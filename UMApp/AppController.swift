@@ -516,15 +516,20 @@ final class AppController {
 
     func deleteShape(_ id: UUID) {
         engine.document.shapes.removeAll { $0.id == id }
-        for i in engine.document.styles.indices where engine.document.styles[i].shapeID == id {
-            engine.document.styles[i].shapeID = nil
+        for i in engine.document.styles.indices {
+            engine.document.styles[i].shapeIDs.removeAll { $0 == id }
         }
         rebuildShapePolygonMap()
     }
 
-    func assignShape(_ shapeID: UUID?, toStyle styleID: UUID) {
+    /// Toggle a shape into/out of a style's sequence list.
+    func toggleShape(_ shapeID: UUID, inStyle styleID: UUID) {
         guard let i = engine.document.styles.firstIndex(where: { $0.id == styleID }) else { return }
-        engine.document.styles[i].shapeID = shapeID
+        if let j = engine.document.styles[i].shapeIDs.firstIndex(of: shapeID) {
+            engine.document.styles[i].shapeIDs.remove(at: j)
+        } else {
+            engine.document.styles[i].shapeIDs.append(shapeID)
+        }
     }
 
     func promoteShapeToLibrary(_ id: UUID) {

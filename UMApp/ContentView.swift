@@ -338,6 +338,7 @@ struct GridCanvasPlaceholder: View {
                         var motion = computeMotion(style: style, path: path,
                                                    frame: currentFrame,
                                                    phaseOffset: cell.phaseOffset,
+                                                   cellIndex: cell.gridIndex,
                                                    cellW: cellW, cellH: cellH)
                         if let src = colorSource,
                            let grid = colorGrid,
@@ -348,12 +349,12 @@ struct GridCanvasPlaceholder: View {
                         let my = Double(r) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY + motion.dy
                         let isSelected = controller.selectedIndices.contains(cell.gridIndex)
 
-                        let polygons: [Polygon2D]
-                        if let sid = style?.shapeID, let p = shapePolyMap[sid] {
-                            polygons = p
-                        } else {
-                            polygons = fallbackPolys
-                        }
+                        let polygons = resolvePolygons(style: style,
+                                                       cellIndex: cell.gridIndex,
+                                                       frame: currentFrame,
+                                                       phaseOffset: cell.phaseOffset,
+                                                       shapeMap: shapePolyMap,
+                                                       fallback: fallbackPolys)
 
                         if polygons.isEmpty {
                             let rw   = (cellW - 4) / 2 * motion.scaleX
@@ -761,9 +762,11 @@ private func applyColorMap(_ sampled: UMColor, source: UMColorSource,
 }
 
 /// Compute the animated transform for a single cell at a given frame.
-/// Combines the style's parametric preset with an optional keyframe path (additive).
+/// Combines the style's parametric preset with an optional keyframe path (additive),
+/// then layers Order/Chaos jitter on top.
 private func computeMotion(style: CellStyle?, path: UMMotionPath?,
                             frame: Int, phaseOffset: Int,
+                            cellIndex: Int,
                             cellW: Double, cellH: Double) -> SpriteMotion {
     var m = SpriteMotion()
 
@@ -783,7 +786,48 @@ private func computeMotion(style: CellStyle?, path: UMMotionPath?,
         m.scaleY   *= p.scaleY
     }
 
+    // --- Order/Chaos jitter (additive, deterministic per-cell oscillators) ---
+    if let style, style.orderChaos > 0 {
+        let oc   = style.orderChaos
+        // Unique phase seed per cell — golden-ratio multiplier decorrelates neighbours
+        let seed = Double(cellIndex) * 1.6180339887
+        // Time in seconds, phase-shifted by this cell's offset so cells aren't synchronised
+        let t    = Double(frame + phaseOffset) / 60.0
+        // Incommensurate frequencies → never repeating combination
+        m.dx       += cellW * 0.30 * oc * sin(t * 2.3 * .pi * 2 + seed * 7.0)
+        m.dy       += cellH * 0.30 * oc * sin(t * 1.7 * .pi * 2 + seed * 11.0)
+        m.rotation += 90.0        * oc * sin(t * 1.1 * .pi * 2 + seed * 5.0)
+        let sj      =               oc * 0.4 * sin(t * 0.9 * .pi * 2 + seed * 3.0)
+        m.scaleX   *= max(0.05, 1.0 + sj)
+        m.scaleY   *= max(0.05, 1.0 + sj * 0.8)  // slightly asymmetric — avoids uniform blob
+    }
+
     return m
+}
+
+/// Resolve the polygon list for a cell given its style's shapeIDs, SEQUENCE mode, and the current frame.
+/// Falls back to `fallback` when the style has no shapes assigned.
+private func resolvePolygons(style: CellStyle?, cellIndex: Int, frame: Int, phaseOffset: Int,
+                              shapeMap: [UUID: [Polygon2D]], fallback: [Polygon2D]) -> [Polygon2D] {
+    guard let style, !style.shapeIDs.isEmpty else { return fallback }
+
+    switch style.sequenceMode {
+    case .sequential:
+        let effectiveFrame = frame + phaseOffset
+        let bucket = (effectiveFrame / max(1, style.framesPerStep)) % style.shapeIDs.count
+        return shapeMap[style.shapeIDs[bucket]] ?? fallback
+
+    case .all:
+        // Render all assigned shapes simultaneously — concatenate their polygon lists
+        let all = style.shapeIDs.flatMap { shapeMap[$0] ?? [] }
+        return all.isEmpty ? fallback : all
+
+    case .random:
+        // Deterministic per-cell, changes each framesPerStep bucket
+        let bucket = (frame + phaseOffset) / max(1, style.framesPerStep)
+        let idx    = abs((cellIndex &* 1_000_003) &+ (bucket &* 999_983)) % style.shapeIDs.count
+        return shapeMap[style.shapeIDs[idx]] ?? fallback
+    }
 }
 
 private func computeParametric(style: CellStyle, frame: Int, phaseOffset: Int,
@@ -881,6 +925,7 @@ private struct FrameCapture: View {
                 var motion = computeMotion(style: style, path: path,
                                            frame: currentFrame,
                                            phaseOffset: cell.phaseOffset,
+                                           cellIndex: cell.gridIndex,
                                            cellW: cellW, cellH: cellH)
                 if let src = colorSource,
                    let grid = colorGrid,
@@ -894,12 +939,12 @@ private struct FrameCapture: View {
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                 let mode    = style?.renderMode  ?? .filledStroked
 
-                let polygons: [Polygon2D]
-                if let sid = style?.shapeID, let p = shapePolygonMap[sid] {
-                    polygons = p
-                } else {
-                    polygons = fallbackPolygons
-                }
+                let polygons = resolvePolygons(style: style,
+                                               cellIndex: cell.gridIndex,
+                                               frame: currentFrame,
+                                               phaseOffset: cell.phaseOffset,
+                                               shapeMap: shapePolygonMap,
+                                               fallback: fallbackPolygons)
 
                 if polygons.isEmpty {
                     let rw = (cellW - 4 * strokeScale) / 2 * motion.scaleX

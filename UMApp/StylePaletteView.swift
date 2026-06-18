@@ -315,7 +315,8 @@ struct StylePaletteView: View {
 
     private func projectShapeRow(_ shape: UMShape) -> some View {
         let activeStyle = controller.engine.document.styles.first { $0.id == controller.activeStyleID }
-        let assigned = activeStyle?.shapeID == shape.id
+        let assigned = activeStyle?.shapeIDs.contains(shape.id) ?? false
+        let seqIndex = activeStyle?.shapeIDs.firstIndex(of: shape.id)
         return HStack(spacing: 6) {
             Image(systemName: "pentagon")
                 .font(.system(size: 9))
@@ -324,6 +325,12 @@ struct StylePaletteView: View {
                 .font(.system(size: 12))
                 .lineLimit(1)
             Spacer()
+            if let idx = seqIndex {
+                Text("\(idx + 1)")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Color.accentColor.opacity(0.8))
+                    .frame(width: 14)
+            }
             Button {
                 controller.promoteShapeToLibrary(shape.id)
             } label: {
@@ -340,8 +347,7 @@ struct StylePaletteView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard let styleID = controller.activeStyleID else { return }
-            let current = controller.engine.document.styles.first { $0.id == styleID }?.shapeID
-            controller.assignShape(current == shape.id ? nil : shape.id, toStyle: styleID)
+            controller.toggleShape(shape.id, inStyle: styleID)
         }
         .contextMenu {
             Button("Save to Library") { controller.promoteShapeToLibrary(shape.id) }
