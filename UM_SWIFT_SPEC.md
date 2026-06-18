@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -1180,40 +1180,91 @@ Medium-large — roughly 4–5 days:
 
 ---
 
-### 12.3 Features Built but Not in Spec
+### 12.3 Features Built (complete inventory)
 
-These are implemented in the current build but not formally documented in earlier sections of this spec. They are captured here for completeness; a future spec revision should fold them into the main sections.
+Everything in this list is implemented and functional in the current build (`main` branch, https://github.com/brogan/UM.git).
 
-| Feature | Where implemented | Notes |
-|---|---|---|
-| Keyframe motion paths | `UMMotionPath`, `PathKeyframe`, PATH EDITOR in Quick Adjust | Full design in §12.1 (bezier evolution) and `UM_HELP.md` |
-| Timeline recording and state playback | `AppController.captureState()`, Transport Bar | Records grid-state snapshots; timeline cut playback at configurable hold durations |
-| Global style/path library | `UMLibrary`, promote/import in Style Palette | Persisted at `~/Library/Application Support/UM/library.json` |
-| Shape library manager | `UMShape`, `UMGridDocument.shapes`, SHAPES sections in Style Palette | Project shapes in `.umproj`; global shapes in `~/Library/Application Support/UM/shapes/`. See §13. |
-| Background draw accumulation mode | `backgroundDraw` flag; `FrameCapture` struct in ContentView | Sprites accumulate without clearing; rewind clears |
-| Image-based color system | — | Designed in §12.2; not yet built |
+**Core grid engine**
+- `UMGridDocument`, `UMGridConfig`, `UMGridCell`, `UMGridEngine` with full save/load (`.umproj` JSON)
+- All painting tools: Draw, Erase, Select (rubber-band + Shift-extend), Sample, Fill (flood), Nudge
+- All grid transforms: flip H/V, rotate L/R, clear, invert — all carry `positionOffset` vectors correctly
+- Transform Mode: Move vs Stamp, including Δφ stamp phase offset
+- Undo/redo (40 steps) covering all painting, transform, nudge, and quick-adjust operations
+- Resample Grid sheet with offset and phase policies (Preserve / Scale / Reset; Inherit / Scatter / Reset)
+
+**Phase and scatter**
+- All five Phase Policies: Synchronized, Random, Sequential, Spatial, Radial
+- φ step stepper in Tool Strip (1–240 fr)
+- Spatial Scatter slider in Tool Strip (0–1)
+- Rescatter Selection in PLACE & TIME
+
+**Styles and animation**
+- `CellStyle` with fill, stroke, render mode, stroke width, motion preset, sequence mode, framesPerStep
+- Parametric motion presets: Static, Spin, Pulse, Wave, Wander, Jitter, Color Cycle (all wired in renderer)
+- Keyframe motion paths: `UMMotionPath`, `PathKeyframe`, full PATH EDITOR UI, path overlay on canvas
+- Path deselect (click active path row again to draw without path assignment)
+- SEQUENCE mode and Frames/Step (persisted; visual effect pending full Loom pipeline)
+- ORDER/CHAOS slider (persisted; visual effect pending full Loom pipeline)
+- Style variants: Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only (right-click context menu)
+
+**Style Palette and Library**
+- Project tab: STYLES, PATHS, SHAPES sections with promote (↑), import (↓), delete
+- Library tab: global styles/paths/shapes with promote and import
+- Global style/path library at `~/Library/Application Support/UM/library.json`
+- Shape library manager: `UMShape`, project shapes embedded in `.umproj`, global shapes at `~/Library/Application Support/UM/shapes/`
+- Import Loom polygon-set JSON files; shapes survive resave (geometry embedded, not file-referenced)
+
+**Canvas and rendering**
+- Live animated canvas (SwiftUI Canvas, `@Observable` engine, 24 fps)
+- Background draw / accumulation mode (`backgroundDraw` flag, `FrameCapture` struct)
+- Color map system: `UMColorMapEngine`, static image and video (up to 240 extracted frames) sampling
+- Color map UI in CANVAS section: apply target, style alpha preserve, video loop mode
+- Open curves, points, ovals, line polygons imported from Loom — all geometry types rendered
+- `buildPolygonPath` handles all five `PolygonType` cases from LoomEngine
+
+**Export**
+- PNG still export: NSSavePanel → `renders/stills/`, multiplier (1×/2×/4×/8×), scale-drawing toggle
+- Video export: H.264 `.mov` via `AVAssetWriter`, `renders/animations/`, same multiplier/scale options, in-progress bar in Transport Bar
+- EXPORT section in Quick Adjust: multiplier, scale drawing, FPS (24/30), frame count, computed output size
+- Render directories auto-created alongside saved project file
+
+**Timeline**
+- Timeline recording: auto-capture at configurable interval while Record is active
+- Timeline state playback (cut-based), state navigation (◀/▶), Timeline Editor sheet (hold durations, delete)
+
+**Quick Adjust**
+- PROJECT section: canvas preset picker, width, height
+- EXPORT section: multiplier, scale drawing, FPS, frames, computed output
+- CANVAS section: background colour, background draw, capture interval, grid lines, Color Map subsection
+- ORDER/CHAOS section (stored, no visual effect yet)
+- PLACE & TIME section: style, path, offset X/Y, phase, scale X/Y (linkable), rotation, Rescatter
+- RENDER section: fill colour, stroke colour, stroke width, render mode
+- MOTION section: preset picker, speed, amount, phase
+- PATH EDITOR section: path picker, name, loop toggle, keyframe list, add keyframe, keyframe property editor (frame, dx, dy, rotation, scale X/Y, easing)
+- SEQUENCE section (stored, no visual effect yet)
+- ADVANCED section (placeholder)
+
+**Project and preferences**
+- Cmd+N / Cmd+O / Cmd+S / Cmd+Shift+S
+- Preferences window: custom projects directory
+- Window title tracks saved filename
+- Git repository: https://github.com/brogan/UM.git
 
 ---
 
-### 12.4 Spec Sections Not Yet Implemented
+### 12.4 Items from Earlier Spec Now Resolved
 
-These are specified in §3–§9 of this document but not yet built. Listed here as a consolidated view of remaining work.
+These items appeared in the §12.4 "not yet implemented" list in prior revisions and have since been built.
 
-| Feature | Spec ref | Notes |
-|---|---|---|
-| Canvas zoom and pan | §5.4 | Pinch-to-zoom, two-finger drag, ⌘0/⌘=/⌘- |
-| Geometry mode + editor | §3.1, §5.4, §13.2 | Requires `LoomEditorKit` extraction from Loom. File-based import workflow is implemented; see §13. |
-| Subdivision / Order/Chaos | §3.2, §5.5 | Loom `SubdivisionEngine`; `OrderChaosEngine` materialisation |
-| Full Loom rendering pipeline | §3.4 | Brushed, stamped, path perturbation, animated opacity/blur |
-| Animated style thumbnails in palette | §5.3 | Currently shows static icon |
-| SVG export | §3.5 | Button stub; `SVGExporter` wiring pending |
-| Video export from timeline | §3.5 | Button stub; `VideoExporter` + timeline integration pending |
-| PNG still export | §3.5 | Button stub |
-| Spatial scatter UI control | §4.4 | Fixed at 0; needs tool strip slider |
-| Phase step frames UI control | §4.3 | Fixed at 8; needs numeric field in tool strip |
-| Hover preview (unpainted cells) | §5.6 | Show active style preview on hover before painting |
-| Legacy UM XML import | §10, phase 5 | Java UM `.xml` project importer |
-| Phase visual indicator (heat-map overlay) | §10, phase 6 | Toggleable per-cell phase visualisation on canvas |
+| Feature | Status |
+|---|---|
+| PNG still export | ✓ Built — multiplier + scale drawing, `renders/stills/` |
+| Video export (live animation) | ✓ Built — H.264 AVAssetWriter, `renders/animations/` |
+| Spatial scatter UI control | ✓ Built — tool strip slider |
+| Phase step frames UI control | ✓ Built — tool strip stepper |
+| Image-based color system | ✓ Built — static + video, `UMColorMapEngine`, full CANVAS UI |
+| Shape library manager | ✓ Built — see §13 |
+| Open curves / points / ovals | ✓ Built — all five `PolygonType` cases rendered |
 
 ---
 
@@ -1289,3 +1340,135 @@ When `LoomEditorKit` is available, UM will gain a **Geometry mode** toggled by a
 - Shapes remain project-local; the promote-to-library flow is unchanged.
 
 Until `LoomEditorKit` is ready, the toolbar Geometry mode button is absent and authoring always happens in standalone Loom.
+
+---
+
+## 15. Outstanding Work — What Remains to Implement
+
+> **This section is the definitive statement of what is not yet done.** Everything listed here is unimplemented as of 2026-06-18. Items are grouped by the phase of work they naturally belong to, roughly in priority order.
+
+---
+
+### 15.1 Loom Rendering Pipeline Integration
+
+This is the single largest remaining body of work. Until it is done, the ORDER/CHAOS slider, SEQUENCE mode, and shape assignments have no visual effect — sprites render with the hard-wired default geometry using the simple SwiftUI Canvas renderer.
+
+**Shape rendering via assigned geometry**
+- `CellStyle.shapeID` is stored and assigned in the UI, but the renderer still uses a hard-wired fallback shape (an oval or rectangle depending on the polygon list).
+- Required: at render time, `AppController` must decode the `UMShape.geometryJSON` for each cell's assigned style, call `EditableGeometryJSONLoader` → `runtimePolygons()`, and supply the resulting `[Polygon2D]` to the drawing loop.
+- Currently `shapePolygons` is a single global polygon list loaded from a bundled test file. It needs to become per-style, resolved from the project's `shapes` array.
+
+**Order/Chaos materialisation (`OrderChaosEngine`)**
+- `CellStyle.orderChaos` (0–1 scalar) is stored and the slider is wired.
+- Required: `OrderChaosEngine.materialize()` must map the scalar to concrete `SubdivisionParams` (ranMiddle, ranDiv, visibilityRule) and `SpriteAnimation` driver amplitudes (rotation jitter, position jitter, path perturbation).
+- Spec: §6.5.
+
+**Subdivision integration**
+- Loom's `SubdivisionEngine` is available in the linked `LoomEngine` package.
+- Required: after `runtimePolygons()`, run `SubdivisionEngine.process(polygons, paramSet)` per cell before rendering, using the materialised `SubdivisionParams` from Order/Chaos.
+- This replaces the current direct-path rendering with a subdivided polygon set.
+
+**Full Loom rendering modes**
+- Current renderer uses SwiftUI Canvas `ctx.fill` / `ctx.stroke` only (modes: filled, stroked, filledStroked).
+- Required: wire `LoomEngine.RenderEngine` for additional modes: brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of polygon geometry).
+- Also: animated blur, opacity animation, and colour oscillator via `RendererDrivers`.
+
+**SEQUENCE shape cycling**
+- `CellStyle.sequenceMode` (.sequential/.all/.random) and `framesPerStep` are stored.
+- Required: at render time, select the active shape(s) from the style's shape sequence based on `(currentFrame + cell.phaseOffset) / framesPerStep` and `sequenceMode`.
+- Currently all cells use the single global polygon list regardless of these values.
+
+**Animated style thumbnails**
+- Style palette rows show a static coloured dot.
+- Required: each style row renders a small live animated preview using the style's actual geometry, renderer, and motion preset at the current frame.
+- Depends on shape rendering and Loom pipeline being functional.
+
+---
+
+### 15.2 Canvas Interaction
+
+**Zoom and pan**
+- The canvas fills the panel and scales with the window but has no independent zoom or pan.
+- Required: pinch-to-zoom, two-finger drag to pan, Cmd+0 to fit, Cmd+= / Cmd+– to zoom in/out.
+- The canvas currently uses a GeometryReader that fills available space; a zoom/pan layer needs to sit between the GeometryReader and the Canvas.
+
+**Hover preview on undrawn cells**
+- No visual feedback on undrawn cells before the user commits a draw stroke.
+- Required: when hovering in Draw or Fill mode, show a faint preview of the active style's sprite on the cell under the cursor.
+- Depends on shape rendering being functional (otherwise only style colours are shown, which is minimally useful).
+
+---
+
+### 15.3 Export
+
+**SVG export**
+- The SVG button in the Transport Bar is a stub (no action).
+- Required: wire `LoomEngine.SVGExporter` for the current frame, following the same NSSavePanel + `renders/svgs/` directory pattern as PNG.
+- Depends on the Loom rendering pipeline (SVGExporter renders via the Loom polygon path, not SwiftUI Canvas).
+
+**Video export from timeline (cut-based)**
+- The Video button currently exports live animation (parametric + keyframe motion) as a continuous `.mov`.
+- Required: a separate export mode (or option in the export sheet) that renders the recorded timeline states as discrete cuts — each state holds for its configured duration, then cuts to the next.
+- This is a different frame-loop structure from the live-animation export.
+
+---
+
+### 15.4 Path Editor
+
+**Bezier tangent handles**
+- The PATH EDITOR currently uses a per-segment easing enum (Linear, Ease In, Ease Out, Ease In/Out, Step).
+- Required: cubic bezier tangent handles (`inTangent`, `outTangent`) on each keyframe, drawn as draggable handle circles on the canvas path overlay.
+- Full design in §12.1. Data model change is backward-compatible (zero-length tangent = current linear interpolation).
+
+---
+
+### 15.5 In-App Geometry Authoring
+
+**Geometry mode (LoomEditorKit)**
+- Shapes must currently be authored in standalone Loom and imported via the Style Palette SHAPES section.
+- Required: extract Loom's geometry editor as a `LoomEditorKit` Swift Package target; wire it into UM as a canvas overlay entered via a toolbar Geometry (G) button.
+- Full design in §13.1. This is a significant extraction effort that depends on Loom's editor stabilising first.
+- Until then, the file-based import workflow is the only path.
+
+---
+
+### 15.6 Canvas Overlays and Visual Aids
+
+**Phase heat-map overlay**
+- No per-cell phase visualisation on the canvas.
+- Required: a toggleable overlay that colours each drawn cell by its `phaseOffset` value (e.g. a heat-map from blue = 0 to red = max), making the temporal structure of the composition visible without playing the animation.
+
+**Background image**
+- The CANVAS section supports a solid background colour only.
+- Required: an option to load a visible image that is composited behind the grid as a backdrop, distinct from the Color Map (which recolors sprites but never renders the image itself).
+
+---
+
+### 15.7 Compatibility
+
+**Legacy UM XML import**
+- No importer for Java UM `.xml` project files.
+- Required: read the Java XOM XML format (GridSquare drawn states, DrawSet/Drawer/Animator/KeyFrame trees); map to `UMGridDocument`; all cells get `positionOffset: .zero` and `phaseOffset: 0` as they carry none in the Java format.
+- Useful for migrating existing Java UM work but not on the critical path.
+
+---
+
+### Summary Table
+
+| Area | Item | Depends on |
+|---|---|---|
+| **Rendering** | Shape rendering via assigned geometry | — |
+| **Rendering** | Order/Chaos materialisation | Shape rendering |
+| **Rendering** | Subdivision integration | Order/Chaos |
+| **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | Shape rendering |
+| **Rendering** | SEQUENCE shape cycling | Shape rendering |
+| **Rendering** | Animated style thumbnails | Shape rendering |
+| **Canvas** | Zoom and pan | — |
+| **Canvas** | Hover preview on undrawn cells | Shape rendering |
+| **Export** | SVG export | Loom pipeline |
+| **Export** | Video export from timeline (cut-based) | — |
+| **Path editor** | Bezier tangent handles | — |
+| **Geometry** | In-app geometry editor (LoomEditorKit) | Loom stabilisation |
+| **Overlays** | Phase heat-map overlay | — |
+| **Overlays** | Background image | — |
+| **Compat** | Legacy UM XML import | — |
