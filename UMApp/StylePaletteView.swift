@@ -209,7 +209,10 @@ struct StylePaletteView: View {
 
             Spacer()
 
-            // Opacity %
+            // Opacity slider + label
+            Slider(value: Binding(get: { ls.opacity }, set: { ls.opacity = $0 }), in: 0...1)
+                .controlSize(.mini)
+                .frame(width: 56)
             Text("\(Int((ls.opacity * 100).rounded()))%")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.quaternary)
