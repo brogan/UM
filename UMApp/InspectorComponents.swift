@@ -197,3 +197,44 @@ struct ResettableSlider: NSViewRepresentable {
         }
     }
 }
+
+// MARK: - ColorWell
+
+/// NSColorWell wrapped as a SwiftUI view.
+/// Replaces SwiftUI's ColorPicker, which hosts the system colour panel via an
+/// XPC remote view controller (TUINSRemoteViewController). That process can
+/// crash and freeze the window while the engine keeps running. NSColorWell
+/// opens NSColorPanel directly with no XPC indirection.
+struct ColorWell: NSViewRepresentable {
+    @Binding var color: Color
+    var supportsOpacity: Bool = true
+
+    func makeNSView(context: Context) -> NSColorWell {
+        let well = NSColorWell()
+        well.target = context.coordinator
+        well.action = #selector(Coordinator.colorChanged(_:))
+        return well
+    }
+
+    func updateNSView(_ nsView: NSColorWell, context: Context) {
+        context.coordinator.skipCallback = true
+        nsView.color = NSColor(color)
+        context.coordinator.skipCallback = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var parent: ColorWell
+        var skipCallback = false
+
+        init(_ parent: ColorWell) { self.parent = parent }
+
+        @objc func colorChanged(_ sender: NSColorWell) {
+            guard !skipCallback else { return }
+            let c = sender.color
+            parent.color = Color(parent.supportsOpacity ? c : c.withAlphaComponent(1))
+        }
+    }
+}

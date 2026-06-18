@@ -140,9 +140,8 @@ struct QuickAdjustView: View {
     private var canvasSection: some View {
         InspectorSection("CANVAS", isCollapsed: $canvasCollapsed) {
             InspectorField("Background") {
-                ColorPicker("", selection: canvasColorBinding(\.backgroundColor), supportsOpacity: false)
-                    .labelsHidden()
-                    .frame(width: 40)
+                ColorWell(color: canvasColorBinding(\.backgroundColor), supportsOpacity: false)
+                    .frame(width: 40, height: 24)
             }
             InspectorField("Draw") {
                 Toggle("Background draw", isOn: Binding(
@@ -172,9 +171,8 @@ struct QuickAdjustView: View {
                 .font(.system(size: 11))
             }
             InspectorField("Grid color") {
-                ColorPicker("", selection: canvasColorBinding(\.gridColor), supportsOpacity: true)
-                    .labelsHidden()
-                    .frame(width: 40)
+                ColorWell(color: canvasColorBinding(\.gridColor), supportsOpacity: true)
+                    .frame(width: 40, height: 24)
                     .disabled(!controller.showGrid)
             }
             InspectorField("Grid width") {
@@ -511,15 +509,13 @@ struct QuickAdjustView: View {
             let disabled = activeStyleIndex == nil
 
             InspectorField("Fill") {
-                ColorPicker("", selection: colorBinding(\.fillColor), supportsOpacity: true)
-                    .labelsHidden()
-                    .frame(width: 40)
+                ColorWell(color: colorBinding(\.fillColor), supportsOpacity: true)
+                    .frame(width: 40, height: 24)
                     .disabled(disabled)
             }
             InspectorField("Stroke") {
-                ColorPicker("", selection: colorBinding(\.strokeColor), supportsOpacity: true)
-                    .labelsHidden()
-                    .frame(width: 40)
+                ColorWell(color: colorBinding(\.strokeColor), supportsOpacity: true)
+                    .frame(width: 40, height: 24)
                     .disabled(disabled)
             }
             InspectorField("Width") {
