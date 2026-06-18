@@ -1,0 +1,274 @@
+{
+  "document" : {
+    "activeLayerID" : "5A157B83-D58A-465E-A7F8-61BCA23E0C63",
+    "id" : "7576F470-5B8C-408D-8C5A-89BF653D5F84",
+    "layers" : [
+      {
+        "id" : "5A157B83-D58A-465E-A7F8-61BCA23E0C63",
+        "isEditable" : true,
+        "isVisible" : true,
+        "name" : "tri",
+        "openCurves" : [
+
+        ],
+        "points" : [
+
+        ],
+        "polygons" : [
+          {
+            "id" : "0F06B8D5-3826-4385-BFCC-0FEDDC72DB76",
+            "isVisible" : true,
+            "name" : "Polygon 1 Cut 1",
+            "points" : [
+              {
+                "id" : "15BF83C4-BF4E-4D33-86DB-A43667859C80",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : -0.2950604226450435,
+                  "y" : -0.0002922148555484644
+                }
+              },
+              {
+                "id" : "21D88B61-247B-41BC-9890-6E1A13D33BB8",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.2414124067848038,
+                  "y" : 0.1408500473850906
+                }
+              },
+              {
+                "id" : "51F62312-1056-482A-BBE4-E188CEA8C239",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.17704890416465802,
+                  "y" : 0.2763992823061193
+                }
+              },
+              {
+                "id" : "3B132A6F-BC0D-4498-BB9C-5222BB3B2CF9",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : 0,
+                  "y" : 0.3531315410615924
+                }
+              },
+              {
+                "id" : "06422463-C486-4564-B5DD-F9639F5114C7",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.18974523970825483,
+                  "y" : 0.2605148673977443
+                }
+              },
+              {
+                "id" : "A896DA29-5630-41A3-B240-0B0599301C78",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.25211691773616235,
+                  "y" : 0.13229472171079656
+                }
+              },
+              {
+                "id" : "ABFB5E71-71D8-4CB6-9865-1BD1659C7BA3",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : 0.29989159283528655,
+                  "y" : -5.579846333064742e-06
+                }
+              },
+              {
+                "id" : "AD709EAC-4720-47DE-9735-92A5DDD15E87",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.04788485236024376,
+                  "y" : 0.11346486948888249
+                }
+              },
+              {
+                "id" : "BAA69B65-026C-420F-BD6C-6519F43D39D8",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.0622506478458677,
+                  "y" : 0.11593102830746667
+                }
+              }
+            ],
+            "pressures" : [
+              1,
+              1,
+              1
+            ],
+            "segments" : [
+              {
+                "controlInID" : "51F62312-1056-482A-BBE4-E188CEA8C239",
+                "controlOutID" : "21D88B61-247B-41BC-9890-6E1A13D33BB8",
+                "endAnchorID" : "3B132A6F-BC0D-4498-BB9C-5222BB3B2CF9",
+                "id" : "F16FE19E-76CF-4335-B147-22C788DB9EA7",
+                "startAnchorID" : "15BF83C4-BF4E-4D33-86DB-A43667859C80"
+              },
+              {
+                "controlInID" : "A896DA29-5630-41A3-B240-0B0599301C78",
+                "controlOutID" : "06422463-C486-4564-B5DD-F9639F5114C7",
+                "endAnchorID" : "ABFB5E71-71D8-4CB6-9865-1BD1659C7BA3",
+                "id" : "1FC0C07B-8B28-42E2-B3E3-D956E66AED51",
+                "startAnchorID" : "3B132A6F-BC0D-4498-BB9C-5222BB3B2CF9"
+              },
+              {
+                "controlInID" : "BAA69B65-026C-420F-BD6C-6519F43D39D8",
+                "controlOutID" : "AD709EAC-4720-47DE-9735-92A5DDD15E87",
+                "endAnchorID" : "15BF83C4-BF4E-4D33-86DB-A43667859C80",
+                "id" : "18A5C149-2992-4E04-B99C-9C9736B974E3",
+                "startAnchorID" : "ABFB5E71-71D8-4CB6-9865-1BD1659C7BA3"
+              }
+            ]
+          },
+          {
+            "id" : "57BB15E4-832D-48EC-8767-2F1A7AA08D99",
+            "isVisible" : true,
+            "name" : "Polygon 1 Cut 2",
+            "points" : [
+              {
+                "id" : "8F5566D5-8A28-41EF-B6A6-5153D59A9662",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : 0.29989159283528655,
+                  "y" : -5.579846333064742e-06
+                }
+              },
+              {
+                "id" : "9C6AD8A2-4F06-4EAB-9D90-215488DBB2EA",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.3330543562365962,
+                  "y" : -0.09184175851961168
+                }
+              },
+              {
+                "id" : "2413D646-AE6A-472F-9117-FDD95D1A9188",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.3591836496988932,
+                  "y" : -0.18564393348674746
+                }
+              },
+              {
+                "id" : "E7FA80E2-2172-421D-A679-096CB544F8FD",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : 0.416,
+                  "y" : -0.2708684589384076
+                }
+              },
+              {
+                "id" : "CCC5E8B2-3238-48D7-A89E-9E1B322273CA",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.1518896261058254,
+                  "y" : -0.34156857160741105
+                }
+              },
+              {
+                "id" : "218A3179-BC4D-4EB5-B584-BA2E26904F3F",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.14521711734268067,
+                  "y" : -0.3531315410615924
+                }
+              },
+              {
+                "id" : "B65AF2F1-5B01-4FD1-85AB-4FCFE34ECC69",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : -0.416,
+                  "y" : -0.2708684589384076
+                }
+              },
+              {
+                "id" : "E0102F74-1834-4948-98B4-658D33678FD9",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.3609870452880859,
+                  "y" : -0.1883490268705365
+                }
+              },
+              {
+                "id" : "700036A3-BE8B-409C-86B3-77C7360B4080",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.33034081604228765,
+                  "y" : -0.09311120278977417
+                }
+              },
+              {
+                "id" : "CD284073-2DA2-41FF-AF2A-B9B861B3B6AB",
+                "kind" : "anchor",
+                "position" : {
+                  "x" : -0.2950604226450435,
+                  "y" : -0.0002922148555484644
+                }
+              },
+              {
+                "id" : "CB2F9E0E-1D02-49DF-B3C5-73B22468D35D",
+                "kind" : "control",
+                "position" : {
+                  "x" : -0.0622506478458677,
+                  "y" : 0.11593102830746667
+                }
+              },
+              {
+                "id" : "AA2781ED-BEE7-4DB4-9476-4075ED809545",
+                "kind" : "control",
+                "position" : {
+                  "x" : 0.04788485236024376,
+                  "y" : 0.11346486948888249
+                }
+              }
+            ],
+            "pressures" : [
+              1,
+              1,
+              1,
+              1
+            ],
+            "segments" : [
+              {
+                "controlInID" : "2413D646-AE6A-472F-9117-FDD95D1A9188",
+                "controlOutID" : "9C6AD8A2-4F06-4EAB-9D90-215488DBB2EA",
+                "endAnchorID" : "E7FA80E2-2172-421D-A679-096CB544F8FD",
+                "id" : "7F666E1B-2AEB-4D35-8545-6E756B0167BB",
+                "startAnchorID" : "8F5566D5-8A28-41EF-B6A6-5153D59A9662"
+              },
+              {
+                "controlInID" : "218A3179-BC4D-4EB5-B584-BA2E26904F3F",
+                "controlOutID" : "CCC5E8B2-3238-48D7-A89E-9E1B322273CA",
+                "endAnchorID" : "B65AF2F1-5B01-4FD1-85AB-4FCFE34ECC69",
+                "id" : "13E7667E-07E7-4508-BEC6-A66E93EBEE16",
+                "startAnchorID" : "E7FA80E2-2172-421D-A679-096CB544F8FD"
+              },
+              {
+                "controlInID" : "700036A3-BE8B-409C-86B3-77C7360B4080",
+                "controlOutID" : "E0102F74-1834-4948-98B4-658D33678FD9",
+                "endAnchorID" : "CD284073-2DA2-41FF-AF2A-B9B861B3B6AB",
+                "id" : "E9AFCD74-B7C0-4627-B15C-5117F357CE2B",
+                "startAnchorID" : "B65AF2F1-5B01-4FD1-85AB-4FCFE34ECC69"
+              },
+              {
+                "controlInID" : "AA2781ED-BEE7-4DB4-9476-4075ED809545",
+                "controlOutID" : "CB2F9E0E-1D02-49DF-B3C5-73B22468D35D",
+                "endAnchorID" : "8F5566D5-8A28-41EF-B6A6-5153D59A9662",
+                "id" : "5C26FBC7-5CA4-47BF-B05D-B952586EA38A",
+                "startAnchorID" : "CD284073-2DA2-41FF-AF2A-B9B861B3B6AB"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "name" : "s",
+    "weldGroups" : [
+
+    ]
+  },
+  "schema" : "loom.editableGeometry",
+  "schemaVersion" : 2
+}
