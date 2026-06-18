@@ -6,6 +6,7 @@ import UMEngine
 struct StylePaletteView: View {
     @Environment(AppController.self) private var controller
     @State private var tab: PaletteTab = .project
+    @State private var renamingLayerID: UUID? = nil
 
     private enum PaletteTab { case project, library }
 
@@ -190,9 +191,20 @@ struct StylePaletteView: View {
                 .frame(width: 6, height: 6)
 
             // Name
-            Text(ls.name)
+            if renamingLayerID == ls.id {
+                TextField("Layer name", text: Binding(
+                    get: { ls.name },
+                    set: { ls.name = $0 }
+                ))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
+                .onSubmit { renamingLayerID = nil }
+            } else {
+                Text(ls.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) { renamingLayerID = ls.id }
+            }
 
             Spacer()
 
@@ -206,8 +218,12 @@ struct StylePaletteView: View {
         .padding(.vertical, 5)
         .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture { controller.selectLayer(index) }
+        .onTapGesture {
+            renamingLayerID = nil
+            controller.selectLayer(index)
+        }
         .contextMenu {
+            Button("Rename") { renamingLayerID = ls.id }
             Button("Duplicate") { controller.duplicateLayer(at: index) }
             Divider()
             Menu("Opacity") {

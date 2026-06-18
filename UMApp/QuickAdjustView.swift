@@ -82,12 +82,18 @@ struct QuickAdjustView: View {
     @ViewBuilder
     private var styleNameHeader: some View {
         HStack(spacing: 6) {
-            if let i = activeStyleIndex {
+            if activeStyleIndex != nil {
                 TextField(
                     "Style name",
                     text: Binding(
-                        get: { controller.engine.document.styles[i].name },
-                        set: { controller.engine.document.styles[i].name = $0 }
+                        get: {
+                            guard let j = activeStyleIndex else { return "" }
+                            return controller.engine.document.styles[j].name
+                        },
+                        set: { newName in
+                            guard let j = activeStyleIndex else { return }
+                            controller.engine.document.styles[j].name = newName
+                        }
                     )
                 )
                 .textFieldStyle(.plain)
