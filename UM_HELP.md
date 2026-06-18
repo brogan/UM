@@ -1,6 +1,6 @@
 # UM — User Guide
 
-_Current as of build: 2026-06-18 (rev 12). Covers what is implemented and testable today._
+_Current as of build: 2026-06-18 (rev 13). Covers what is implemented and testable today._
 
 ---
 
@@ -694,6 +694,7 @@ The top of the Project tab lists all layers in the composition. Each row shows a
 - **Click** a row to make it the active layer.
 - **Double-click** the layer name to rename it inline. Press Return or click elsewhere to commit.
 - **Drag** a row up or down to reorder layers. An accent-colour line marks where the layer will land.
+- **Opacity slider** — each row contains a compact slider on the right. Drag it to adjust the layer's opacity continuously; the percentage updates live alongside it.
 - **Right-click** for the context menu: Rename, Duplicate, Opacity presets (100/75/50/25%), Delete.
 - **+ New Layer** appends a new layer at the same grid resolution as the current active layer.
 

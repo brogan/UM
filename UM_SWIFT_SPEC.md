@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -673,7 +673,7 @@ A **LAYERS** section appears at the top of the Project tab in the Style Palette.
 - Visibility toggle (eye icon)
 - Active-layer indicator dot (accent colour when active, faint when not)
 - Layer name (double-click to rename inline; press Return or click elsewhere to commit)
-- Opacity percentage
+- Mini opacity slider (56 px) with live percentage readout alongside it
 
 Tap a row to switch the active layer. Drag a row to reorder layers (an accent-colour line indicates the drop target). Context menu: Rename, Duplicate, Opacity presets (100/75/50/25%), Delete. `+ New Layer` button appends a new layer with the same grid resolution as the current active layer.
 
@@ -1380,9 +1380,10 @@ Everything in this list is implemented and functional in the current build (`mai
 - PNG export: `umRenderComposited()` composites layers at their respective opacities
 - Video export: `UMVideoExporter.export(layers: [UMLayer], ...)` renders and composites per-frame
 - Save/load: project file encodes `[UMLayer]` JSON array (replaces single `UMGridDocument`)
-- LAYERS section at top of Project tab in Style Palette: visibility toggle, active indicator, name, opacity %, add/remove/duplicate via context menu
+- LAYERS section at top of Project tab in Style Palette: visibility toggle, active indicator, name, opacity slider + %, add/remove/duplicate via context menu
 - Layer rename: double-click the name to edit inline; Return or clicking another row commits; context menu "Rename" also available
 - Layer reordering: drag-and-drop within the LAYERS list using SwiftUI `draggable`/`dropDestination` (UUID string payload); accent-colour line overlay marks the drop target row
+- Layer opacity slider: mini `Slider` (56 px) in each row bound directly to `ls.opacity`; live percentage label alongside; context-menu presets (100/75/50/25%) remain
 
 **Project and preferences**
 - Cmd+N / Cmd+O / Cmd+S / Cmd+Shift+S
