@@ -23,6 +23,7 @@
 		AA00003A000000000000001A /* UMColorMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003B000000000000001A /* UMColorMapEngine.swift */; };
 		AA00003C000000000000001A /* UMExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003D000000000000001A /* UMExporter.swift */; };
 		AA00003E000000000000001A /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003F000000000000001A /* HelpView.swift */; };
+		AA000040000000000000001A /* UMLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000041000000000000001A /* UMLogger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 		AA00003B000000000000001A /* UMColorMapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMColorMapEngine.swift; sourceTree = "<group>"; };
 		AA00003D000000000000001A /* UMExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMExporter.swift; sourceTree = "<group>"; };
 		AA00003F000000000000001A /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
+		AA000041000000000000001A /* UMLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMLogger.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 				AA00003B000000000000001A /* UMColorMapEngine.swift */,
 				AA00003D000000000000001A /* UMExporter.swift */,
 				AA00003F000000000000001A /* HelpView.swift */,
+				AA000041000000000000001A /* UMLogger.swift */,
 				AA000009000000000000001A /* Assets.xcassets */,
 				AA000031000000000000001A /* polygonSets */,
 			);
@@ -183,6 +186,7 @@
 				AA00003A000000000000001A /* UMColorMapEngine.swift in Sources */,
 				AA00003C000000000000001A /* UMExporter.swift in Sources */,
 				AA00003E000000000000001A /* HelpView.swift in Sources */,
+				AA000040000000000000001A /* UMLogger.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

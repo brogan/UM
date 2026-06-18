@@ -24,6 +24,8 @@ struct UMApp: App {
             // Help menu
             CommandGroup(replacing: .help) {
                 HelpMenuButton()
+                Divider()
+                Button("Show Log File") { UMLogger.shared.showInFinder() }
             }
             // File operations — replaces the built-in "New Window" entry
             CommandGroup(replacing: .newItem) {

@@ -54,6 +54,7 @@ final class AppController {
     /// Switch to a layer by index, saving per-layer UI state back to the departing layer.
     func selectLayer(_ index: Int) {
         guard index >= 0, index < layerStates.count, index != activeLayerIndex else { return }
+        UMLogger.shared.log("selectLayer \(activeLayerIndex)→\(index) styles:\(engine.document.styles.count)")
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         activeLayerIndex = index
         let layer = layerStates[index]
@@ -64,10 +65,14 @@ final class AppController {
     }
 
     func addLayer(name: String? = nil) {
-        let config = engine.document.gridConfig
-        let doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
-        let label  = name ?? "Layer \(layerStates.count + 1)"
-        let ls     = UMLayerState(layer: UMLayer(name: label, document: doc))
+        let config  = engine.document.gridConfig
+        // Inherit project styles from the current layer so the new layer has a usable palette.
+        let styles  = engine.document.styles
+        var doc     = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        doc.styles  = styles
+        let label   = name ?? "Layer \(layerStates.count + 1)"
+        let ls      = UMLayerState(layer: UMLayer(name: label, document: doc))
+        UMLogger.shared.log("addLayer '\(label)' inherited \(styles.count) styles, total layers→\(layerStates.count + 1)")
         layerStates.append(ls)
         selectLayer(layerStates.count - 1)
         rebuildShapePolygonMap()
@@ -145,6 +150,9 @@ final class AppController {
         loadShapePolygons()
         rebuildShapePolygonMap()
         ensureProjectsDirectory()
+        // Initialise logger (creates log file, registers exception handler)
+        UMLogger.shared.logState(prefix: "init", layers: 1,
+                                  styles: doc.styles.count, cells: doc.cells.count)
         loadGlobalLibrary()
         loadGlobalShapes()
         startKeyMonitor()
@@ -365,6 +373,7 @@ final class AppController {
     // MARK: Save / Load
 
     func newDocument() {
+        UMLogger.shared.log("newDocument")
         let doc = UMGridDocument.makeTestGrid()
         let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
         layerStates      = [ls]
@@ -412,20 +421,30 @@ final class AppController {
     }
 
     private func write(to url: URL) {
-        // Save current per-layer UI state before encoding
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         let layers = layerStates.map { $0.toUMLayer() }
-        guard let data = try? enc.encode(layers) else { return }
-        try? data.write(to: url, options: .atomic)
+        guard let data = try? enc.encode(layers) else {
+            UMLogger.shared.log("ERROR write(to:) encode failed")
+            return
+        }
+        do {
+            try data.write(to: url, options: .atomic)
+            UMLogger.shared.log("saved \(url.lastPathComponent) \(layerStates.count)L")
+        } catch {
+            UMLogger.shared.log("ERROR write(to:) \(error)")
+        }
     }
 
     private func read(from url: URL) {
         guard let data   = try? Data(contentsOf: url),
               let layers = try? JSONDecoder().decode([UMLayer].self, from: data),
               !layers.isEmpty
-        else { return }
+        else {
+            UMLogger.shared.log("ERROR read(from:) decode failed \(url.lastPathComponent)")
+            return
+        }
         layerStates      = layers.map { UMLayerState(layer: $0) }
         activeLayerIndex = 0
         engine           = layerStates[0].engine
@@ -439,6 +458,10 @@ final class AppController {
             let cols = layerStates[0].engine.document.gridConfig.cols
             colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
         }
+        UMLogger.shared.logState(prefix: "read \(url.lastPathComponent)",
+                                  layers: layerStates.count,
+                                  styles: engine.document.styles.count,
+                                  cells:  engine.document.cells.filter { $0.isDrawn }.count)
     }
 
     // MARK: Global library
