@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -586,6 +586,106 @@ func evaluateCell(_ cell: UMGridCell, currentFrame: Int) -> SpriteState {
 
 Because Loom's `DriverEvaluator` is already stateless and deterministic (it takes `(seed, frame)` → value), the phase shift is free: no mutable state is needed on any cell.
 
+### 6.8 Layer System
+
+UM supports a stack of independent composition layers. Each layer owns its own grid document (rows/cols, cells, styles, shapes, paths) and renders into the shared canvas at a configurable opacity. Layers are composited bottom-to-top.
+
+#### Data model
+
+```swift
+// UMEngine/Composition/UMLayer.swift
+public struct UMLayer: Codable, Identifiable, Sendable {
+    public var id:        UUID
+    public var name:      String
+    public var isVisible: Bool
+    public var opacity:   Double      // 0–1; 1 = fully opaque
+    public var document:  UMGridDocument
+}
+
+// UMApp/AppController.swift
+@Observable @MainActor
+final class UMLayerState: Identifiable {
+    let  id:           UUID
+    var  name:         String
+    var  isVisible:    Bool
+    var  opacity:      Double
+    var  engine:       UMGridEngine    // document + undo stack
+    var  activeStyleID: UUID?
+
+    func toUMLayer() -> UMLayer { ... }   // called at save time
+}
+```
+
+`UMLayer` is the serialised form (Codable value type stored in the `.umproj` JSON array). `UMLayerState` is the live in-memory form that holds the engine and per-layer UI state.
+
+#### AppController integration
+
+`AppController` holds `layerStates: [UMLayerState]` and `activeLayerIndex: Int`. The existing `engine: UMGridEngine` stored property is preserved but updated by `selectLayer()` to always point to the active layer's engine — all 187+ existing `controller.engine.X` call sites in view files remain unchanged.
+
+Key methods:
+- `selectLayer(_ index: Int)` — saves departing layer's `activeStyleID`, switches `engine`
+- `addLayer(name:)` — appends a new layer with the active layer's grid resolution
+- `removeLayer(at:)`, `duplicateLayer(at:)`, `moveLayer(from:to:)` — full CRUD
+
+Save encodes `[UMLayer]` (via `UMLayerState.toUMLayer()`); load decodes `[UMLayer]` and creates fresh `[UMLayerState]` instances.
+
+#### Playback
+
+The playback loop advances **all** layer engines in lockstep each tick:
+
+```swift
+for ls in self.layerStates { ls.engine.advance() }
+```
+
+All layers share the same frame clock. Timeline recording and navigation operate on the active layer only.
+
+#### Canvas rendering
+
+The live SwiftUI Canvas loops over all visible layers and renders each into an isolated compositing group:
+
+```swift
+for ls in controller.layerStates where ls.isVisible {
+    ctx.drawLayer { layerCtx in
+        layerCtx.opacity = ls.opacity
+        // draw ls.engine.document.cells using per-layer cellW/cellH
+    }
+}
+```
+
+Each layer computes its own cell dimensions from its grid resolution (`lCellW = gridW / Double(lConfig.cols)`), so layers can have different grid resolutions occupying the same canvas area. Selection highlights apply only to the active layer.
+
+#### Export compositing
+
+For PNG and video export, layers are composited in CoreGraphics:
+
+1. Render each visible layer's cells to a transparent-background `CGImage` via `ImageRenderer(content: FrameCapture(..., drawBackground: false))`
+2. Draw into a `CGBitmapContext` at the layer's opacity using `ctx.setAlpha(ls.opacity)`
+
+`umRenderComposited()` in ContentView.swift handles PNG export. `UMVideoExporter.export(layers: [UMLayer], ...)` handles video, rendering from the serialised layer snapshots captured at export start.
+
+#### Accumulation (background-draw OFF)
+
+In accumulation mode the frame buffer is the composite of all layers from the previous tick. Each new frame blends all current layers on top of the existing buffer.
+
+#### Layer UI
+
+A **LAYERS** section appears at the top of the Project tab in the Style Palette. Each row shows:
+- Visibility toggle (eye icon)
+- Active-layer indicator dot (accent colour when active, faint when not)
+- Layer name
+- Opacity percentage
+
+Tap a row to switch the active layer. Context menu: Duplicate, Opacity presets (100/75/50/25%), Delete. `+ New Layer` button appends a new layer with the same grid resolution as the current active layer.
+
+#### Current limitations (deferred to §15.8)
+
+- All layers share the global `colorMapEngine` (no per-layer color maps)
+- No layer blend modes beyond normal (opacity)
+- No animated layer opacity
+- No camera/parallax or depth ordering — see §15.8
+
+---
+
 ### 6.7 Project Structure on Disk
 
 ```
@@ -620,6 +720,8 @@ UMEngine (Swift Package — library)
 │   ├── CellStyle.swift
 │   ├── MotionPreset.swift
 │   └── OrderChaosEngine.swift
+├── Composition/
+│   └── UMLayer.swift            // Codable layer value type — ✓ built
 ├── Placement/
 │   ├── PhasePolicy.swift        // phase offset application at paint time
 │   └── ResolutionResampler.swift // carries offsets + phases through resize
@@ -1266,6 +1368,20 @@ Everything in this list is implemented and functional in the current build (`mai
 - SEQUENCE section: mode picker (Sequential/All/Random), Frames/Step stepper — fully wired to renderer
 - ADVANCED section (placeholder)
 
+**Layer system**
+- `UMLayer` (Codable struct in UMEngine) — serialisable layer value type with id, name, isVisible, opacity, document
+- `UMLayerState` (@Observable @MainActor class in UMApp) — live in-memory layer wrapping `UMGridEngine` + per-layer UI state
+- Layer stack in `AppController`: `layerStates: [UMLayerState]`, `activeLayerIndex`, `selectLayer()`, `addLayer()`, `removeLayer(at:)`, `duplicateLayer(at:)`, `moveLayer(from:to:)`
+- The stored `engine` property always points to the active layer's engine — all existing `controller.engine.X` call sites work unchanged
+- Playback advances all layer engines in lockstep; timeline recording/navigation is per-active-layer
+- Multi-layer live canvas: `ctx.drawLayer { layerCtx in layerCtx.opacity = ... }` per visible layer; each layer computes cell dimensions from its own grid resolution
+- Selection highlights apply only to the active layer
+- `captureFrameBuffer` composites all visible layers via CoreGraphics into the accumulation buffer
+- PNG export: `umRenderComposited()` composites layers at their respective opacities
+- Video export: `UMVideoExporter.export(layers: [UMLayer], ...)` renders and composites per-frame
+- Save/load: project file encodes `[UMLayer]` JSON array (replaces single `UMGridDocument`)
+- LAYERS section at top of Project tab in Style Palette: visibility toggle, active indicator, name, opacity %, add/remove/duplicate via context menu
+
 **Project and preferences**
 - Cmd+N / Cmd+O / Cmd+S / Cmd+Shift+S
 - Preferences window: custom projects directory
@@ -1472,6 +1588,54 @@ Shape rendering, Order/Chaos jitter, and SEQUENCE cycling are now built (§12.4)
 
 ---
 
+### 15.8 Camera and Parallax System
+
+The layer stack (§6.8) provides the foundation. These extensions add depth, movement, and spatial storytelling to multi-layer compositions. Explicitly deferred until the basic layer system has been used and understood.
+
+**Camera**
+
+A virtual camera that can translate, scale, and rotate relative to the canvas origin. All layers render in camera space rather than screen space:
+
+```swift
+struct UMCamera: Codable {
+    var tx: Double        // horizontal pan (canvas pixels)
+    var ty: Double        // vertical pan
+    var scale: Double     // 1.0 = no zoom
+    var rotation: Double  // degrees
+}
+```
+
+The camera transform is applied as a single `CGAffineTransform` to the canvas context before rendering. Animating camera properties (via a motion driver or keyframe path) produces camera moves over time.
+
+**Parallax**
+
+Each layer gains a `depthOrder: Int` (or a `parallaxFactor: Double` in 0–1) that controls how much of the camera movement it responds to:
+- `parallaxFactor = 1.0` — moves 1:1 with the camera (foreground layer, locked to camera)
+- `parallaxFactor = 0.0` — does not move at all (background fixed to world space)
+- Values between: partial movement, simulating depth
+
+The parallax shift for layer `i` at camera offset `(tx, ty)` is:
+```
+layerShift = (tx * (1 - factor), ty * (1 - factor))
+```
+
+**Per-layer properties to add**
+
+| Property | Type | Default | Notes |
+|---|---|---|---|
+| `depthOrder` | Int | 0 | Higher = further from camera |
+| `parallaxFactor` | Double | 1.0 | How strongly camera movement affects this layer |
+| `layerOffset` | CGVector | .zero | Static positional offset for manual positioning |
+| `blendMode` | CGBlendMode | .normal | Compositing blend mode |
+
+**Animated layer properties (future extension)**
+
+Per-layer opacity, parallaxFactor, and layerOffset could all be driven by `AnimationDriver` instances (oscillator, keyframe, noise) once the deeper Loom driver integration (§15.1) is complete. This would allow layers to drift, pulse in opacity, or shift depth dynamically.
+
+**Scope:** medium — roughly 3–4 days. Camera state is simple to add to `AppController`; the parallax transform is a per-layer CGAffineTransform applied in the canvas loop; the UI is a new CAMERA section in Quick Adjust and a depth/parallax slider per layer row. The main complexity is in the export pipeline (camera transform must be applied consistently per-frame).
+
+---
+
 ### Summary Table
 
 | Area | Item | Depends on |
@@ -1487,4 +1651,9 @@ Shape rendering, Order/Chaos jitter, and SEQUENCE cycling are now built (§12.4)
 | **Geometry** | In-app geometry editor (LoomEditorKit) | Loom stabilisation |
 | **Overlays** | Phase heat-map overlay | — |
 | **Overlays** | Background image | — |
+| **Layers** | Camera system (pan, zoom, rotation) | Layer system ✓ |
+| **Layers** | Parallax (per-layer depth factor) | Camera system |
+| **Layers** | Per-layer blend modes | Layer system ✓ |
+| **Layers** | Animated layer opacity / parallax drivers | Loom driver integration |
+| **Layers** | Per-layer color maps | Layer system ✓ |
 | **Compat** | Legacy UM XML import | — |
