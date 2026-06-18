@@ -83,6 +83,16 @@ struct ToolStripView: View {
             .font(.system(size: 11))
             .help("Phase policy for newly painted cells")
 
+            // Phase step frames — step size used by Sequential, Spatial, Radial policies
+            phaseStepControl
+
+            Divider().frame(height: 16).padding(.horizontal, 4)
+
+            // Spatial scatter — random position offset applied when cells are painted
+            scatterControl
+
+            Divider().frame(height: 16).padding(.horizontal, 4)
+
             Toggle("Stretch", isOn: Binding(
                 get: { controller.stretchSpritesToCell },
                 set: { controller.stretchSpritesToCell = $0 }
@@ -165,6 +175,51 @@ struct ToolStripView: View {
                 .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
             .disabled(!isStamp)
             .opacity(isStamp ? 1 : 0.4)
+        }
+    }
+
+    private var phaseStepControl: some View {
+        HStack(spacing: 3) {
+            Text("φ step")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                Button("−") {
+                    controller.engine.document.gridConfig.phaseStepFrames =
+                        max(1, controller.engine.document.gridConfig.phaseStepFrames - 1)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 16)
+                Text("\(controller.engine.document.gridConfig.phaseStepFrames) fr")
+                    .font(.system(size: 11, design: .monospaced))
+                    .frame(minWidth: 36)
+                    .multilineTextAlignment(.center)
+                Button("+") {
+                    controller.engine.document.gridConfig.phaseStepFrames =
+                        min(240, controller.engine.document.gridConfig.phaseStepFrames + 1)
+                }
+                .buttonStyle(.plain)
+                .frame(width: 16)
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .overlay(RoundedRectangle(cornerRadius: 4)
+                .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5))
+        }
+        .help("Phase step frames — used by Sequential, Spatial, and Radial policies")
+    }
+
+    private var scatterControl: some View {
+        HStack(spacing: 4) {
+            Text("Scatter")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            Slider(value: Binding(
+                get: { controller.engine.document.gridConfig.spatialScatter },
+                set: { controller.engine.document.gridConfig.spatialScatter = $0 }
+            ), in: 0...1)
+            .frame(width: 80)
+            .help("Random position scatter applied when cells are painted (0 = none, 1 = up to ±1 cell)")
         }
     }
 

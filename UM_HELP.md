@@ -1,6 +1,6 @@
 # UM — User Guide
 
-_Current as of build: 2026-06-18 (rev 9). Covers what is implemented and testable today._
+_Current as of build: 2026-06-18 (rev 10). Covers what is implemented and testable today._
 
 ---
 
@@ -189,9 +189,35 @@ A compact popup menu at the right of the Tool Strip (before the Stretch checkbox
 
 The test grid is loaded with **Sequential** policy (phaseStepFrames = 8), so painted cells receive progressively higher phase offsets.
 
+### Phase step (φ step)
+
+Immediately after the Phase Policy picker, a compact **φ step** stepper controls `phaseStepFrames` — the frame increment used by Sequential, Spatial, and Radial policies. Range: 1–240 frames. Default: 4.
+
+- **Sequential:** each cell painted in sequence gets `phaseOffset = N × phaseStepFrames`, where N is its paint order within the stroke.
+- **Spatial:** `phaseOffset = (row + col) × phaseStepFrames`.
+- **Radial:** `phaseOffset = distanceFromCentre × phaseStepFrames`.
+
+Larger steps spread cells further around the animation cycle. Smaller steps cluster them together. Synchronized and Random policies ignore this value.
+
+Click **−** / **+** to step by 1 frame at a time. The display shows the value in frames (e.g. `8 fr`).
+
 **Phase offset and motion paths:** `phaseOffset` also controls where each cell enters its keyframe path loop. A field of cells sharing one path but painted with Sequential policy will produce a travelling wave along the path — each sprite is at a different point in the same orbit. This is the primary way to differentiate cells that share a path.
 
 **Important:** changing the policy affects only cells painted after the change. Existing cells keep their current `phaseOffset`. This is intentional — you can deliberately mix policies by painting layers with different settings.
+
+---
+
+## 7. Stretch
+
+### Spatial Scatter
+
+To the right of the phase step stepper, a **Scatter** slider controls `spatialScatter` (0.0–1.0). When non-zero, each cell painted receives a random `positionOffset` applied at paint time:
+
+- `0` (leftmost) — sprites land exactly at cell centres. Default.
+- `0.5` — random offset up to ±0.5 × cell dimensions on each axis.
+- `1` (rightmost) — random offset up to ±1 full cell width/height on each axis.
+
+Scatter is applied once when a cell is drawn. Existing cells are unaffected by moving the slider — use **Rescatter** in PLACE & TIME to re-scatter selected cells with the current value.
 
 ---
 
@@ -787,10 +813,6 @@ To change it, open **UM → Preferences…** (Cmd+,) and click **Choose…**. Cl
 
 **Background image** — the CANVAS section supports a solid background colour only. Loading a visible image that sits behind the grid as a compositing backdrop is planned. This is distinct from the **Color Map** (which samples pixel color to colorize sprites but never renders the image itself).
 
-**Spatial Scatter control** — fixed at zero (sprites land at cell centres). A tool strip slider is planned.
-
-**Phase Step Frames control** — fixed at 8. A numeric field alongside the Phase Policy picker is planned.
-
 ---
 
-_End of UM Help — v0.7_
+_End of UM Help — v0.8_
