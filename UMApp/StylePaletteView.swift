@@ -7,6 +7,7 @@ struct StylePaletteView: View {
     @Environment(AppController.self) private var controller
     @State private var tab: PaletteTab = .project
     @State private var renamingLayerID: UUID? = nil
+    @State private var dropTargetLayerID: UUID? = nil
 
     private enum PaletteTab { case project, library }
 
@@ -217,7 +218,23 @@ struct StylePaletteView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
+        .overlay(alignment: .top) {
+            if dropTargetLayerID == ls.id {
+                Color.accentColor.frame(height: 2)
+            }
+        }
         .contentShape(Rectangle())
+        .draggable(ls.id.uuidString)
+        .dropDestination(for: String.self) { items, _ in
+            guard let idString = items.first,
+                  let fromIndex = controller.layerStates.firstIndex(where: { $0.id.uuidString == idString }),
+                  fromIndex != index
+            else { return false }
+            controller.moveLayer(from: fromIndex, to: index)
+            return true
+        } isTargeted: { targeted in
+            dropTargetLayerID = targeted ? ls.id : nil
+        }
         .onTapGesture {
             renamingLayerID = nil
             controller.selectLayer(index)
