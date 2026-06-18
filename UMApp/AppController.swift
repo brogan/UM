@@ -51,10 +51,18 @@ final class AppController {
     /// Kept as a stored @Observable var so all existing engine.X observation chains work.
     var engine: UMGridEngine
 
+    /// Project-level style palette — shared across all layers.
+    /// didSet propagates to every layer engine so rendering always sees current styles.
+    var projectStyles: [CellStyle] = [] {
+        didSet {
+            for ls in layerStates { ls.engine.document.styles = projectStyles }
+        }
+    }
+
     /// Switch to a layer by index, saving per-layer UI state back to the departing layer.
     func selectLayer(_ index: Int) {
         guard index >= 0, index < layerStates.count, index != activeLayerIndex else { return }
-        UMLogger.shared.log("selectLayer \(activeLayerIndex)→\(index) styles:\(engine.document.styles.count)")
+        UMLogger.shared.log("selectLayer \(activeLayerIndex)→\(index) styles:\(projectStyles.count)")
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         activeLayerIndex = index
         let layer = layerStates[index]
@@ -65,14 +73,12 @@ final class AppController {
     }
 
     func addLayer(name: String? = nil) {
-        let config  = engine.document.gridConfig
-        // Inherit project styles from the current layer so the new layer has a usable palette.
-        let styles  = engine.document.styles
-        var doc     = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
-        doc.styles  = styles
-        let label   = name ?? "Layer \(layerStates.count + 1)"
-        let ls      = UMLayerState(layer: UMLayer(name: label, document: doc))
-        UMLogger.shared.log("addLayer '\(label)' inherited \(styles.count) styles, total layers→\(layerStates.count + 1)")
+        let config = engine.document.gridConfig
+        var doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        doc.styles = projectStyles
+        let label  = name ?? "Layer \(layerStates.count + 1)"
+        let ls     = UMLayerState(layer: UMLayer(name: label, document: doc))
+        UMLogger.shared.log("addLayer '\(label)' \(projectStyles.count) styles, total layers→\(layerStates.count + 1)")
         layerStates.append(ls)
         selectLayer(layerStates.count - 1)
         rebuildShapePolygonMap()
@@ -146,6 +152,7 @@ final class AppController {
         layerStates      = [ls]
         engine           = ls.engine
         activeLayerIndex = 0
+        projectStyles    = doc.styles
         activeStyleID    = doc.styles.first?.id
         loadShapePolygons()
         rebuildShapePolygonMap()
@@ -229,7 +236,7 @@ final class AppController {
     func captureState() {
         let state = UMTimelineState(gridConfig: engine.document.gridConfig,
                                     cells: engine.document.cells,
-                                    styles: engine.document.styles,
+                                    styles: projectStyles,
                                     holdFrames: recordingInterval)
         engine.document.timeline.append(state)
         if engine.document.timeline.count > 500 {
@@ -243,12 +250,12 @@ final class AppController {
         let state = timeline[index]
         engine.document.gridConfig = state.gridConfig
         engine.document.cells      = state.cells
-        engine.document.styles     = state.styles
+        projectStyles              = state.styles
         selectedIndices = []
         timelinePosition = index
         stateFrameCount  = 0
-        if let id = activeStyleID, !engine.document.styles.contains(where: { $0.id == id }) {
-            activeStyleID = engine.document.styles.first?.id
+        if let id = activeStyleID, !projectStyles.contains(where: { $0.id == id }) {
+            activeStyleID = projectStyles.first?.id
         }
     }
 
@@ -319,7 +326,7 @@ final class AppController {
                             self.timelinePosition = next
                             self.engine.document.gridConfig = tl[next].gridConfig
                             self.engine.document.cells      = tl[next].cells
-                            self.engine.document.styles     = tl[next].styles
+                            self.projectStyles              = tl[next].styles
                             self.selectedIndices = []
                         }
                     }
@@ -343,7 +350,7 @@ final class AppController {
 
     var activeStyle: CellStyle? {
         guard let id = activeStyleID else { return nil }
-        return engine.document.styles.first { $0.id == id }
+        return projectStyles.first { $0.id == id }
     }
 
     // MARK: Projects directory
@@ -379,6 +386,7 @@ final class AppController {
         layerStates      = [ls]
         engine           = ls.engine
         activeLayerIndex = 0
+        projectStyles    = doc.styles
         activeStyleID    = doc.styles.first?.id
         selectedIndices  = []
         currentFileURL   = nil
@@ -448,7 +456,9 @@ final class AppController {
         layerStates      = layers.map { UMLayerState(layer: $0) }
         activeLayerIndex = 0
         engine           = layerStates[0].engine
-        activeStyleID    = layerStates[0].activeStyleID
+        // Layer 0's styles are canonical; sync to all layers (handles old files where styles diverged).
+        projectStyles    = layerStates[0].engine.document.styles
+        activeStyleID    = layerStates[0].activeStyleID ?? projectStyles.first?.id
         selectedIndices  = []
         currentFileURL   = url
         rebuildShapePolygonMap()
@@ -460,7 +470,7 @@ final class AppController {
         }
         UMLogger.shared.logState(prefix: "read \(url.lastPathComponent)",
                                   layers: layerStates.count,
-                                  styles: engine.document.styles.count,
+                                  styles: projectStyles.count,
                                   cells:  engine.document.cells.filter { $0.isDrawn }.count)
     }
 
@@ -493,27 +503,30 @@ final class AppController {
     // MARK: Style transforms
 
     func applyTransform(_ transform: StyleTransform, to styleID: UUID) {
-        guard let style = engine.document.styles.first(where: { $0.id == styleID }) else { return }
+        guard let style = projectStyles.first(where: { $0.id == styleID }) else { return }
         let variant = style.applying(transform)
-        engine.document.styles.append(variant)
+        projectStyles.append(variant)
         activeStyleID = variant.id
     }
 
     func deleteStyle(_ styleID: UUID) {
-        guard engine.document.styles.count > 1 else { return }
+        guard projectStyles.count > 1 else { return }
         engine.pushUndoSnapshot()
-        let fallbackID = engine.document.styles.first { $0.id != styleID }?.id ?? UUID()
-        for i in engine.document.cells.indices where engine.document.cells[i].styleID == styleID {
-            engine.document.cells[i].styleID = fallbackID
+        let fallbackID = projectStyles.first { $0.id != styleID }?.id ?? UUID()
+        // Reassign cells across all layers, not just the active one.
+        for ls in layerStates {
+            for i in ls.engine.document.cells.indices where ls.engine.document.cells[i].styleID == styleID {
+                ls.engine.document.cells[i].styleID = fallbackID
+            }
         }
-        engine.document.styles.removeAll { $0.id == styleID }
-        if activeStyleID == styleID { activeStyleID = engine.document.styles.first?.id }
+        projectStyles.removeAll { $0.id == styleID }
+        if activeStyleID == styleID { activeStyleID = projectStyles.first?.id }
     }
 
     // MARK: Style library
 
     func promoteStyleToLibrary(_ styleID: UUID) {
-        guard let style = engine.document.styles.first(where: { $0.id == styleID }) else { return }
+        guard let style = projectStyles.first(where: { $0.id == styleID }) else { return }
         if let idx = globalLibrary.styles.firstIndex(where: { $0.id == styleID }) {
             globalLibrary.styles[idx] = style
         } else {
@@ -524,8 +537,8 @@ final class AppController {
 
     func importStyleFromLibrary(_ libraryStyleID: UUID) {
         guard let style = globalLibrary.styles.first(where: { $0.id == libraryStyleID }) else { return }
-        guard !engine.document.styles.contains(where: { $0.id == libraryStyleID }) else { return }
-        engine.document.styles.append(style)
+        guard !projectStyles.contains(where: { $0.id == libraryStyleID }) else { return }
+        projectStyles.append(style)
         activeStyleID = style.id
     }
 
@@ -648,19 +661,21 @@ final class AppController {
 
     func deleteShape(_ id: UUID) {
         engine.document.shapes.removeAll { $0.id == id }
-        for i in engine.document.styles.indices {
-            engine.document.styles[i].shapeIDs.removeAll { $0 == id }
-        }
+        var updated = projectStyles
+        for i in updated.indices { updated[i].shapeIDs.removeAll { $0 == id } }
+        projectStyles = updated
         rebuildShapePolygonMap()
     }
 
     func toggleShape(_ shapeID: UUID, inStyle styleID: UUID) {
-        guard let i = engine.document.styles.firstIndex(where: { $0.id == styleID }) else { return }
-        if let j = engine.document.styles[i].shapeIDs.firstIndex(of: shapeID) {
-            engine.document.styles[i].shapeIDs.remove(at: j)
+        var updated = projectStyles
+        guard let i = updated.firstIndex(where: { $0.id == styleID }) else { return }
+        if let j = updated[i].shapeIDs.firstIndex(of: shapeID) {
+            updated[i].shapeIDs.remove(at: j)
         } else {
-            engine.document.styles[i].shapeIDs.append(shapeID)
+            updated[i].shapeIDs.append(shapeID)
         }
+        projectStyles = updated
     }
 
     func promoteShapeToLibrary(_ id: UUID) {

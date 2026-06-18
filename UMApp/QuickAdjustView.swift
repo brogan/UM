@@ -88,11 +88,11 @@ struct QuickAdjustView: View {
                     text: Binding(
                         get: {
                             guard let j = activeStyleIndex else { return "" }
-                            return controller.engine.document.styles[j].name
+                            return controller.projectStyles[j].name
                         },
                         set: { newName in
                             guard let j = activeStyleIndex else { return }
-                            controller.engine.document.styles[j].name = newName
+                            controller.projectStyles[j].name = newName
                         }
                     )
                 )
@@ -104,7 +104,7 @@ struct QuickAdjustView: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
-            Text("\(controller.engine.document.styles.count)")
+            Text("\(controller.projectStyles.count)")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.quaternary)
         }
@@ -394,7 +394,7 @@ struct QuickAdjustView: View {
 
             InspectorField("Style") {
                 Picker("", selection: selectionStyleBinding) {
-                    ForEach(controller.engine.document.styles) { style in
+                    ForEach(controller.projectStyles) { style in
                         Text(style.name).tag(style.id)
                     }
                 }
@@ -909,18 +909,18 @@ struct QuickAdjustView: View {
 
     private var activeStyleIndex: Int? {
         guard let id = controller.activeStyleID else { return nil }
-        return controller.engine.document.styles.firstIndex { $0.id == id }
+        return controller.projectStyles.firstIndex { $0.id == id }
     }
 
     private func colorBinding(_ kp: WritableKeyPath<CellStyle, UMColor>) -> Binding<Color> {
         Binding(
             get: {
                 guard let i = activeStyleIndex else { return .accentColor }
-                return controller.engine.document.styles[i][keyPath: kp].swiftUIColor
+                return controller.projectStyles[i][keyPath: kp].swiftUIColor
             },
             set: { color in
                 guard let i = activeStyleIndex else { return }
-                controller.engine.document.styles[i][keyPath: kp] = UMColor(color)
+                controller.projectStyles[i][keyPath: kp] = UMColor(color)
             }
         )
     }
@@ -929,11 +929,11 @@ struct QuickAdjustView: View {
         Binding(
             get: {
                 guard let i = activeStyleIndex else { return fallback }
-                return controller.engine.document.styles[i][keyPath: kp]
+                return controller.projectStyles[i][keyPath: kp]
             },
             set: { val in
                 guard let i = activeStyleIndex else { return }
-                controller.engine.document.styles[i][keyPath: kp] = val
+                controller.projectStyles[i][keyPath: kp] = val
             }
         )
     }
@@ -1078,7 +1078,7 @@ struct QuickAdjustView: View {
             get: { controller.activeStyle?.framesPerStep ?? 4 },
             set: { val in
                 guard let i = activeStyleIndex else { return }
-                controller.engine.document.styles[i].framesPerStep = val
+                controller.projectStyles[i].framesPerStep = val
             }
         )
     }

@@ -630,7 +630,7 @@ struct GridCanvasPlaceholder: View {
 
         switch controller.activeTool {
         case .draw:
-            let sid = controller.activeStyleID ?? controller.engine.document.styles.first?.id ?? UUID()
+            let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
             controller.engine.setCellDrawn(index, drawn: true, styleID: sid)
             controller.engine.document.cells[index].pathID = controller.activePathID
         case .erase:
@@ -640,7 +640,7 @@ struct GridCanvasPlaceholder: View {
                 controller.activeStyleID = style.id
             }
         case .fill:
-            let sid = controller.activeStyleID ?? controller.engine.document.styles.first?.id ?? UUID()
+            let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
             controller.engine.floodFill(from: index, styleID: sid, pathID: controller.activePathID)
         case .select, .nudge:
             break  // handled separately

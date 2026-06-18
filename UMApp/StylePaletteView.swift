@@ -57,13 +57,13 @@ struct StylePaletteView: View {
 
                 sectionHeader("STYLES")
 
-                ForEach(controller.engine.document.styles) { style in
+                ForEach(controller.projectStyles) { style in
                     projectStyleRow(style)
                 }
 
                 Button("+ New Style") {
-                    let style = CellStyle(name: "Style \(controller.engine.document.styles.count + 1)")
-                    controller.engine.document.styles.append(style)
+                    let style = CellStyle(name: "Style \(controller.projectStyles.count + 1)")
+                    controller.projectStyles.append(style)
                     controller.activeStyleID = style.id
                 }
                 .buttonStyle(.plain)
@@ -313,7 +313,7 @@ struct StylePaletteView: View {
             Button("Save to Library") { controller.promoteStyleToLibrary(style.id) }
             Divider()
             Button("Delete Style", role: .destructive) { controller.deleteStyle(style.id) }
-                .disabled(controller.engine.document.styles.count <= 1)
+                .disabled(controller.projectStyles.count <= 1)
         }
     }
 
@@ -355,7 +355,7 @@ struct StylePaletteView: View {
     }
 
     private func libraryStyleRow(_ style: CellStyle) -> some View {
-        let inProject = controller.engine.document.styles.contains { $0.id == style.id }
+        let inProject = controller.projectStyles.contains { $0.id == style.id }
         return HStack(spacing: 6) {
             Circle()
                 .stroke(Color.secondary.opacity(0.45), lineWidth: 1)
@@ -419,7 +419,7 @@ struct StylePaletteView: View {
     }
 
     private func projectShapeRow(_ shape: UMShape) -> some View {
-        let activeStyle = controller.engine.document.styles.first { $0.id == controller.activeStyleID }
+        let activeStyle = controller.projectStyles.first { $0.id == controller.activeStyleID }
         let assigned = activeStyle?.shapeIDs.contains(shape.id) ?? false
         let seqIndex = activeStyle?.shapeIDs.firstIndex(of: shape.id)
         return HStack(spacing: 6) {
