@@ -1,6 +1,6 @@
 # UM — User Guide
 
-_Current as of build: 2026-06-18 (rev 8). Covers what is implemented and testable today._
+_Current as of build: 2026-06-18 (rev 9). Covers what is implemented and testable today._
 
 ---
 
@@ -15,6 +15,7 @@ _Current as of build: 2026-06-18 (rev 8). Covers what is implemented and testabl
 7. [Stretch](#7-stretch)
 8. [Playback and Recording](#8-playback-and-recording)
 9. [Quick Adjust](#9-quick-adjust)
+9b. [Export — Stills and Video](#9b-export--stills-and-video)
 10. [Resample Grid](#10-resample-grid)
 11. [Undo and Redo](#11-undo-and-redo)
 12. [Style Palette and Library](#12-style-palette-and-library)
@@ -67,7 +68,7 @@ Both layers are additive: a cell with the Spin preset and an Orbit path will spi
 
 **Grid Canvas** — centre. The live, always-animated workspace. The canvas is letterboxed to maintain the output aspect ratio set in the PROJECT section; the neutral grey border outside the canvas is not part of the output. Draw here with the painting tools.
 
-**Quick Adjust** — right column. Collapsible sections for project-wide settings (PROJECT, CANVAS) and per-style or per-cell parameters (ORDER/CHAOS, PLACE & TIME, RENDER, MOTION, PATH EDITOR, SEQUENCE, ADVANCED).
+**Quick Adjust** — right column. Collapsible sections for project-wide settings (PROJECT, CANVAS, EXPORT) and per-style or per-cell parameters (ORDER/CHAOS, PLACE & TIME, RENDER, MOTION, PATH EDITOR, SEQUENCE, ADVANCED).
 
 **Transport Bar** — across the bottom. Rewind, play/pause, record, frame counter, and timeline navigation controls.
 
@@ -219,6 +220,9 @@ The **Transport Bar** at the bottom of the window controls animation playback an
 | ▶ / ⏸ | Space | Play / Pause. Toggles animation playback at 24 fps. Pausing holds the current frame. |
 | ● / ■ | — | Record / Stop recording. See below. |
 | Frame counter | — | Shows the current frame number in the form `N fr`. |
+| PNG | — | Export the current frame as a PNG still. See [Export](#export-stills-and-video) below. |
+| SVG | — | SVG export (not yet implemented). |
+| Video | — | Export an animation as a .mov video. See [Export](#export-stills-and-video) below. |
 
 **Space** toggles playback from anywhere in the window, as long as a text field does not have keyboard focus.
 
@@ -303,6 +307,22 @@ Controls the fundamental output properties of the document.
 | Custom | — | Shown automatically when Width or Height don't match any preset |
 
 The canvas is **letterboxed** on screen: the drawing area always preserves the output aspect ratio regardless of window shape. The neutral grey area outside the canvas boundary is not part of the output.
+
+### EXPORT
+
+Controls the resolution and timing parameters for PNG and video export. These are project-wide settings and apply to both the PNG and Video buttons in the Transport Bar.
+
+| Field | Description |
+|---|---|
+| Multiplier | Scale factor applied to the canvas dimensions at export time. 1× = native canvas size (e.g. 1080 × 1080). 2× = double (2160 × 2160). 4× or 8× for very high quality stills or large-format output. |
+| Scale drawing | When checked (default), stroke widths scale proportionally with the multiplier so lines appear visually identical to the on-screen preview regardless of output size. When unchecked, stroke widths stay at their nominal pixel values and will appear thinner relative to the image at higher multipliers. |
+| Output | Read-only display of the actual pixel dimensions that will be written — canvas width × multiplier by canvas height × multiplier. |
+| FPS | Frames per second for video export. 24 or 30. |
+| Frames | Total number of animation frames to render for video. The duration in seconds is shown alongside (Frames ÷ FPS). Default is 96 frames (4 s at 24 fps). |
+
+**Output resolution** is computed at export time. Changing the canvas size in PROJECT or the multiplier here both affect it — the Output field updates live.
+
+**Scale drawing** is the equivalent of Loom's "Scale Image" toggle. Leave it on for production output; turn it off only if you specifically want the stroke widths unchanged (e.g. when testing at high multiplier to verify geometry rather than final look).
 
 ### CANVAS
 
@@ -525,6 +545,46 @@ Collapsed by default. Will contain subdivision parameters and animation driver c
 
 ---
 
+## 9b. Export — Stills and Video
+
+The **PNG** and **Video** buttons in the Transport Bar produce output files from the current canvas state. Export settings are configured in the EXPORT section of Quick Adjust (see [§9 EXPORT](#export)).
+
+### PNG export
+
+Renders the current frame at the configured output resolution and saves it as a PNG.
+
+1. Set **Multiplier** and **Scale drawing** in EXPORT.
+2. Navigate to the frame you want to export (pause, scrub, or leave at frame 0).
+3. Click **PNG** in the Transport Bar.
+4. A save panel opens, defaulted to a `renders/stills/` directory alongside the saved project file. The suggested filename is `<projectname>_YYYYMMDD_HHmmss.png`.
+5. Choose a location and click Save.
+
+The image is rendered at `canvasWidth × multiplier` × `canvasHeight × multiplier` pixels using `ImageRenderer` — the same drawing code as the live canvas but at the target resolution. If **Background draw** is off (accumulation mode), the current accumulation buffer is composited as the background layer before rendering the current frame.
+
+### Video export
+
+Renders a sequence of animation frames and writes a `.mov` file using H.264.
+
+1. Set **Multiplier**, **Scale drawing**, **FPS**, and **Frames** in EXPORT.
+2. Click **Video** in the Transport Bar.
+3. A save panel opens, defaulted to a `renders/animations/` directory alongside the project file.
+4. Choose a location and click Save. The save panel closes immediately and export begins in the background.
+5. A progress bar replaces the Video button in the Transport Bar. It shows `N%` as frames are rendered. The UI remains responsive during export.
+6. When export completes the Video button returns.
+
+**Accumulation mode in video:** if **Background draw** is off, each exported frame composites onto the previous frame's output, exactly as it appears on screen during live playback. The exported video correctly shows the build-up over time.
+
+**Render directories** are created automatically on first use alongside the saved project file:
+```
+<project_dir>/renders/stills/       ← PNG exports
+<project_dir>/renders/animations/   ← video exports
+```
+If the project has not yet been saved, the save panel defaults to `~/Documents/UM Projects/renders/`.
+
+**Codec:** H.264 in a `.mov` container. ProRes and HEVC are available in Loom's exporter and may be added to UM in a future build.
+
+---
+
 ## 10. Resample Grid
 
 Click the resolution label (e.g. **6 × 6**) at the far right of the Tool Strip to open the Resample Grid sheet.
@@ -717,11 +777,11 @@ To change it, open **UM → Preferences…** (Cmd+,) and click **Choose…**. Cl
 
 **Timeline scrubber** — a graphical horizontal scrubber (drag state boundaries to resize hold durations) is planned as an alternative to the list-based timeline editor.
 
-**Video export from timeline** — the Video button does not yet produce output. Intended pipeline: record states → adjust timing → export cut video.
+**Video export from timeline** — the Video button exports live animation (parametric and keyframe motion), not the recorded timeline state sequence. Timeline-driven cut video export (render states as discrete cuts) is planned separately.
+
+**SVG export** — the SVG button in the Transport Bar is a stub.
 
 **Zoom and pan** — the canvas fills the available panel area and resizes with the window but cannot be zoomed or panned independently. Planned: pinch-to-zoom, two-finger drag, Cmd+0 to fit.
-
-**Export** — the PNG, SVG, and Video buttons in the Transport Bar are stubs.
 
 **Geometry mode** — a dedicated Geometry mode (toggled from the toolbar) is planned for when the Loom geometry editor is available as an embeddable component. In the meantime, shapes are authored in standalone Loom and imported into UM via the Style Palette SHAPES section.
 
@@ -733,4 +793,4 @@ To change it, open **UM → Preferences…** (Cmd+,) and click **Choose…**. Cl
 
 ---
 
-_End of UM Help — v0.6_
+_End of UM Help — v0.7_
