@@ -11,7 +11,8 @@ import LoomEngine
 @MainActor
 final class AppController {
     var engine: UMGridEngine
-    var shapePolygons: [Polygon2D] = []
+    var shapePolygons: [Polygon2D] = []        // bundled default — used when a style has no shape assigned
+    var shapePolygonMap: [UUID: [Polygon2D]] = [:] // shape.id → decoded runtime polygons
 
     // UI state
     var activeTool: PaintTool        = .draw
@@ -38,6 +39,7 @@ final class AppController {
         engine = UMGridEngine(document: doc)
         activeStyleID = doc.styles.first?.id
         loadShapePolygons()
+        rebuildShapePolygonMap()
         ensureProjectsDirectory()
         loadGlobalLibrary()
         loadGlobalShapes()
@@ -55,6 +57,18 @@ final class AppController {
               let polygons = try? geoDoc.runtimePolygons()
         else { return }
         shapePolygons = polygons
+    }
+
+    private func rebuildShapePolygonMap() {
+        var map: [UUID: [Polygon2D]] = [:]
+        for shape in engine.document.shapes {
+            guard let data  = shape.geometryJSON.data(using: .utf8),
+                  let geo   = try? EditableGeometryJSONLoader.decode(from: data),
+                  let polys = try? geo.runtimePolygons()
+            else { continue }
+            map[shape.id] = polys
+        }
+        shapePolygonMap = map
     }
 
     var backgroundDraw: Bool = true {
@@ -309,6 +323,7 @@ final class AppController {
         activeStyleID   = doc.styles.first?.id
         selectedIndices = []
         currentFileURL  = url
+        rebuildShapePolygonMap()
         colorMapEngine.clear()
         if let src = doc.colorSource {
             let rows = doc.gridConfig.rows
@@ -496,6 +511,7 @@ final class AppController {
         let name  = url.deletingPathExtension().lastPathComponent
         let shape = UMShape(name: name, sourceFilename: url.lastPathComponent, geometryJSON: raw)
         engine.document.shapes.append(shape)
+        rebuildShapePolygonMap()
     }
 
     func deleteShape(_ id: UUID) {
@@ -503,6 +519,7 @@ final class AppController {
         for i in engine.document.styles.indices where engine.document.styles[i].shapeID == id {
             engine.document.styles[i].shapeID = nil
         }
+        rebuildShapePolygonMap()
     }
 
     func assignShape(_ shapeID: UUID?, toStyle styleID: UUID) {
@@ -531,6 +548,7 @@ final class AppController {
         guard let shape = globalShapes.first(where: { $0.id == id }) else { return }
         guard !engine.document.shapes.contains(where: { $0.id == id }) else { return }
         engine.document.shapes.append(shape)
+        rebuildShapePolygonMap()
     }
 
     func removeShapeFromLibrary(_ id: UUID) {
@@ -641,7 +659,8 @@ final class AppController {
                 guard let cgImage = umRenderFrame(
                     doc:              self.engine.document,
                     backgroundColor:  self.backgroundColor,
-                    polygons:         self.shapePolygons,
+                    shapePolygonMap:  self.shapePolygonMap,
+                    fallbackPolygons: self.shapePolygons,
                     colorMapEngine:   self.colorMapEngine,
                     backgroundDraw:   self.backgroundDraw,
                     stretchSprites:   self.stretchSpritesToCell,
@@ -678,6 +697,7 @@ final class AppController {
 
         let doc      = engine.document
         let bg       = backgroundColor
+        let polyMap  = shapePolygonMap
         let polys    = shapePolygons
         let cmEngine = colorMapEngine
         let bgDraw   = backgroundDraw
@@ -695,7 +715,8 @@ final class AppController {
                     try await UMVideoExporter.export(
                         doc:              doc,
                         backgroundColor:  bg,
-                        polygons:         polys,
+                        shapePolygonMap:  polyMap,
+                        fallbackPolygons: polys,
                         colorMapEngine:   cmEngine,
                         backgroundDraw:   bgDraw,
                         stretchSprites:   stretch,

@@ -317,8 +317,8 @@ struct GridCanvasPlaceholder: View {
 
                     // Drawn cells — positionOffset is in reference-pixel space,
                     // multiplied by scale to convert to screen pixels.
-                    let polygons    = controller.shapePolygons
-                    let useFallback = polygons.isEmpty
+                    let shapePolyMap = controller.shapePolygonMap
+                    let fallbackPolys = controller.shapePolygons
                     let cellHalf    = min(cellW, cellH)
                     let stretch     = controller.stretchSpritesToCell
                     let styleMap = Dictionary(uniqueKeysWithValues:
@@ -348,7 +348,14 @@ struct GridCanvasPlaceholder: View {
                         let my = Double(r) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY + motion.dy
                         let isSelected = controller.selectedIndices.contains(cell.gridIndex)
 
-                        if useFallback {
+                        let polygons: [Polygon2D]
+                        if let sid = style?.shapeID, let p = shapePolyMap[sid] {
+                            polygons = p
+                        } else {
+                            polygons = fallbackPolys
+                        }
+
+                        if polygons.isEmpty {
                             let rw   = (cellW - 4) / 2 * motion.scaleX
                             let rh   = (cellH - 4) / 2 * motion.scaleY
                             let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
@@ -541,7 +548,8 @@ struct GridCanvasPlaceholder: View {
             cells:           doc.cells,
             styles:          doc.styles,
             motionPaths:     doc.paths,
-            polygons:        controller.shapePolygons,
+            shapePolygonMap: controller.shapePolygonMap,
+            fallbackPolygons: controller.shapePolygons,
             stretchSprites:  controller.stretchSpritesToCell,
             currentFrame:    controller.engine.currentFrame,
             gridW: gridW, gridH: gridH,
@@ -834,7 +842,8 @@ private struct FrameCapture: View {
     let cells: [UMGridCell]
     let styles: [CellStyle]
     let motionPaths: [UMMotionPath]
-    let polygons: [Polygon2D]
+    let shapePolygonMap: [UUID: [Polygon2D]]
+    let fallbackPolygons: [Polygon2D]
     let stretchSprites: Bool
     let currentFrame: Int
     let gridW: Double
@@ -860,8 +869,6 @@ private struct FrameCapture: View {
             }
 
             let config   = gridConfig
-            let visible  = polygons.filter(\.visible)
-            let fallback = polygons.isEmpty
             let half     = min(cellW, cellH)
             let styleMap = Dictionary(uniqueKeysWithValues: styles.map { ($0.id, $0) })
             let pathMap  = Dictionary(uniqueKeysWithValues: motionPaths.map { ($0.id, $0) })
@@ -887,7 +894,14 @@ private struct FrameCapture: View {
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                 let mode    = style?.renderMode  ?? .filledStroked
 
-                if fallback {
+                let polygons: [Polygon2D]
+                if let sid = style?.shapeID, let p = shapePolygonMap[sid] {
+                    polygons = p
+                } else {
+                    polygons = fallbackPolygons
+                }
+
+                if polygons.isEmpty {
                     let rw = (cellW - 4 * strokeScale) / 2 * motion.scaleX
                     let rh = (cellH - 4 * strokeScale) / 2 * motion.scaleY
                     ctx.fill(Path(roundedRect: CGRect(x: mx-rw, y: my-rh, width: rw*2, height: rh*2),
@@ -896,7 +910,7 @@ private struct FrameCapture: View {
                 } else {
                     let zoomX = (stretchSprites ? cellW : half) * motion.scaleX
                     let zoomY = (stretchSprites ? cellH : half) * motion.scaleY
-                    for polygon in visible {
+                    for polygon in polygons.filter(\.visible) {
                         let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
                                                    zoomX: zoomX, zoomY: zoomY,
                                                    scaleX: cell.scaleX, scaleY: cell.scaleY,
@@ -924,7 +938,8 @@ private struct FrameCapture: View {
 func umRenderFrame(
     doc: UMGridDocument,
     backgroundColor: UMColor,
-    polygons: [Polygon2D],
+    shapePolygonMap: [UUID: [Polygon2D]],
+    fallbackPolygons: [Polygon2D],
     colorMapEngine: UMColorMapEngine,
     backgroundDraw: Bool,
     stretchSprites: Bool,
@@ -942,22 +957,23 @@ func umRenderFrame(
     let loopMode  = doc.colorSource?.videoLoopMode ?? .loop
     let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
     let renderer = ImageRenderer(content: FrameCapture(
-        existingBuffer:  backgroundDraw ? nil : accumulationBuffer,
-        backgroundColor: backgroundColor,
-        gridConfig:      config,
-        cells:           doc.cells,
-        styles:          doc.styles,
-        motionPaths:     doc.paths,
-        polygons:        polygons,
-        stretchSprites:  stretchSprites,
-        currentFrame:    frame,
+        existingBuffer:   backgroundDraw ? nil : accumulationBuffer,
+        backgroundColor:  backgroundColor,
+        gridConfig:       config,
+        cells:            doc.cells,
+        styles:           doc.styles,
+        motionPaths:      doc.paths,
+        shapePolygonMap:  shapePolygonMap,
+        fallbackPolygons: fallbackPolygons,
+        stretchSprites:   stretchSprites,
+        currentFrame:     frame,
         gridW: exportW, gridH: exportH,
         cellW: cellW, cellH: cellH,
         scaleX: sx, scaleY: sy,
-        displayScale:    1.0,
-        colorGrid:       colorGrid,
-        colorSource:     doc.colorSource,
-        strokeScale:     strokeScale
+        displayScale:     1.0,
+        colorGrid:        colorGrid,
+        colorSource:      doc.colorSource,
+        strokeScale:      strokeScale
     ))
     renderer.scale = 1.0
     return renderer.cgImage

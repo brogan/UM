@@ -20,7 +20,8 @@ enum UMVideoExporter {
     static func export(
         doc: UMGridDocument,
         backgroundColor: UMColor,
-        polygons: [Polygon2D],
+        shapePolygonMap: [UUID: [Polygon2D]],
+        fallbackPolygons: [Polygon2D],
         colorMapEngine: UMColorMapEngine,
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -72,7 +73,8 @@ enum UMVideoExporter {
             let cgImage = umRenderFrame(
                 doc:                doc,
                 backgroundColor:    backgroundColor,
-                polygons:           polygons,
+                shapePolygonMap:    shapePolygonMap,
+                fallbackPolygons:   fallbackPolygons,
                 colorMapEngine:     colorMapEngine,
                 backgroundDraw:     backgroundDraw,
                 stretchSprites:     stretchSprites,
