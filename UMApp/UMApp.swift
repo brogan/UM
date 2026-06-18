@@ -21,6 +21,10 @@ struct UMApp: App {
                     .keyboardShortcut("z", modifiers: [.command, .shift])
                     .disabled(!controller.engine.canRedo)
             }
+            // Help menu
+            CommandGroup(replacing: .help) {
+                HelpMenuButton()
+            }
             // File operations — replaces the built-in "New Window" entry
             CommandGroup(replacing: .newItem) {
                 Button("New")      { controller.newDocument() }
@@ -34,6 +38,12 @@ struct UMApp: App {
                     .keyboardShortcut("s", modifiers: [.command, .shift])
             }
         }
+
+        // Help window — opened via Help menu or ⌘/
+        Window("UM Help", id: "umhelp") {
+            HelpView()
+        }
+        .defaultSize(width: 840, height: 620)
 
         // Preferences window — adds "Preferences…" + Cmd+, to the app menu automatically
         Settings {
