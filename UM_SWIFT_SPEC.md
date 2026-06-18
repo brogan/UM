@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -535,19 +535,39 @@ struct UMGridDocument: Codable {
 
 ### 6.5 Order/Chaos Materialisation
 
-`CellStyle.orderChaos` is a scalar. `UMGridEngine` materialises it into concrete driver and subdivision values:
+`CellStyle.orderChaos` is a 0–1 scalar. Materialisation happens in two phases — the first is built; the second (polygon-level warping) is pending subdivision integration.
+
+**Phase 1 — built: per-cell sine-oscillator jitter**
+
+Applied in `computeMotion` in ContentView.swift, additive on top of the parametric preset and keyframe path. Each cell gets a unique phase seed from its grid index (golden-ratio multiplication), so neighbouring sprites never synchronise:
 
 ```swift
+let seed = Double(cellIndex) * 1.6180339887
+let t    = Double(frame + phaseOffset) / 60.0   // seconds
+m.dx       += cellW * 0.30 * oc * sin(t * 2.3τ + seed * 7.0)
+m.dy       += cellH * 0.30 * oc * sin(t * 1.7τ + seed * 11.0)
+m.rotation += 90.0        * oc * sin(t * 1.1τ + seed * 5.0)
+let sj      =               oc * 0.4 * sin(t * 0.9τ + seed * 3.0)
+m.scaleX   *= max(0.05, 1.0 + sj)
+m.scaleY   *= max(0.05, 1.0 + sj * 0.8)
+```
+
+At `orderChaos=1`: ±30% cell-size position drift, ±90° rotation, ±40%/32% scale. All smooth — no per-frame random.
+
+**Phase 2 — pending: polygon-level warping via SubdivisionEngine**
+
+The original spec intent (mapping `orderChaos` → `SubdivisionParams` → `SubdivisionEngine.process`) is the deeper materialisation and requires subdivision integration (§15.1). That is distinct from the jitter above and not yet built:
+
+```swift
+// Not yet implemented:
 func materializeOrderChaos(_ t: Double,
                             into params: inout SubdivisionParams,
                             animation: inout SpriteAnimation) {
     params.ranMiddle      = t > 0.3
     params.ranDiv         = 2.0 + t * 8.0
     params.visibilityRule = t > 0.7 ? .random1in3 : t > 0.5 ? .random1in2 : .all
-    // Path perturbation via renderer driver
     animation.rotationDriver.amplitude = t * 15.0
     animation.rotationDriver.mode      = t > 0.1 ? .jitter : .constant
-    // Position jitter (distinct from per-cell positionOffset which is static)
     animation.positionDriver.amplitude = t * 8.0
     animation.positionDriver.mode      = t > 0.2 ? .jitter : .constant
 }
@@ -1200,11 +1220,12 @@ Everything in this list is implemented and functional in the current build (`mai
 
 **Styles and animation**
 - `CellStyle` with fill, stroke, render mode, stroke width, motion preset, sequence mode, framesPerStep
+- `CellStyle.shapeIDs: [UUID]` — ordered list of assigned shapes (migrates from legacy single `shapeID`)
 - Parametric motion presets: Static, Spin, Pulse, Wave, Wander, Jitter, Color Cycle (all wired in renderer)
 - Keyframe motion paths: `UMMotionPath`, `PathKeyframe`, full PATH EDITOR UI, path overlay on canvas
 - Path deselect (click active path row again to draw without path assignment)
-- SEQUENCE mode and Frames/Step (persisted; visual effect pending full Loom pipeline)
-- ORDER/CHAOS slider (persisted; visual effect pending full Loom pipeline)
+- SEQUENCE mode fully wired: sequential, all, random — cycles through `style.shapeIDs` each `framesPerStep` frames, phase-offset per cell
+- ORDER/CHAOS jitter fully wired: layered sine oscillators (position ±30%, rotation ±90°, scale ±40%), per-cell seed, additive on top of parametric preset and path
 - Style variants: Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only (right-click context menu)
 
 **Style Palette and Library**
@@ -1213,6 +1234,7 @@ Everything in this list is implemented and functional in the current build (`mai
 - Global style/path library at `~/Library/Application Support/UM/library.json`
 - Shape library manager: `UMShape`, project shapes embedded in `.umproj`, global shapes at `~/Library/Application Support/UM/shapes/`
 - Import Loom polygon-set JSON files; shapes survive resave (geometry embedded, not file-referenced)
+- Shape rows support multi-select: clicking a row toggles the shape into/out of the active style's `shapeIDs` list; a sequence-position badge shows the order
 
 **Canvas and rendering**
 - Live animated canvas (SwiftUI Canvas, `@Observable` engine, 24 fps)
@@ -1236,12 +1258,12 @@ Everything in this list is implemented and functional in the current build (`mai
 - PROJECT section: canvas preset picker, width, height
 - EXPORT section: multiplier, scale drawing, FPS, frames, computed output
 - CANVAS section: background colour, background draw, capture interval, grid lines, Color Map subsection
-- ORDER/CHAOS section (stored, no visual effect yet)
+- ORDER/CHAOS section: slider wired to `CellStyle.orderChaos`; live jitter visible on canvas
 - PLACE & TIME section: style, path, offset X/Y, phase, scale X/Y (linkable), rotation, Rescatter
 - RENDER section: fill colour, stroke colour, stroke width, render mode
 - MOTION section: preset picker, speed, amount, phase
 - PATH EDITOR section: path picker, name, loop toggle, keyframe list, add keyframe, keyframe property editor (frame, dx, dy, rotation, scale X/Y, easing)
-- SEQUENCE section (stored, no visual effect yet)
+- SEQUENCE section: mode picker (Sequential/All/Random), Frames/Step stepper — fully wired to renderer
 - ADVANCED section (placeholder)
 
 **Project and preferences**
@@ -1265,6 +1287,10 @@ These items appeared in the §12.4 "not yet implemented" list in prior revisions
 | Image-based color system | ✓ Built — static + video, `UMColorMapEngine`, full CANVAS UI |
 | Shape library manager | ✓ Built — see §13 |
 | Open curves / points / ovals | ✓ Built — all five `PolygonType` cases rendered |
+| Shape rendering via assigned geometry | ✓ Built — `shapePolygonMap: [UUID: [Polygon2D]]`, decoded once per shape, looked up per cell at render time |
+| `shapeID: UUID?` → `shapeIDs: [UUID]` | ✓ Built — ordered list enables SEQUENCE; backward-compat Codable migration from old files |
+| Order/Chaos jitter | ✓ Built — sine-oscillator position/rotation/scale jitter in `computeMotion`; subdivision-level warp remains pending |
+| SEQUENCE shape cycling | ✓ Built — sequential, all (simultaneous), random; phase-offset per cell; `resolvePolygons()` helper |
 
 ---
 
@@ -1299,8 +1325,10 @@ UMShape                                     (UMEngine/Shape/UMShape.swift)
   sourceFilename: String                    — original Loom file name, for reference
   geometryJSON:   String                    — raw Loom polygonSet JSON content
 
-CellStyle.shapeID: UUID?                    — the shape assigned to this style (nil = default)
+CellStyle.shapeIDs: [UUID]                  — ordered list of assigned shapes (SEQUENCE cycles this)
+CellStyle.shapeID:  UUID? { shapeIDs.first }  — computed convenience accessor
 UMGridDocument.shapes: [UMShape]            — project-local shape assets
+AppController.shapePolygonMap: [UUID: [Polygon2D]]  — decoded at import/load, looked up per cell per frame
 ```
 
 #### Storage
@@ -1310,7 +1338,12 @@ UMGridDocument.shapes: [UMShape]            — project-local shape assets
 
 #### Shape–style assignment
 
-A `CellStyle` carries a single `shapeID: UUID?`. Assigning a shape to a style is a per-style operation (not per-cell). When the Loom rendering pipeline is fully integrated, `AppController` will decode the geometry for each style's assigned shape and supply the resulting polygons to `LoomEngine.RenderEngine`. Until then, the assignment is stored but has no visual effect.
+A `CellStyle` carries `shapeIDs: [UUID]` — an ordered list of shapes used by SEQUENCE mode. The list is per-style (not per-cell). `AppController.shapePolygonMap` caches the decoded `[Polygon2D]` for every project shape keyed by UUID; the renderer looks up the right entry per cell per frame via `resolvePolygons()` in ContentView.swift.
+
+**SEQUENCE mode uses `shapeIDs` as follows:**
+- **Sequential** — cycles through the list by frame bucket: `shapeIDs[(frame + phaseOffset) / framesPerStep % count]`
+- **All** — concatenates all shapes' polygon lists; every sprite renders all assigned shapes simultaneously
+- **Random** — deterministic hash of `(cellIndex, frameBucket)` → index into `shapeIDs`; each cell independently picks a shape that changes every `framesPerStep` frames without flickering
 
 #### UI — Style Palette SHAPES sections
 
@@ -1320,10 +1353,10 @@ Both the **Project** and **Library** tabs of the Style Palette contain a SHAPES 
 
 | Action | Result |
 |---|---|
-| Click a shape row | Assigns/deassigns the shape to the active style (toggle). The row highlights in accent when the active style uses this shape. |
+| Click a shape row | Toggles the shape into/out of the active style's `shapeIDs` list. The row highlights in accent when assigned; a sequence-position number badge shows the shape's index in the list (1-based). |
 | **+ Import Shape…** | Opens `NSOpenPanel` (`.json` files, multiple selection, defaults to `~/.loom_projects`). Each selected file is read and added as a `UMShape` to the project. |
 | **↑** button | Promotes the shape to the global library (`~/Library/Application Support/UM/shapes/<uuid>.json`). |
-| Right-click → Delete Shape | Removes from project; clears `shapeID` from any styles that referenced it. |
+| Right-click → Delete Shape | Removes from project; removes the shape's UUID from any styles' `shapeIDs` that referenced it. |
 
 **Library tab SHAPES:**
 
@@ -1351,37 +1384,23 @@ Until `LoomEditorKit` is ready, the toolbar Geometry mode button is absent and a
 
 ### 15.1 Loom Rendering Pipeline Integration
 
-This is the single largest remaining body of work. Until it is done, the ORDER/CHAOS slider, SEQUENCE mode, and shape assignments have no visual effect — sprites render with the hard-wired default geometry using the simple SwiftUI Canvas renderer.
-
-**Shape rendering via assigned geometry**
-- `CellStyle.shapeID` is stored and assigned in the UI, but the renderer still uses a hard-wired fallback shape (an oval or rectangle depending on the polygon list).
-- Required: at render time, `AppController` must decode the `UMShape.geometryJSON` for each cell's assigned style, call `EditableGeometryJSONLoader` → `runtimePolygons()`, and supply the resulting `[Polygon2D]` to the drawing loop.
-- Currently `shapePolygons` is a single global polygon list loaded from a bundled test file. It needs to become per-style, resolved from the project's `shapes` array.
-
-**Order/Chaos materialisation (`OrderChaosEngine`)**
-- `CellStyle.orderChaos` (0–1 scalar) is stored and the slider is wired.
-- Required: `OrderChaosEngine.materialize()` must map the scalar to concrete `SubdivisionParams` (ranMiddle, ranDiv, visibilityRule) and `SpriteAnimation` driver amplitudes (rotation jitter, position jitter, path perturbation).
-- Spec: §6.5.
+Shape rendering, Order/Chaos jitter, and SEQUENCE cycling are now built (§12.4). What remains here is the deeper Loom pipeline integration: polygon-level subdivision, brushed/stamped render modes, and animated thumbnails.
 
 **Subdivision integration**
-- Loom's `SubdivisionEngine` is available in the linked `LoomEngine` package.
-- Required: after `runtimePolygons()`, run `SubdivisionEngine.process(polygons, paramSet)` per cell before rendering, using the materialised `SubdivisionParams` from Order/Chaos.
-- This replaces the current direct-path rendering with a subdivided polygon set.
+- The Order/Chaos jitter built so far operates on the final sprite transform (position, rotation, scale). The deeper materialisation maps `orderChaos` to `SubdivisionParams` and runs `SubdivisionEngine.process(polygons, paramSet)` to warp the polygon vertices themselves — producing organic, distorted shapes at high chaos values rather than just displaced sprites.
+- Loom's `SubdivisionEngine` is already available in the linked `LoomEngine` package.
+- Required: in `resolvePolygons()` (or a new post-resolve step), run `SubdivisionEngine.process` per cell using the materialised params from `orderChaos`. The existing sine-oscillator jitter in `computeMotion` would remain as the transform-layer chaos; subdivision adds the geometry-layer chaos.
+- See §6.5 Phase 2.
 
 **Full Loom rendering modes**
-- Current renderer uses SwiftUI Canvas `ctx.fill` / `ctx.stroke` only (modes: filled, stroked, filledStroked).
+- Current renderer uses SwiftUI Canvas `ctx.fill` / `ctx.stroke` only (render modes: filled, stroked, filledStroked).
 - Required: wire `LoomEngine.RenderEngine` for additional modes: brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of polygon geometry).
 - Also: animated blur, opacity animation, and colour oscillator via `RendererDrivers`.
 
-**SEQUENCE shape cycling**
-- `CellStyle.sequenceMode` (.sequential/.all/.random) and `framesPerStep` are stored.
-- Required: at render time, select the active shape(s) from the style's shape sequence based on `(currentFrame + cell.phaseOffset) / framesPerStep` and `sequenceMode`.
-- Currently all cells use the single global polygon list regardless of these values.
-
 **Animated style thumbnails**
 - Style palette rows show a static coloured dot.
-- Required: each style row renders a small live animated preview using the style's actual geometry, renderer, and motion preset at the current frame.
-- Depends on shape rendering and Loom pipeline being functional.
+- Required: each style row renders a small live animated preview using the style's actual geometry, motion preset, and Order/Chaos at the current frame.
+- The geometry is already available via `shapePolygonMap`; the blocker is that the thumbnail renderer needs a miniature canvas pass per style per frame tick, which has a performance cost that needs careful throttling.
 
 ---
 
@@ -1457,14 +1476,11 @@ This is the single largest remaining body of work. Until it is done, the ORDER/C
 
 | Area | Item | Depends on |
 |---|---|---|
-| **Rendering** | Shape rendering via assigned geometry | — |
-| **Rendering** | Order/Chaos materialisation | Shape rendering |
-| **Rendering** | Subdivision integration | Order/Chaos |
-| **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | Shape rendering |
-| **Rendering** | SEQUENCE shape cycling | Shape rendering |
-| **Rendering** | Animated style thumbnails | Shape rendering |
+| **Rendering** | Subdivision integration (polygon-level warp) | — |
+| **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | — |
+| **Rendering** | Animated style thumbnails | — |
 | **Canvas** | Zoom and pan | — |
-| **Canvas** | Hover preview on undrawn cells | Shape rendering |
+| **Canvas** | Hover preview on undrawn cells | — |
 | **Export** | SVG export | Loom pipeline |
 | **Export** | Video export from timeline (cut-based) | — |
 | **Path editor** | Bezier tangent handles | — |
