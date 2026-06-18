@@ -7,14 +7,113 @@ import ImageIO
 import UMEngine
 import LoomEngine
 
+// MARK: - Per-layer mutable state
+
+/// In-memory state for a single composition layer. Holds the engine (document + undo stack)
+/// plus layer-level properties that survive layer switching.
+@Observable
+@MainActor
+final class UMLayerState: Identifiable {
+    let id: UUID
+    var name: String
+    var isVisible: Bool
+    var opacity: Double
+    var engine: UMGridEngine
+    var activeStyleID: UUID?
+
+    init(layer: UMLayer) {
+        self.id            = layer.id
+        self.name          = layer.name
+        self.isVisible     = layer.isVisible
+        self.opacity       = layer.opacity
+        self.engine        = UMGridEngine(document: layer.document)
+        self.activeStyleID = layer.document.styles.first?.id
+    }
+
+    func toUMLayer() -> UMLayer {
+        UMLayer(id: id, name: name, isVisible: isVisible, opacity: opacity,
+                document: engine.document)
+    }
+}
+
+// MARK: - App controller
+
 @Observable
 @MainActor
 final class AppController {
-    var engine: UMGridEngine
-    var shapePolygons: [Polygon2D] = []        // bundled default — used when a style has no shape assigned
-    var shapePolygonMap: [UUID: [Polygon2D]] = [:] // shape.id → decoded runtime polygons
 
-    // UI state
+    // MARK: Layer stack
+
+    var layerStates: [UMLayerState] = []
+    var activeLayerIndex: Int = 0
+
+    /// The active layer's engine — always in sync via selectLayer / addLayer / read.
+    /// Kept as a stored @Observable var so all existing engine.X observation chains work.
+    var engine: UMGridEngine
+
+    /// Switch to a layer by index, saving per-layer UI state back to the departing layer.
+    func selectLayer(_ index: Int) {
+        guard index >= 0, index < layerStates.count, index != activeLayerIndex else { return }
+        layerStates[activeLayerIndex].activeStyleID = activeStyleID
+        activeLayerIndex = index
+        let layer = layerStates[index]
+        engine          = layer.engine
+        activeStyleID   = layer.activeStyleID
+        selectedIndices = []
+        activePathID    = nil
+    }
+
+    func addLayer(name: String? = nil) {
+        let config = engine.document.gridConfig
+        let doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        let label  = name ?? "Layer \(layerStates.count + 1)"
+        let ls     = UMLayerState(layer: UMLayer(name: label, document: doc))
+        layerStates.append(ls)
+        selectLayer(layerStates.count - 1)
+        rebuildShapePolygonMap()
+    }
+
+    func removeLayer(at index: Int) {
+        guard layerStates.count > 1, index >= 0, index < layerStates.count else { return }
+        layerStates.remove(at: index)
+        let newIndex = min(activeLayerIndex, layerStates.count - 1)
+        activeLayerIndex = newIndex
+        engine          = layerStates[newIndex].engine
+        activeStyleID   = layerStates[newIndex].activeStyleID
+        selectedIndices = []
+        rebuildShapePolygonMap()
+    }
+
+    func duplicateLayer(at index: Int) {
+        guard index >= 0, index < layerStates.count else { return }
+        let src = layerStates[index]
+        let ls  = UMLayerState(layer: UMLayer(name: src.name + " Copy",
+                                              isVisible: src.isVisible,
+                                              opacity: src.opacity,
+                                              document: src.engine.document))
+        layerStates.insert(ls, at: index + 1)
+        selectLayer(index + 1)
+        rebuildShapePolygonMap()
+    }
+
+    func moveLayer(from: Int, to: Int) {
+        guard from != to,
+              from >= 0, from < layerStates.count,
+              to   >= 0, to   < layerStates.count else { return }
+        let isActive = (activeLayerIndex == from)
+        let layer = layerStates.remove(at: from)
+        let dest  = to > from ? to - 1 : to
+        layerStates.insert(layer, at: dest)
+        if isActive { activeLayerIndex = dest }
+    }
+
+    // MARK: Polygons
+
+    var shapePolygons: [Polygon2D] = []        // bundled default
+    var shapePolygonMap: [UUID: [Polygon2D]] = [:]
+
+    // MARK: Global UI state
+
     var activeTool: PaintTool        = .draw
     var transformMode: TransformMode = .move
     var stampPhaseOffset: Int        = 0
@@ -24,8 +123,8 @@ final class AppController {
     var gridLineWidth: Double        = 0.5
     var backgroundColor: UMColor     = UMColor(r: 1, g: 1, b: 1, a: 1)
     var isPlaying: Bool              = false
-    var selectedIndices: Set<Int> = []
-    var activeStyleID: UUID?     = nil
+    var selectedIndices: Set<Int>    = []
+    var activeStyleID: UUID?         = nil
 
     var currentFileURL: URL? = nil
     var globalLibrary: UMLibrary = .empty
@@ -34,10 +133,15 @@ final class AppController {
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
 
+    // MARK: Init
+
     init() {
         let doc = UMGridDocument.makeTestGrid()
-        engine = UMGridEngine(document: doc)
-        activeStyleID = doc.styles.first?.id
+        let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
+        layerStates      = [ls]
+        engine           = ls.engine
+        activeLayerIndex = 0
+        activeStyleID    = doc.styles.first?.id
         loadShapePolygons()
         rebuildShapePolygonMap()
         ensureProjectsDirectory()
@@ -61,36 +165,41 @@ final class AppController {
 
     private func rebuildShapePolygonMap() {
         var map: [UUID: [Polygon2D]] = [:]
-        for shape in engine.document.shapes {
-            guard let data  = shape.geometryJSON.data(using: .utf8),
-                  let geo   = try? EditableGeometryJSONLoader.decode(from: data),
-                  let polys = try? geo.runtimePolygons()
-            else { continue }
-            map[shape.id] = polys
+        for ls in layerStates {
+            for shape in ls.engine.document.shapes {
+                guard let data  = shape.geometryJSON.data(using: .utf8),
+                      let geo   = try? EditableGeometryJSONLoader.decode(from: data),
+                      let polys = try? geo.runtimePolygons()
+                else { continue }
+                map[shape.id] = polys
+            }
         }
         shapePolygonMap = map
     }
+
+    // MARK: Accumulation buffer
 
     var backgroundDraw: Bool = true {
         didSet { if backgroundDraw { frameBuffer = nil } }
     }
     private(set) var frameBuffer: CGImage? = nil
 
-    // MARK: - Export settings
-    var exportMultiplier: Int    = 1     // 1, 2, 4, 8 — output pixel scale
-    var exportScaleDrawing: Bool = true  // scale stroke widths with multiplier
+    // MARK: Export settings
+
+    var exportMultiplier: Int    = 1
+    var exportScaleDrawing: Bool = true
     var exportFPS: Int           = 24
-    var exportFrameCount: Int    = 96    // total frames for video (default 4 s at 24 fps)
+    var exportFrameCount: Int    = 96
     var isExporting: Bool        = false
     var exportProgress: Double   = 0.0
 
     var exportDurationSeconds: Double { Double(exportFrameCount) / Double(max(1, exportFPS)) }
 
-    // MARK: - Recording & timeline
+    // MARK: Recording & timeline (active layer only)
 
     var isRecording: Bool = false
-    var recordingInterval: Int = 48   // frames between auto-captures (2 s at 24 fps)
-    var timelinePosition: Int = -1    // -1 = live mode; 0+ = viewing a timeline state
+    var recordingInterval: Int = 48
+    var timelinePosition: Int = -1
     private var stateFrameCount: Int = 0
 
     var recordingIntervalSeconds: Double {
@@ -127,7 +236,7 @@ final class AppController {
         engine.document.gridConfig = state.gridConfig
         engine.document.cells      = state.cells
         engine.document.styles     = state.styles
-        selectedIndices = []   // stale indices from a different resolution grid
+        selectedIndices = []
         timelinePosition = index
         stateFrameCount  = 0
         if let id = activeStyleID, !engine.document.styles.contains(where: { $0.id == id }) {
@@ -138,10 +247,9 @@ final class AppController {
     func stepTimeline(forward: Bool) {
         let count = engine.document.timeline.count
         guard count > 0 else { return }
-        let base    = timelinePosition < 0 ? (forward ? 0 : count - 1)
-                                           : (forward ? timelinePosition + 1 : timelinePosition - 1)
-        let next    = (base + count) % count
-        navigateToState(next)
+        let base = timelinePosition < 0 ? (forward ? 0 : count - 1)
+                                        : (forward ? timelinePosition + 1 : timelinePosition - 1)
+        navigateToState((base + count) % count)
     }
 
     func clearTimeline() {
@@ -168,7 +276,7 @@ final class AppController {
     func rewindToStart() {
         frameBuffer     = nil
         stateFrameCount = 0
-        engine.seek(toFrame: 0)
+        for ls in layerStates { ls.engine.seek(toFrame: 0) }
         if !engine.document.timeline.isEmpty {
             navigateToState(0)
         } else {
@@ -179,21 +287,19 @@ final class AppController {
     func togglePlayback() {
         isPlaying.toggle()
         if isPlaying {
-            // If a timeline exists and we're in live mode, begin at state 0
             if !engine.document.timeline.isEmpty && timelinePosition < 0 {
                 navigateToState(0)
             }
             if timelinePosition >= 0 { stateFrameCount = 0 }
             playbackTask = Task { @MainActor [weak self] in
                 while let self, !Task.isCancelled, self.isPlaying {
-                    self.engine.advance()
+                    // Advance all layers in lockstep
+                    for ls in self.layerStates { ls.engine.advance() }
 
-                    // Auto-capture during recording
                     if self.isRecording && self.engine.currentFrame % self.recordingInterval == 0 {
                         self.captureState()
                     }
 
-                    // Advance through timeline states when in timeline mode (not recording)
                     if !self.isRecording && self.timelinePosition >= 0 {
                         let tl  = self.engine.document.timeline
                         guard !tl.isEmpty else { self.timelinePosition = -1; continue }
@@ -210,7 +316,7 @@ final class AppController {
                         }
                     }
 
-                    try? await Task.sleep(nanoseconds: 41_666_667) // 24 fps
+                    try? await Task.sleep(nanoseconds: 41_666_667)
                 }
             }
         } else {
@@ -227,13 +333,12 @@ final class AppController {
         }
     }
 
-    // Active style (currently selected in the Style Palette for painting)
     var activeStyle: CellStyle? {
         guard let id = activeStyleID else { return nil }
         return engine.document.styles.first { $0.id == id }
     }
 
-    // MARK: - Projects directory
+    // MARK: Projects directory
 
     static var defaultProjectsDirectory: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -249,25 +354,26 @@ final class AppController {
     private func ensureProjectsDirectory() {
         let dir = projectsDirectory
         guard !FileManager.default.fileExists(atPath: dir.path) else { return }
-        try? FileManager.default.createDirectory(at: dir,
-                                                  withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
-
-    // MARK: - Document title
 
     var documentTitle: String {
         guard let url = currentFileURL else { return "UM — Untitled" }
         return "UM — \(url.deletingPathExtension().lastPathComponent)"
     }
 
-    // MARK: - Save / Load
+    // MARK: Save / Load
 
     func newDocument() {
         let doc = UMGridDocument.makeTestGrid()
-        engine        = UMGridEngine(document: doc)
-        activeStyleID = doc.styles.first?.id
-        selectedIndices = []
-        currentFileURL  = nil
+        let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
+        layerStates      = [ls]
+        engine           = ls.engine
+        activeLayerIndex = 0
+        activeStyleID    = doc.styles.first?.id
+        selectedIndices  = []
+        currentFileURL   = nil
+        rebuildShapePolygonMap()
     }
 
     func saveDocument() {
@@ -277,11 +383,10 @@ final class AppController {
     func saveDocumentAs() {
         let panel = NSSavePanel()
         panel.title = "Save UM Project"
-        panel.directoryURL = currentFileURL?.deletingLastPathComponent()
-                             ?? projectsDirectory
+        panel.directoryURL = currentFileURL?.deletingLastPathComponent() ?? projectsDirectory
         panel.nameFieldStringValue = currentFileURL?
             .deletingPathExtension().lastPathComponent ?? "Untitled"
-        panel.allowedFileTypes = ["umproj"]   // TODO: replace with UTType once Info.plist is wired
+        panel.allowedFileTypes = ["umproj"]
         panel.canCreateDirectories = true
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
@@ -302,37 +407,41 @@ final class AppController {
         panel.allowsMultipleSelection = false
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
-            Task { @MainActor [weak self] in
-                self?.read(from: url)
-            }
+            Task { @MainActor [weak self] in self?.read(from: url) }
         }
     }
 
     private func write(to url: URL) {
+        // Save current per-layer UI state before encoding
+        layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? enc.encode(engine.document) else { return }
+        let layers = layerStates.map { $0.toUMLayer() }
+        guard let data = try? enc.encode(layers) else { return }
         try? data.write(to: url, options: .atomic)
     }
 
     private func read(from url: URL) {
-        guard let data = try? Data(contentsOf: url),
-              let doc  = try? JSONDecoder().decode(UMGridDocument.self, from: data)
+        guard let data   = try? Data(contentsOf: url),
+              let layers = try? JSONDecoder().decode([UMLayer].self, from: data),
+              !layers.isEmpty
         else { return }
-        engine          = UMGridEngine(document: doc)
-        activeStyleID   = doc.styles.first?.id
-        selectedIndices = []
-        currentFileURL  = url
+        layerStates      = layers.map { UMLayerState(layer: $0) }
+        activeLayerIndex = 0
+        engine           = layerStates[0].engine
+        activeStyleID    = layerStates[0].activeStyleID
+        selectedIndices  = []
+        currentFileURL   = url
         rebuildShapePolygonMap()
         colorMapEngine.clear()
-        if let src = doc.colorSource {
-            let rows = doc.gridConfig.rows
-            let cols = doc.gridConfig.cols
+        if let src = layerStates[0].engine.document.colorSource {
+            let rows = layerStates[0].engine.document.gridConfig.rows
+            let cols = layerStates[0].engine.document.gridConfig.cols
             colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
         }
     }
 
-    // MARK: - Global library
+    // MARK: Global library
 
     private static var globalLibraryURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -378,12 +487,12 @@ final class AppController {
         if activeStyleID == styleID { activeStyleID = engine.document.styles.first?.id }
     }
 
-    // MARK: Style library operations
+    // MARK: Style library
 
     func promoteStyleToLibrary(_ styleID: UUID) {
         guard let style = engine.document.styles.first(where: { $0.id == styleID }) else { return }
         if let idx = globalLibrary.styles.firstIndex(where: { $0.id == styleID }) {
-            globalLibrary.styles[idx] = style   // update existing entry
+            globalLibrary.styles[idx] = style
         } else {
             globalLibrary.styles.append(style)
         }
@@ -402,7 +511,7 @@ final class AppController {
         saveGlobalLibrary()
     }
 
-    // MARK: - Path management
+    // MARK: Path management
 
     var activePathID: UUID?      = nil
     var showPathOverlay: Bool    = true
@@ -446,11 +555,11 @@ final class AppController {
     func removeKeyframe(id kfID: UUID, from pathID: UUID) {
         guard let pi = engine.document.paths.firstIndex(where: { $0.id == pathID }),
               engine.document.paths[pi].keyframes.count > 2
-        else { return }                     // always keep at least 2 keyframes
+        else { return }
         engine.document.paths[pi].removeKeyframe(id: kfID)
     }
 
-    // MARK: Path library operations
+    // MARK: Path library
 
     func promotePathToLibrary(_ pathID: UUID) {
         guard let path = engine.document.paths.first(where: { $0.id == pathID }) else { return }
@@ -473,7 +582,7 @@ final class AppController {
         saveGlobalLibrary()
     }
 
-    // MARK: - Color map
+    // MARK: Color map
 
     func loadColorSource(url: URL) {
         engine.document.colorSource = UMColorSource(filePath: url.path)
@@ -487,7 +596,7 @@ final class AppController {
         colorMapEngine.clear()
     }
 
-    // MARK: - Shape management
+    // MARK: Shape management
 
     private static var globalShapesDirectoryURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -522,7 +631,6 @@ final class AppController {
         rebuildShapePolygonMap()
     }
 
-    /// Toggle a shape into/out of a style's sequence list.
     func toggleShape(_ shapeID: UUID, inStyle styleID: UUID) {
         guard let i = engine.document.styles.firstIndex(where: { $0.id == styleID }) else { return }
         if let j = engine.document.styles[i].shapeIDs.firstIndex(of: shapeID) {
@@ -562,29 +670,47 @@ final class AppController {
         globalShapes.removeAll { $0.id == id }
     }
 
-    // MARK: - Keyboard
+    // MARK: Assign style to selection
+
+    func assignStyleToSelection(_ styleID: UUID) {
+        guard !selectedIndices.isEmpty else { return }
+        engine.pushUndoSnapshot()
+        for i in selectedIndices where i < engine.document.cells.count {
+            engine.document.cells[i].styleID = styleID
+        }
+    }
+
+    // MARK: Nudge
+
+    func nudgeSelection(dx: Double, dy: Double, isRepeat: Bool = false) {
+        guard !selectedIndices.isEmpty else { return }
+        if !isRepeat { engine.pushUndoSnapshot() }
+        for i in selectedIndices where i < engine.document.cells.count {
+            engine.document.cells[i].positionOffset.dx += dx
+            engine.document.cells[i].positionOffset.dy += dy
+        }
+    }
+
+    private func nudgeStep(_ shift: Bool) -> Double { shift ? 10 : 1 }
+
+    // MARK: Keyboard
 
     private func startKeyMonitor() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            // Never steal events from text inputs
             if NSApp.keyWindow?.firstResponder is NSText { return event }
-            // Ignore events that carry Command / Option / Control (let menus handle those)
             if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty { return event }
 
             let shift = event.modifierFlags.contains(.shift)
-
-            let rep = event.isARepeat
+            let rep   = event.isARepeat
             switch event.keyCode {
-            // Arrow-key nudge — works in any tool when cells are selected
-            case 123: nudgeSelection(dx: -nudgeStep(shift), dy:  0, isRepeat: rep); return nil  // ←
-            case 124: nudgeSelection(dx:  nudgeStep(shift), dy:  0, isRepeat: rep); return nil  // →
-            case 125: nudgeSelection(dx:  0, dy:  nudgeStep(shift), isRepeat: rep); return nil  // ↓
-            case 126: nudgeSelection(dx:  0, dy: -nudgeStep(shift), isRepeat: rep); return nil  // ↑
+            case 123: nudgeSelection(dx: -nudgeStep(shift), dy:  0, isRepeat: rep); return nil
+            case 124: nudgeSelection(dx:  nudgeStep(shift), dy:  0, isRepeat: rep); return nil
+            case 125: nudgeSelection(dx:  0, dy:  nudgeStep(shift), isRepeat: rep); return nil
+            case 126: nudgeSelection(dx:  0, dy: -nudgeStep(shift), isRepeat: rep); return nil
             default: break
             }
 
-            // Single-character shortcuts (ignore if Shift is held to avoid conflicts)
             guard !shift else { return event }
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "d": activeTool = .draw;   return nil
@@ -599,26 +725,7 @@ final class AppController {
         }
     }
 
-    func assignStyleToSelection(_ styleID: UUID) {
-        guard !selectedIndices.isEmpty else { return }
-        engine.pushUndoSnapshot()
-        for i in selectedIndices where i < engine.document.cells.count {
-            engine.document.cells[i].styleID = styleID
-        }
-    }
-
-    func nudgeSelection(dx: Double, dy: Double, isRepeat: Bool = false) {
-        guard !selectedIndices.isEmpty else { return }
-        if !isRepeat { engine.pushUndoSnapshot() }
-        for i in selectedIndices where i < engine.document.cells.count {
-            engine.document.cells[i].positionOffset.dx += dx
-            engine.document.cells[i].positionOffset.dy += dy
-        }
-    }
-
-    private func nudgeStep(_ shift: Bool) -> Double { shift ? 10 : 1 }
-
-    // MARK: - Renders directories
+    // MARK: Render directories
 
     private func rendersBaseURL() -> URL {
         if let proj = currentFileURL {
@@ -640,13 +747,13 @@ final class AppController {
         return url
     }
 
-    // MARK: - Export
+    // MARK: Export
 
     func exportPNG() {
         let config = engine.document.gridConfig
-        let m = Double(exportMultiplier)
-        let exportW = config.canvasWidth  * m
-        let exportH = config.canvasHeight * m
+        let m      = Double(exportMultiplier)
+        let exportW     = config.canvasWidth  * m
+        let exportH     = config.canvasHeight * m
         let strokeScale = exportScaleDrawing ? m : 1.0
 
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmmss"
@@ -661,8 +768,8 @@ final class AppController {
             guard response == .OK, let url = panel.url, let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                guard let cgImage = umRenderFrame(
-                    doc:              self.engine.document,
+                guard let cgImage = umRenderComposited(
+                    layerStates:      self.layerStates,
                     backgroundColor:  self.backgroundColor,
                     shapePolygonMap:  self.shapePolygonMap,
                     fallbackPolygons: self.shapePolygons,
@@ -686,10 +793,10 @@ final class AppController {
     }
 
     func exportVideo() {
-        let config = engine.document.gridConfig
-        let m = Double(exportMultiplier)
-        let exportW = config.canvasWidth  * m
-        let exportH = config.canvasHeight * m
+        let config      = engine.document.gridConfig
+        let m           = Double(exportMultiplier)
+        let exportW     = config.canvasWidth  * m
+        let exportH     = config.canvasHeight * m
         let strokeScale = exportScaleDrawing ? m : 1.0
 
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmmss"
@@ -700,7 +807,8 @@ final class AppController {
         panel.nameFieldStringValue = "\(baseName)_\(f.string(from: Date())).mov"
         panel.directoryURL         = animationsRenderDirectory()
 
-        let doc      = engine.document
+        // Capture layer snapshots so export is consistent even if user edits mid-export
+        let layers   = layerStates.map { $0.toUMLayer() }
         let bg       = backgroundColor
         let polyMap  = shapePolygonMap
         let polys    = shapePolygons
@@ -718,7 +826,7 @@ final class AppController {
                 guard let self else { return }
                 do {
                     try await UMVideoExporter.export(
-                        doc:              doc,
+                        layers:           layers,
                         backgroundColor:  bg,
                         shapePolygonMap:  polyMap,
                         fallbackPolygons: polys,
@@ -733,18 +841,18 @@ final class AppController {
                         to:               url,
                         progress:         { [weak self] p in self?.exportProgress = p }
                     )
-                } catch {
-                    // TODO: surface error in UI
-                }
+                } catch { }
                 self.isExporting = false
             }
         }
     }
 }
 
+// MARK: - Enums
+
 enum TransformMode {
-    case move   // cells relocate to the transformed position (replaces)
-    case stamp  // original cells stay; transformed copy is painted on top
+    case move
+    case stamp
 }
 
 enum PaintTool: String, CaseIterable {

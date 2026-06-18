@@ -2,6 +2,7 @@ import AVFoundation
 import CoreGraphics
 import CoreVideo
 import Foundation
+import SwiftUI
 import UniformTypeIdentifiers
 import UMEngine
 import LoomEngine
@@ -11,14 +12,9 @@ import LoomEngine
 @MainActor
 enum UMVideoExporter {
 
-    /// Render all `frameCount` frames of `doc` to a .mov file at `url`.
-    ///
-    /// - Parameters:
-    ///   - backgroundDraw: when false, each frame composites onto the previous (accumulation mode)
-    ///   - strokeScale:    multiplier applied to stroke widths; pass `exportMultiplier` when scaleDrawing is on
-    ///   - progress:       called on MainActor after each frame with a 0→1 value
+    /// Render all `frameCount` frames, compositing all visible layers, to a .mov file at `url`.
     static func export(
-        doc: UMGridDocument,
+        layers: [UMLayer],
         backgroundColor: UMColor,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
@@ -66,22 +62,23 @@ enum UMVideoExporter {
 
         guard let pool = adaptor.pixelBufferPool else { throw UMExportError.setupFailed }
 
+        let visibleLayers = layers.filter(\.isVisible)
         var accum: CGImage? = nil
 
         for frameIndex in 0..<max(1, frameCount) {
 
-            let cgImage = umRenderFrame(
-                doc:                doc,
-                backgroundColor:    backgroundColor,
-                shapePolygonMap:    shapePolygonMap,
-                fallbackPolygons:   fallbackPolygons,
-                colorMapEngine:     colorMapEngine,
-                backgroundDraw:     backgroundDraw,
-                stretchSprites:     stretchSprites,
-                frame:              frameIndex,
-                exportW:            exportW,
-                exportH:            exportH,
-                strokeScale:        strokeScale,
+            let cgImage = renderComposited(
+                layers:           visibleLayers,
+                backgroundColor:  backgroundColor,
+                shapePolygonMap:  shapePolygonMap,
+                fallbackPolygons: fallbackPolygons,
+                colorMapEngine:   colorMapEngine,
+                backgroundDraw:   backgroundDraw,
+                stretchSprites:   stretchSprites,
+                frame:            frameIndex,
+                exportW:          exportW,
+                exportH:          exportH,
+                strokeScale:      strokeScale,
                 accumulationBuffer: accum
             )
 
@@ -94,7 +91,7 @@ enum UMVideoExporter {
 
                     CVPixelBufferLockBaseAddress(pb, [])
                     if let base = CVPixelBufferGetBaseAddress(pb) {
-                        let bpr      = CVPixelBufferGetBytesPerRow(pb)
+                        let bpr       = CVPixelBufferGetBytesPerRow(pb)
                         let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
                                        | CGBitmapInfo.byteOrder32Little.rawValue
                         if let ctx = CGContext(data: base, width: w, height: h,
@@ -125,6 +122,102 @@ enum UMVideoExporter {
         }
 
         if let error = writer.error { throw error }
+    }
+
+    // MARK: - Per-frame composite render
+
+    private static func renderComposited(
+        layers: [UMLayer],
+        backgroundColor: UMColor,
+        shapePolygonMap: [UUID: [Polygon2D]],
+        fallbackPolygons: [Polygon2D],
+        colorMapEngine: UMColorMapEngine,
+        backgroundDraw: Bool,
+        stretchSprites: Bool,
+        frame: Int,
+        exportW: Double,
+        exportH: Double,
+        strokeScale: Double,
+        accumulationBuffer: CGImage?
+    ) -> CGImage? {
+        let w = Int(exportW); let h = Int(exportH)
+        guard w > 0, h > 0 else { return nil }
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                       | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let ctx = CGContext(data: nil, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: bitmapInfo) else { return nil }
+        let destRect = CGRect(x: 0, y: 0, width: w, height: h)
+
+        if let buf = accumulationBuffer, !backgroundDraw {
+            ctx.draw(buf, in: destRect)
+        } else {
+            ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
+                                     blue: backgroundColor.b, alpha: backgroundColor.a))
+            ctx.fill(destRect)
+        }
+
+        for layer in layers {
+            if let img = renderLayerCells(layer: layer,
+                                          shapePolygonMap: shapePolygonMap,
+                                          fallbackPolygons: fallbackPolygons,
+                                          colorMapEngine: colorMapEngine,
+                                          stretchSprites: stretchSprites,
+                                          frame: frame,
+                                          exportW: exportW, exportH: exportH,
+                                          strokeScale: strokeScale) {
+                ctx.setAlpha(layer.opacity)
+                ctx.draw(img, in: destRect)
+                ctx.setAlpha(1.0)
+            }
+        }
+
+        return ctx.makeImage()
+    }
+
+    // Render one layer's cells onto a transparent background and return a CGImage.
+    private static func renderLayerCells(
+        layer: UMLayer,
+        shapePolygonMap: [UUID: [Polygon2D]],
+        fallbackPolygons: [Polygon2D],
+        colorMapEngine: UMColorMapEngine,
+        stretchSprites: Bool,
+        frame: Int,
+        exportW: Double,
+        exportH: Double,
+        strokeScale: Double
+    ) -> CGImage? {
+        let config = layer.document.gridConfig
+        let cellW  = exportW / Double(config.cols)
+        let cellH  = exportH / Double(config.rows)
+        let sx     = cellW / config.cellWidth
+        let sy     = cellH / config.cellHeight
+        let loopMode  = layer.document.colorSource?.videoLoopMode ?? .loop
+        let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
+
+        let renderer = ImageRenderer(content: FrameCapture(
+            existingBuffer:   nil,
+            backgroundColor:  UMColor(r: 0, g: 0, b: 0, a: 0),
+            gridConfig:       config,
+            cells:            layer.document.cells,
+            styles:           layer.document.styles,
+            motionPaths:      layer.document.paths,
+            shapePolygonMap:  shapePolygonMap,
+            fallbackPolygons: fallbackPolygons,
+            stretchSprites:   stretchSprites,
+            currentFrame:     frame,
+            gridW: exportW, gridH: exportH,
+            cellW: cellW, cellH: cellH,
+            scaleX: sx, scaleY: sy,
+            displayScale:     1.0,
+            colorGrid:        colorGrid,
+            colorSource:      layer.document.colorSource,
+            strokeScale:      strokeScale,
+            drawBackground:   false
+        ))
+        renderer.scale = 1.0
+        return renderer.cgImage
     }
 }
 

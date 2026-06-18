@@ -35,6 +35,24 @@ struct StylePaletteView: View {
     private var projectTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("LAYERS")
+
+                ForEach(Array(controller.layerStates.enumerated()), id: \.element.id) { idx, ls in
+                    layerRow(ls, index: idx)
+                }
+
+                Button("+ New Layer") {
+                    controller.addLayer()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+
+                Divider().padding(.vertical, 4)
+
                 sectionHeader("STYLES")
 
                 ForEach(controller.engine.document.styles) { style in
@@ -151,6 +169,57 @@ struct StylePaletteView: View {
     }
 
     // MARK: - Row views
+
+    private func layerRow(_ ls: UMLayerState, index: Int) -> some View {
+        let active = (index == controller.activeLayerIndex)
+        return HStack(spacing: 5) {
+            // Visibility toggle
+            Button {
+                ls.isVisible.toggle()
+            } label: {
+                Image(systemName: ls.isVisible ? "eye" : "eye.slash")
+                    .font(.system(size: 10))
+                    .foregroundStyle(ls.isVisible ? Color.primary.opacity(0.7) : Color.secondary.opacity(0.4))
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+
+            // Active indicator dot
+            Circle()
+                .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
+                .frame(width: 6, height: 6)
+
+            // Name
+            Text(ls.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+
+            Spacer()
+
+            // Opacity %
+            Text("\(Int((ls.opacity * 100).rounded()))%")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.quaternary)
+                .frame(width: 28, alignment: .trailing)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture { controller.selectLayer(index) }
+        .contextMenu {
+            Button("Duplicate") { controller.duplicateLayer(at: index) }
+            Divider()
+            Menu("Opacity") {
+                ForEach([100, 75, 50, 25], id: \.self) { pct in
+                    Button("\(pct)%") { ls.opacity = Double(pct) / 100.0 }
+                }
+            }
+            Divider()
+            Button("Delete Layer", role: .destructive) { controller.removeLayer(at: index) }
+                .disabled(controller.layerStates.count <= 1)
+        }
+    }
 
     private var pathsSectionHeader: some View {
         HStack(spacing: 0) {

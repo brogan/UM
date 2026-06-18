@@ -315,97 +315,111 @@ struct GridCanvasPlaceholder: View {
                                    lineWidth: controller.gridLineWidth)
                     }
 
-                    // Drawn cells — positionOffset is in reference-pixel space,
-                    // multiplied by scale to convert to screen pixels.
-                    let shapePolyMap = controller.shapePolygonMap
+                    // Drawn cells — render each layer into an isolated compositing group.
+                    let shapePolyMap  = controller.shapePolygonMap
                     let fallbackPolys = controller.shapePolygons
-                    let cellHalf    = min(cellW, cellH)
-                    let stretch     = controller.stretchSpritesToCell
-                    let styleMap = Dictionary(uniqueKeysWithValues:
-                        controller.engine.document.styles.map { ($0.id, $0) })
-                    let pathMap = Dictionary(uniqueKeysWithValues:
-                        controller.engine.document.paths.map { ($0.id, $0) })
-                    let colorGrid    = controller.colorMapEngine.currentGrid(
-                        animationFrame: currentFrame,
-                        loopMode: controller.engine.document.colorSource?.videoLoopMode ?? .loop)
-                    let colorSource  = controller.engine.document.colorSource
+                    let stretch       = controller.stretchSpritesToCell
 
-                    for cell in controller.engine.document.cells where cell.isDrawn {
-                        let r      = cell.gridIndex / config.cols
-                        let c      = cell.gridIndex % config.cols
-                        let style  = styleMap[cell.styleID]
-                        let path   = cell.pathID.flatMap { pathMap[$0] }
-                        var motion = computeMotion(style: style, path: path,
-                                                   frame: currentFrame,
-                                                   phaseOffset: cell.phaseOffset,
-                                                   cellIndex: cell.gridIndex,
-                                                   cellW: cellW, cellH: cellH)
-                        if let src = colorSource,
-                           let grid = colorGrid,
-                           r < grid.count, c < grid[r].count {
-                            applyColorMap(grid[r][c], source: src, style: style, to: &motion)
-                        }
-                        let mx = Double(c) * cellW + cellW / 2 + cell.positionOffset.dx * scaleX + motion.dx
-                        let my = Double(r) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY + motion.dy
-                        let isSelected = controller.selectedIndices.contains(cell.gridIndex)
+                    for ls in controller.layerStates where ls.isVisible {
+                        let isActiveLayer = ls.engine === controller.engine
+                        let lConfig   = ls.engine.document.gridConfig
+                        let lCellW    = gridW / Double(lConfig.cols)
+                        let lCellH    = gridH / Double(lConfig.rows)
+                        let lScaleX   = lCellW / lConfig.cellWidth
+                        let lScaleY   = lCellH / lConfig.cellHeight
+                        let lCellHalf = min(lCellW, lCellH)
+                        let lStyleMap = Dictionary(uniqueKeysWithValues:
+                            ls.engine.document.styles.map { ($0.id, $0) })
+                        let lPathMap  = Dictionary(uniqueKeysWithValues:
+                            ls.engine.document.paths.map { ($0.id, $0) })
+                        let lColorGrid = controller.colorMapEngine.currentGrid(
+                            animationFrame: currentFrame,
+                            loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop)
+                        let lColorSrc  = ls.engine.document.colorSource
+                        let lOpacity   = ls.opacity
 
-                        let polygons = resolvePolygons(style: style,
-                                                       cellIndex: cell.gridIndex,
-                                                       frame: currentFrame,
-                                                       phaseOffset: cell.phaseOffset,
-                                                       shapeMap: shapePolyMap,
-                                                       fallback: fallbackPolys)
-
-                        if polygons.isEmpty {
-                            let rw   = (cellW - 4) / 2 * motion.scaleX
-                            let rh   = (cellH - 4) / 2 * motion.scaleY
-                            let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
-                            let fc   = motion.fillOverride ?? style?.fillColor ?? .defaultFill
-                            ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
-                                     with: .color(Color(red: fc.r, green: fc.g, blue: fc.b)
-                                         .opacity(isSelected ? min(1, fc.a * 1.3) : fc.a)))
-                            if isSelected {
-                                ctx.stroke(Path(roundedRect: rect, cornerRadius: 3),
-                                           with: .color(.accentColor), lineWidth: 1.5)
-                            }
-                        } else {
-                            let zoomX   = (stretch ? cellW : cellHalf) * motion.scaleX
-                            let zoomY   = (stretch ? cellH : cellHalf) * motion.scaleY
-                            let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
-                            let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
-                            let strokeW = style?.strokeWidth ?? 1.5
-                            let mode    = style?.renderMode  ?? .filledStroked
-
-                            let paths = polygons.filter(\.visible)
-                                                .map { buildPolygonPath($0, cx: mx, cy: my,
-                                                                        zoomX: zoomX, zoomY: zoomY,
-                                                                        scaleX: cell.scaleX,
-                                                                        scaleY: cell.scaleY,
-                                                                        rotation: cell.rotation + motion.rotation) }
-                            for cgp in paths {
-                                if mode == .filled || mode == .filledStroked {
-                                    ctx.fill(Path(cgp),
-                                             with: .color(Color(red: fillC.r, green: fillC.g,
-                                                                 blue: fillC.b, opacity: fillC.a)))
+                        ctx.drawLayer { layerCtx in
+                            layerCtx.opacity = lOpacity
+                            for cell in ls.engine.document.cells where cell.isDrawn {
+                                let r      = cell.gridIndex / lConfig.cols
+                                let c      = cell.gridIndex % lConfig.cols
+                                let style  = lStyleMap[cell.styleID]
+                                let path   = cell.pathID.flatMap { lPathMap[$0] }
+                                var motion = computeMotion(style: style, path: path,
+                                                           frame: currentFrame,
+                                                           phaseOffset: cell.phaseOffset,
+                                                           cellIndex: cell.gridIndex,
+                                                           cellW: lCellW, cellH: lCellH)
+                                if let src = lColorSrc, let grid = lColorGrid,
+                                   r < grid.count, c < grid[r].count {
+                                    applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                                 }
-                                if mode == .stroked || mode == .filledStroked {
-                                    ctx.stroke(Path(cgp),
-                                               with: .color(Color(red: strokeC.r, green: strokeC.g,
-                                                                   blue: strokeC.b, opacity: strokeC.a)),
-                                               lineWidth: strokeW)
+                                let mx = Double(c) * lCellW + lCellW / 2 + cell.positionOffset.dx * lScaleX + motion.dx
+                                let my = Double(r) * lCellH + lCellH / 2 + cell.positionOffset.dy * lScaleY + motion.dy
+                                let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
+
+                                let polygons = resolvePolygons(style: style,
+                                                               cellIndex: cell.gridIndex,
+                                                               frame: currentFrame,
+                                                               phaseOffset: cell.phaseOffset,
+                                                               shapeMap: shapePolyMap,
+                                                               fallback: fallbackPolys)
+
+                                if polygons.isEmpty {
+                                    let rw   = (lCellW - 4) / 2 * motion.scaleX
+                                    let rh   = (lCellH - 4) / 2 * motion.scaleY
+                                    let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
+                                    let fc   = motion.fillOverride ?? style?.fillColor ?? .defaultFill
+                                    layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                                                  with: .color(Color(red: fc.r, green: fc.g, blue: fc.b)
+                                                      .opacity(isSelected ? min(1, fc.a * 1.3) : fc.a)))
+                                    if isSelected {
+                                        layerCtx.stroke(Path(roundedRect: rect, cornerRadius: 3),
+                                                        with: .color(.accentColor), lineWidth: 1.5)
+                                    }
+                                } else {
+                                    let zoomX   = (stretch ? lCellW : lCellHalf) * motion.scaleX
+                                    let zoomY   = (stretch ? lCellH : lCellHalf) * motion.scaleY
+                                    let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
+                                    let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
+                                    let strokeW = style?.strokeWidth ?? 1.5
+                                    let mode    = style?.renderMode  ?? .filledStroked
+
+                                    let paths = polygons.filter(\.visible)
+                                                        .map { buildPolygonPath($0, cx: mx, cy: my,
+                                                                                zoomX: zoomX, zoomY: zoomY,
+                                                                                scaleX: cell.scaleX,
+                                                                                scaleY: cell.scaleY,
+                                                                                rotation: cell.rotation + motion.rotation) }
+                                    for cgp in paths {
+                                        if mode == .filled || mode == .filledStroked {
+                                            layerCtx.fill(Path(cgp),
+                                                          with: .color(Color(red: fillC.r, green: fillC.g,
+                                                                             blue: fillC.b, opacity: fillC.a)))
+                                        }
+                                        if mode == .stroked || mode == .filledStroked {
+                                            layerCtx.stroke(Path(cgp),
+                                                            with: .color(Color(red: strokeC.r, green: strokeC.g,
+                                                                               blue: strokeC.b, opacity: strokeC.a)),
+                                                            lineWidth: strokeW)
+                                        }
+                                    }
+                                    if isSelected {
+                                        for cgp in paths {
+                                            layerCtx.stroke(Path(cgp),
+                                                            with: .color(.accentColor.opacity(0.9)),
+                                                            lineWidth: 2.5)
+                                        }
+                                    }
                                 }
                             }
-                            if isSelected {
-                                for cgp in paths {
-                                    ctx.stroke(Path(cgp),
-                                               with: .color(.accentColor.opacity(0.9)),
-                                               lineWidth: 2.5)
-                                }
-                            }
-                        }
-                    }
+                        } // ctx.drawLayer
+                    } // for ls in layerStates
 
                     // Path overlay: trajectory + keyframe dots + animated playhead
+                    // Uses active layer's paths (controller.engine is always the active layer).
+                    let pathMap = Dictionary(uniqueKeysWithValues:
+                        controller.engine.document.paths.map { ($0.id, $0) })
                     if controller.showPathOverlay,
                        let activePID = controller.activePathID,
                        let activePath = pathMap[activePID],
@@ -538,31 +552,68 @@ struct GridCanvasPlaceholder: View {
                                     cellW: Double, cellH: Double,
                                     scaleX: Double, scaleY: Double) {
         guard !controller.backgroundDraw else { return }
-        let doc = controller.engine.document
-        let loopMode  = doc.colorSource?.videoLoopMode ?? .loop
-        let colorGrid = controller.colorMapEngine.currentGrid(
-            animationFrame: controller.engine.currentFrame, loopMode: loopMode)
-        let renderer = ImageRenderer(content: FrameCapture(
-            existingBuffer:  controller.frameBuffer,
-            backgroundColor: controller.backgroundColor,
-            gridConfig:      doc.gridConfig,
-            cells:           doc.cells,
-            styles:          doc.styles,
-            motionPaths:     doc.paths,
-            shapePolygonMap: controller.shapePolygonMap,
-            fallbackPolygons: controller.shapePolygons,
-            stretchSprites:  controller.stretchSpritesToCell,
-            currentFrame:    controller.engine.currentFrame,
-            gridW: gridW, gridH: gridH,
-            cellW: cellW, cellH: cellH,
-            scaleX: scaleX, scaleY: scaleY,
-            displayScale: displayScale,
-            colorGrid:       colorGrid,
-            colorSource:     doc.colorSource,
-            strokeScale:     1.0
-        ))
-        renderer.scale = displayScale
-        controller.updateFrameBuffer(renderer.cgImage)
+
+        let pw = Int((gridW * displayScale).rounded())
+        let ph = Int((gridH * displayScale).rounded())
+        guard pw > 0, ph > 0 else { return }
+        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                       | CGBitmapInfo.byteOrder32Little.rawValue
+        guard let bitmapCtx = CGContext(data: nil, width: pw, height: ph,
+                                        bitsPerComponent: 8, bytesPerRow: 0,
+                                        space: CGColorSpaceCreateDeviceRGB(),
+                                        bitmapInfo: bitmapInfo) else { return }
+        let frame = CGRect(x: 0, y: 0, width: pw, height: ph)
+
+        // Base: previous accumulated frame or background fill
+        if let buf = controller.frameBuffer {
+            bitmapCtx.draw(buf, in: frame)
+        } else {
+            let bg = controller.backgroundColor
+            bitmapCtx.setFillColor(CGColor(red: bg.r, green: bg.g, blue: bg.b, alpha: bg.a))
+            bitmapCtx.fill(frame)
+        }
+
+        let currentFrame = controller.engine.currentFrame
+
+        // Composite each visible layer on top
+        for ls in controller.layerStates where ls.isVisible {
+            let lConfig = ls.engine.document.gridConfig
+            let lCellW  = gridW / Double(lConfig.cols)
+            let lCellH  = gridH / Double(lConfig.rows)
+            let lSX     = lCellW / lConfig.cellWidth
+            let lSY     = lCellH / lConfig.cellHeight
+            let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
+            let colorGrid = controller.colorMapEngine.currentGrid(
+                animationFrame: currentFrame, loopMode: loopMode)
+            let renderer = ImageRenderer(content: FrameCapture(
+                existingBuffer:   nil,
+                backgroundColor:  controller.backgroundColor,
+                gridConfig:       lConfig,
+                cells:            ls.engine.document.cells,
+                styles:           ls.engine.document.styles,
+                motionPaths:      ls.engine.document.paths,
+                shapePolygonMap:  controller.shapePolygonMap,
+                fallbackPolygons: controller.shapePolygons,
+                stretchSprites:   controller.stretchSpritesToCell,
+                currentFrame:     currentFrame,
+                gridW: gridW, gridH: gridH,
+                cellW: lCellW, cellH: lCellH,
+                scaleX: lSX, scaleY: lSY,
+                displayScale:     displayScale,
+                colorGrid:        colorGrid,
+                colorSource:      ls.engine.document.colorSource,
+                strokeScale:      1.0,
+                drawBackground:   false
+            ))
+            renderer.scale = displayScale
+            if let layerImage = renderer.cgImage {
+                bitmapCtx.setAlpha(ls.opacity)
+                bitmapCtx.draw(layerImage, in: frame)
+                bitmapCtx.setAlpha(1.0)
+            }
+        }
+
+        controller.updateFrameBuffer(bitmapCtx.makeImage())
     }
 
     private func handleDrag(at pt: CGPoint,
@@ -877,9 +928,9 @@ private func computeParametric(style: CellStyle, frame: Int, phaseOffset: Int,
     return m
 }
 
-// MARK: - Frame buffer renderer (used by ImageRenderer for background-draw accumulation)
+// MARK: - Frame buffer renderer (used by ImageRenderer for accumulation and export compositing)
 
-private struct FrameCapture: View {
+struct FrameCapture: View {
     let existingBuffer: CGImage?
     let backgroundColor: UMColor
     let gridConfig: UMGridConfig
@@ -900,16 +951,19 @@ private struct FrameCapture: View {
     let colorGrid: [[UMColor]]?
     let colorSource: UMColorSource?
     var strokeScale: Double = 1.0
+    var drawBackground: Bool = true
 
     var body: some View {
         Canvas { ctx, size in
-            if let buf = existingBuffer {
-                let img = ctx.resolve(Image(decorative: buf, scale: displayScale))
-                ctx.draw(img, in: CGRect(origin: .zero, size: size))
-            } else {
-                let bg = backgroundColor
-                ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .color(Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)))
+            if drawBackground {
+                if let buf = existingBuffer {
+                    let img = ctx.resolve(Image(decorative: buf, scale: displayScale))
+                    ctx.draw(img, in: CGRect(origin: .zero, size: size))
+                } else {
+                    let bg = backgroundColor
+                    ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                             with: .color(Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)))
+                }
             }
 
             let config   = gridConfig
@@ -1022,6 +1076,84 @@ func umRenderFrame(
     ))
     renderer.scale = 1.0
     return renderer.cgImage
+}
+
+/// Composite all visible layers into a single CGImage for PNG/video export.
+/// Each layer is rendered cells-only (transparent background) via ImageRenderer,
+/// then blended into a CoreGraphics context at the layer's opacity.
+@MainActor
+func umRenderComposited(
+    layerStates: [UMLayerState],
+    backgroundColor: UMColor,
+    shapePolygonMap: [UUID: [Polygon2D]],
+    fallbackPolygons: [Polygon2D],
+    colorMapEngine: UMColorMapEngine,
+    backgroundDraw: Bool,
+    stretchSprites: Bool,
+    frame: Int,
+    exportW: Double,
+    exportH: Double,
+    strokeScale: Double,
+    accumulationBuffer: CGImage?
+) -> CGImage? {
+    let w = Int(exportW); let h = Int(exportH)
+    guard w > 0, h > 0 else { return nil }
+    let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                   | CGBitmapInfo.byteOrder32Little.rawValue
+    guard let ctx = CGContext(data: nil, width: w, height: h,
+                              bitsPerComponent: 8, bytesPerRow: 0,
+                              space: CGColorSpaceCreateDeviceRGB(),
+                              bitmapInfo: bitmapInfo) else { return nil }
+    let destRect = CGRect(x: 0, y: 0, width: w, height: h)
+
+    // Accumulation base or background fill
+    if let buf = accumulationBuffer, !backgroundDraw {
+        ctx.draw(buf, in: destRect)
+    } else {
+        ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
+                                 blue: backgroundColor.b, alpha: backgroundColor.a))
+        ctx.fill(destRect)
+    }
+
+    for ls in layerStates where ls.isVisible {
+        let lConfig = ls.engine.document.gridConfig
+        let lCellW  = exportW / Double(lConfig.cols)
+        let lCellH  = exportH / Double(lConfig.rows)
+        let lSX     = lCellW / lConfig.cellWidth
+        let lSY     = lCellH / lConfig.cellHeight
+        let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
+        let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
+
+        // Render layer cells on transparent background (drawBackground: false)
+        let renderer = ImageRenderer(content: FrameCapture(
+            existingBuffer:   nil,
+            backgroundColor:  backgroundColor,
+            gridConfig:       lConfig,
+            cells:            ls.engine.document.cells,
+            styles:           ls.engine.document.styles,
+            motionPaths:      ls.engine.document.paths,
+            shapePolygonMap:  shapePolygonMap,
+            fallbackPolygons: fallbackPolygons,
+            stretchSprites:   stretchSprites,
+            currentFrame:     frame,
+            gridW: exportW, gridH: exportH,
+            cellW: lCellW, cellH: lCellH,
+            scaleX: lSX, scaleY: lSY,
+            displayScale:     1.0,
+            colorGrid:        colorGrid,
+            colorSource:      ls.engine.document.colorSource,
+            strokeScale:      strokeScale,
+            drawBackground:   false
+        ))
+        renderer.scale = 1.0
+        if let img = renderer.cgImage {
+            ctx.setAlpha(ls.opacity)
+            ctx.draw(img, in: destRect)
+            ctx.setAlpha(1.0)
+        }
+    }
+
+    return ctx.makeImage()
 }
 
 // MARK: - Transport bar
