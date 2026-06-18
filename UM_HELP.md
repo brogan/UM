@@ -1,6 +1,6 @@
 # UM — User Guide
 
-_Current as of build: 2026-06-18 (rev 10). Covers what is implemented and testable today._
+_Current as of build: 2026-06-18 (rev 11). Covers what is implemented and testable today._
 
 ---
 
@@ -62,7 +62,7 @@ Both layers are additive: a cell with the Spin preset and an Orbit path will spi
 └──────────────────────────────────────────────────────────┘
 ```
 
-**Tool Strip** — across the top. Contains painting tools, grid transform buttons, the Move/Stamp toggle, phase offset control, phase policy picker, the Stretch checkbox, and the resolution button.
+**Tool Strip** — across the top. Contains painting tools, grid transform buttons, the Move/Stamp toggle, Δφ phase offset control, transform buttons, the Phase Policy picker, φ step stepper, Scatter slider, the Stretch checkbox, and the resolution button.
 
 **Style Palette** — left column. Two tabs: **Project** lists styles and paths belonging to this document; **Library** lists the global user library shared across all projects. Click a project style to make it the active painting style. Click a project path to make it the active path for keyframe editing.
 
@@ -93,8 +93,8 @@ Keyboard shortcuts are suppressed when a text field has focus, so they do not in
 
 When a cell is drawn:
 - It is assigned the currently active Cell Style.
-- Its `positionOffset` is set to the value determined by the **Spatial Scatter** setting (not yet exposed as a UI control — currently zero, so sprites land exactly at cell centres).
-- Its `phaseOffset` is set according to the current **Phase Policy** (see [Phase Policy](#6-phase-policy)).
+- Its `positionOffset` is set according to the **Scatter** slider in the Tool Strip (see [Spatial Scatter](#spatial-scatter)). At `0` (default), the sprite lands at the exact cell centre.
+- Its `phaseOffset` is set according to the **Phase Policy** and **φ step** controls in the Tool Strip (see [Phase Policy](#6-phase-policy)).
 
 Painting is a stroke operation: click and hold, then drag across multiple cells. The entire stroke is a single undo operation.
 
@@ -177,7 +177,7 @@ Example: draw cells with sequential phases (0, 8, 16…), set Δφ to +24, flip 
 
 ## 6. Phase Policy
 
-A compact popup menu at the right of the Tool Strip (before the Stretch checkbox and resolution button) controls the **phase policy** — how newly painted cells get their `phaseOffset` assigned.
+A compact popup menu in the Tool Strip controls the **phase policy** — how newly painted cells get their `phaseOffset` assigned. It sits to the right of the transform buttons, followed by the φ step stepper and Scatter slider (both described below), then the Stretch checkbox and resolution button.
 
 | Policy | Effect on new cells |
 |---|---|
@@ -205,19 +205,15 @@ Click **−** / **+** to step by 1 frame at a time. The display shows the value 
 
 **Important:** changing the policy affects only cells painted after the change. Existing cells keep their current `phaseOffset`. This is intentional — you can deliberately mix policies by painting layers with different settings.
 
----
-
-## 7. Stretch
-
 ### Spatial Scatter
 
 To the right of the phase step stepper, a **Scatter** slider controls `spatialScatter` (0.0–1.0). When non-zero, each cell painted receives a random `positionOffset` applied at paint time:
 
-- `0` (leftmost) — sprites land exactly at cell centres. Default.
+- `0` (leftmost, default) — sprites land exactly at cell centres.
 - `0.5` — random offset up to ±0.5 × cell dimensions on each axis.
 - `1` (rightmost) — random offset up to ±1 full cell width/height on each axis.
 
-Scatter is applied once when a cell is drawn. Existing cells are unaffected by moving the slider — use **Rescatter** in PLACE & TIME to re-scatter selected cells with the current value.
+Scatter is applied once when a cell is drawn. Existing cells are unaffected by moving the slider — use **Rescatter** in PLACE & TIME to re-scatter selected cells with the current setting.
 
 ---
 
@@ -307,7 +303,7 @@ States are saved with the project file (`.umproj`). Loading a project with a tim
 
 ## 9. Quick Adjust
 
-The right panel contains collapsible sections. The top two sections (PROJECT and CANVAS) hold project-wide settings that apply regardless of which style is active. The sections below them are per-style or per-cell.
+The right panel contains collapsible sections. The top three sections (PROJECT, EXPORT, CANVAS) hold project-wide settings that apply regardless of which style is active. The sections below them are per-style or per-cell.
 
 Click a section header to expand or collapse it. A chevron (▶ collapsed / ▼ expanded) indicates the state.
 
@@ -815,4 +811,4 @@ To change it, open **UM → Preferences…** (Cmd+,) and click **Choose…**. Cl
 
 ---
 
-_End of UM Help — v0.8_
+_End of UM Help — v0.9_
