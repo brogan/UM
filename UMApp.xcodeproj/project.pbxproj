@@ -21,6 +21,7 @@
 		AA000038000000000000001A /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000039000000000000001A /* TimelineView.swift */; };
 		AA000030000000000000001A /* polygonSets in Resources */ = {isa = PBXBuildFile; fileRef = AA000031000000000000001A /* polygonSets */; };
 		AA00003A000000000000001A /* UMColorMapEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003B000000000000001A /* UMColorMapEngine.swift */; };
+		AA00003C000000000000001A /* UMExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003D000000000000001A /* UMExporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -37,6 +38,7 @@
 		AA000037000000000000001A /* StyleTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleTransform.swift; sourceTree = "<group>"; };
 		AA000039000000000000001A /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		AA00003B000000000000001A /* UMColorMapEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMColorMapEngine.swift; sourceTree = "<group>"; };
+		AA00003D000000000000001A /* UMExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMExporter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,6 +83,7 @@
 				AA000037000000000000001A /* StyleTransform.swift */,
 				AA000039000000000000001A /* TimelineView.swift */,
 				AA00003B000000000000001A /* UMColorMapEngine.swift */,
+				AA00003D000000000000001A /* UMExporter.swift */,
 				AA000009000000000000001A /* Assets.xcassets */,
 				AA000031000000000000001A /* polygonSets */,
 			);
@@ -175,6 +178,7 @@
 				AA000036000000000000001A /* StyleTransform.swift in Sources */,
 				AA000038000000000000001A /* TimelineView.swift in Sources */,
 				AA00003A000000000000001A /* UMColorMapEngine.swift in Sources */,
+				AA00003C000000000000001A /* UMExporter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

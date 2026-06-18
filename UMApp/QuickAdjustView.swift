@@ -49,6 +49,7 @@ struct QuickAdjustView: View {
     @State private var pathCollapsed       = false
     @State private var sequenceCollapsed   = false
     @State private var advancedCollapsed   = true
+    @State private var exportCollapsed     = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
 
@@ -61,6 +62,7 @@ struct QuickAdjustView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     projectSection
                     canvasSection
+                    exportSection
                     orderChaosSection
                     placeTimeSection
                     renderSection
@@ -306,6 +308,55 @@ struct QuickAdjustView: View {
             get: { controller.recordingIntervalSeconds },
             set: { controller.recordingIntervalSeconds = $0 }
         )
+    }
+
+    private var exportSection: some View {
+        @Bindable var ctrl = controller
+        return InspectorSection("EXPORT", isCollapsed: $exportCollapsed) {
+            InspectorField("Multiplier") {
+                Picker("", selection: $ctrl.exportMultiplier) {
+                    Text("1×").tag(1)
+                    Text("2×").tag(2)
+                    Text("4×").tag(4)
+                    Text("8×").tag(8)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 160)
+            }
+            InspectorField("Scale drawing") {
+                Toggle("", isOn: $ctrl.exportScaleDrawing)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .help("Scale stroke widths with the multiplier")
+            }
+            InspectorField("Output") {
+                let m = controller.exportMultiplier
+                let w = Int(controller.engine.document.gridConfig.canvasWidth  * Double(m))
+                let h = Int(controller.engine.document.gridConfig.canvasHeight * Double(m))
+                Text("\(w) × \(h) px")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            InspectorField("FPS") {
+                Picker("", selection: $ctrl.exportFPS) {
+                    Text("24").tag(24)
+                    Text("30").tag(30)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 80)
+            }
+            InspectorField("Frames") {
+                FloatEntryField(value: Binding(
+                    get: { Double(controller.exportFrameCount) },
+                    set: { controller.exportFrameCount = max(1, Int($0)) }
+                ), width: 52, fractionDigits: 0)
+                Text(String(format: "%.1f s", controller.exportDurationSeconds))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private var orderChaosSection: some View {

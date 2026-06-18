@@ -494,7 +494,8 @@ struct GridCanvasPlaceholder: View {
             scaleX: scaleX, scaleY: scaleY,
             displayScale: displayScale,
             colorGrid:       colorGrid,
-            colorSource:     doc.colorSource
+            colorSource:     doc.colorSource,
+            strokeScale:     1.0
         ))
         renderer.scale = displayScale
         controller.updateFrameBuffer(renderer.cgImage)
@@ -790,6 +791,7 @@ private struct FrameCapture: View {
     let displayScale: CGFloat
     let colorGrid: [[UMColor]]?
     let colorSource: UMColorSource?
+    var strokeScale: Double = 1.0
 
     var body: some View {
         Canvas { ctx, size in
@@ -827,12 +829,12 @@ private struct FrameCapture: View {
                 let my = Double(r) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY + motion.dy
                 let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
                 let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
-                let strokeW = style?.strokeWidth ?? 1.5
+                let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                 let mode    = style?.renderMode  ?? .filledStroked
 
                 if fallback {
-                    let rw = (cellW - 4) / 2 * motion.scaleX
-                    let rh = (cellH - 4) / 2 * motion.scaleY
+                    let rw = (cellW - 4 * strokeScale) / 2 * motion.scaleX
+                    let rh = (cellH - 4 * strokeScale) / 2 * motion.scaleY
                     ctx.fill(Path(roundedRect: CGRect(x: mx-rw, y: my-rh, width: rw*2, height: rh*2),
                                   cornerRadius: 3),
                              with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
@@ -859,6 +861,51 @@ private struct FrameCapture: View {
         }
         .frame(width: gridW, height: gridH)
     }
+}
+
+// MARK: - Export render helper (module-internal; used by UMVideoExporter)
+
+@MainActor
+func umRenderFrame(
+    doc: UMGridDocument,
+    backgroundColor: UMColor,
+    polygons: [Polygon2D],
+    colorMapEngine: UMColorMapEngine,
+    backgroundDraw: Bool,
+    stretchSprites: Bool,
+    frame: Int,
+    exportW: Double,
+    exportH: Double,
+    strokeScale: Double,
+    accumulationBuffer: CGImage?
+) -> CGImage? {
+    let config = doc.gridConfig
+    let cellW  = exportW / Double(config.cols)
+    let cellH  = exportH / Double(config.rows)
+    let sx     = cellW / config.cellWidth
+    let sy     = cellH / config.cellHeight
+    let loopMode  = doc.colorSource?.videoLoopMode ?? .loop
+    let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
+    let renderer = ImageRenderer(content: FrameCapture(
+        existingBuffer:  backgroundDraw ? nil : accumulationBuffer,
+        backgroundColor: backgroundColor,
+        gridConfig:      config,
+        cells:           doc.cells,
+        styles:          doc.styles,
+        motionPaths:     doc.paths,
+        polygons:        polygons,
+        stretchSprites:  stretchSprites,
+        currentFrame:    frame,
+        gridW: exportW, gridH: exportH,
+        cellW: cellW, cellH: cellH,
+        scaleX: sx, scaleY: sy,
+        displayScale:    1.0,
+        colorGrid:       colorGrid,
+        colorSource:     doc.colorSource,
+        strokeScale:     strokeScale
+    ))
+    renderer.scale = 1.0
+    return renderer.cgImage
 }
 
 // MARK: - Transport bar
@@ -937,9 +984,36 @@ struct TransportBarView: View {
 
             Spacer()
 
-            Button("PNG")   { }.buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(.secondary)
-            Button("SVG")   { }.buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(.secondary)
-            Button("Video") { }.buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(.secondary)
+            Button("PNG") {
+                controller.exportPNG()
+            }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12))
+            .disabled(controller.isExporting)
+
+            Button("SVG") { }
+            .buttonStyle(.borderless)
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+
+            Group {
+                if controller.isExporting {
+                    HStack(spacing: 4) {
+                        ProgressView(value: controller.exportProgress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 60)
+                        Text("\(Int(controller.exportProgress * 100))%")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button("Video") {
+                        controller.exportVideo()
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.system(size: 12))
+                }
+            }
         }
         .sheet(isPresented: $showTimeline) {
             TimelineView()

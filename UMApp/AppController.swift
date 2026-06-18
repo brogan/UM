@@ -1,6 +1,9 @@
 import SwiftUI
 import Observation
 import AppKit
+import UniformTypeIdentifiers
+import CoreGraphics
+import ImageIO
 import UMEngine
 import LoomEngine
 
@@ -58,6 +61,16 @@ final class AppController {
         didSet { if backgroundDraw { frameBuffer = nil } }
     }
     private(set) var frameBuffer: CGImage? = nil
+
+    // MARK: - Export settings
+    var exportMultiplier: Int    = 1     // 1, 2, 4, 8 — output pixel scale
+    var exportScaleDrawing: Bool = true  // scale stroke widths with multiplier
+    var exportFPS: Int           = 24
+    var exportFrameCount: Int    = 96    // total frames for video (default 4 s at 24 fps)
+    var isExporting: Bool        = false
+    var exportProgress: Double   = 0.0
+
+    var exportDurationSeconds: Double { Double(exportFrameCount) / Double(max(1, exportFPS)) }
 
     // MARK: - Recording & timeline
 
@@ -581,6 +594,126 @@ final class AppController {
     }
 
     private func nudgeStep(_ shift: Bool) -> Double { shift ? 10 : 1 }
+
+    // MARK: - Renders directories
+
+    private func rendersBaseURL() -> URL {
+        if let proj = currentFileURL {
+            return proj.deletingLastPathComponent().appendingPathComponent("renders")
+        }
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("UM Projects/renders")
+    }
+
+    func stillsRenderDirectory() -> URL {
+        let url = rendersBaseURL().appendingPathComponent("stills")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    func animationsRenderDirectory() -> URL {
+        let url = rendersBaseURL().appendingPathComponent("animations")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    // MARK: - Export
+
+    func exportPNG() {
+        let config = engine.document.gridConfig
+        let m = Double(exportMultiplier)
+        let exportW = config.canvasWidth  * m
+        let exportH = config.canvasHeight * m
+        let strokeScale = exportScaleDrawing ? m : 1.0
+
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmmss"
+        let baseName = currentFileURL?.deletingPathExtension().lastPathComponent ?? "umproject"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes  = [.png]
+        panel.nameFieldStringValue = "\(baseName)_\(f.string(from: Date())).png"
+        panel.directoryURL         = stillsRenderDirectory()
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard let cgImage = umRenderFrame(
+                    doc:              self.engine.document,
+                    backgroundColor:  self.backgroundColor,
+                    polygons:         self.shapePolygons,
+                    colorMapEngine:   self.colorMapEngine,
+                    backgroundDraw:   self.backgroundDraw,
+                    stretchSprites:   self.stretchSpritesToCell,
+                    frame:            self.engine.currentFrame,
+                    exportW:          exportW,
+                    exportH:          exportH,
+                    strokeScale:      strokeScale,
+                    accumulationBuffer: self.backgroundDraw ? nil : self.frameBuffer
+                ) else { return }
+
+                guard let dest = CGImageDestinationCreateWithURL(
+                    url as CFURL, UTType.png.identifier as CFString, 1, nil
+                ) else { return }
+                CGImageDestinationAddImage(dest, cgImage, nil)
+                CGImageDestinationFinalize(dest)
+            }
+        }
+    }
+
+    func exportVideo() {
+        let config = engine.document.gridConfig
+        let m = Double(exportMultiplier)
+        let exportW = config.canvasWidth  * m
+        let exportH = config.canvasHeight * m
+        let strokeScale = exportScaleDrawing ? m : 1.0
+
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmmss"
+        let baseName = currentFileURL?.deletingPathExtension().lastPathComponent ?? "umproject"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes  = [.movie]
+        panel.nameFieldStringValue = "\(baseName)_\(f.string(from: Date())).mov"
+        panel.directoryURL         = animationsRenderDirectory()
+
+        let doc      = engine.document
+        let bg       = backgroundColor
+        let polys    = shapePolygons
+        let cmEngine = colorMapEngine
+        let bgDraw   = backgroundDraw
+        let stretch  = stretchSpritesToCell
+        let fps      = exportFPS
+        let frames   = exportFrameCount
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.isExporting    = true
+            self.exportProgress = 0.0
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    try await UMVideoExporter.export(
+                        doc:              doc,
+                        backgroundColor:  bg,
+                        polygons:         polys,
+                        colorMapEngine:   cmEngine,
+                        backgroundDraw:   bgDraw,
+                        stretchSprites:   stretch,
+                        frameCount:       frames,
+                        fps:              fps,
+                        exportW:          exportW,
+                        exportH:          exportH,
+                        strokeScale:      strokeScale,
+                        to:               url,
+                        progress:         { [weak self] p in self?.exportProgress = p }
+                    )
+                } catch {
+                    // TODO: surface error in UI
+                }
+                self.isExporting = false
+            }
+        }
+    }
 }
 
 enum TransformMode {
