@@ -636,8 +636,7 @@ private let qaProjectBody = #"""
 <div class="tip"><strong>Projects are self-contained</strong> — when you choose a color source, UM copies the file into a <code>colorSources/</code> folder inside the .umproj package. The project can be moved, renamed, or shared and the color source travels with it automatically.</div>
 
 <h2>Color map palette extraction</h2>
-<p>Not yet built — but planned. An <strong>Extract Palette…</strong> button will let you sample an image (or the currently loaded color source) to extract a set of representative colors using k-means clustering. The resulting swatches can be reviewed, edited, and confirmed, creating new style entries in your Style Palette directly from the image. This bridges the live Color Map and the Style Palette — derive a coherent set of named styles from any reference image.</p>
-<p>See <a href="um-help://help/pending">Not Yet Built</a> for scope and status.</p>
+<p>When a Color Map source is loaded, UM can sample it to build a named <strong>colour palette</strong> — a set of swatches you can use to hand-pick fill and stroke colours for your styles. See <a href="um-help://help/palette">Style Palette &amp; Library → PALETTES</a> for how to generate and manage palettes, and <a href="um-help://help/qa-style">Style (RENDER)</a> for how to apply palette colours to a style's fill or stroke.</p>
 """#
 
 private let qaStyleBody = #"""
@@ -659,11 +658,21 @@ private let qaStyleBody = #"""
 <p>Edits the <strong>active style</strong> (highlighted in the STYLES section of the Style Palette). Changes are reflected immediately on every cell that uses this style.</p>
 <table>
   <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><strong>Fill</strong></td><td>Fill colour and opacity. Click the swatch to open the colour panel.</td></tr>
-  <tr><td><strong>Stroke</strong></td><td>Stroke colour and opacity.</td></tr>
+  <tr><td><strong>Fill</strong></td><td>Fill colour and opacity. Click the colour well to open the system colour panel. Click the palette icon (🎨) to pick from a colour palette instead — see below.</td></tr>
+  <tr><td><strong>Stroke</strong></td><td>Stroke colour and opacity. Same palette icon available.</td></tr>
   <tr><td><strong>Width</strong></td><td>Stroke width in pixels. Double-click to reset to 1.5.</td></tr>
   <tr><td><strong>Mode</strong></td><td>Filled (fill only), Stroked (outline only), or Fill &amp; Stroke (both, default).</td></tr>
 </table>
+
+<h2>Colour palette picker</h2>
+<p>The palette icon (swatchpalette) next to Fill and Stroke opens a popover showing your project's colour palettes as swatch grids. Palettes are generated from a loaded Color Map — see <a href="um-help://help/palette">Style Palette → PALETTES</a> and <a href="um-help://help/qa-project">PROJECT / CANVAS → Color map palette extraction</a>.</p>
+<ul>
+  <li>If multiple palettes exist, a menu at the top of the popover lets you switch between them.</li>
+  <li>Adjust the <strong>Alpha</strong> slider before clicking a swatch to control opacity. The slider default is 1.0 (fully opaque).</li>
+  <li>Click any swatch to apply that colour (with the current alpha) to the active style's fill or stroke and close the popover.</li>
+  <li>The palette icon is greyed out when no palettes exist in the project.</li>
+</ul>
+<div class="tip">The colour well and palette picker work together — use the colour well for fine-tuned colour editing (hue wheel, sliders) and the palette picker to stay within a coherent image-sourced colour range.</div>
 
 <h2>Style variants</h2>
 <p>Right-click any style row in the palette to create a derived variant:</p>
@@ -846,7 +855,7 @@ private let paletteBody = #"""
 <p>The Style Palette sits on the left side of the window. It has two tabs: <strong>Project</strong> and <strong>Library</strong>.</p>
 
 <h2>Project tab</h2>
-<p>Lists everything owned by the current document. Organised into five sections: LAYERS, STYLES, MOTIONS, PATHS, and SHAPES — corresponding to the four creative axes plus layers.</p>
+<p>Lists everything owned by the current document. Organised into six sections: LAYERS, STYLES, MOTIONS, PATHS, SHAPES, and PALETTES.</p>
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
@@ -900,11 +909,30 @@ private let paletteBody = #"""
 
 <div class="note"><strong>One shape per cell</strong> — each cell now carries a single direct shape reference (the 4-axis model). The old system where multiple shapes were assigned to a style for SEQUENCE cycling has been replaced. Shape cycling over time will be re-introduced as a motion set feature in a future update.</div>
 
-<h2>Library tab</h2>
-<p>Shows your global user library — styles, motion sets, paths, and shapes saved across all projects.</p>
+<h3>PALETTES</h3>
+<p>Colour palettes are sets of swatches sampled from a Color Map source. They provide a way to apply coherent, image-sourced colours to your styles through the palette picker in the RENDER section.</p>
 <ul>
-  <li>Style, motion, and shape rows show whether the item is already in the current project. If not, a <strong>↓</strong> button imports it.</li>
-  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions) and <code>~/Library/Application Support/UM/shapes/</code> (shapes).</li>
+  <li><strong>Generate from Color Map…</strong> — opens a sheet to name the palette and choose a size. Available only when a Color Map source is loaded. Sizes:
+    <ul>
+      <li><strong>4×4</strong> — 16 colours (4 horizontal bands × 4 vertical bands of the source image)</li>
+      <li><strong>4×8</strong> — 32 colours</li>
+      <li><strong>8×8</strong> — 64 colours</li>
+    </ul>
+  </li>
+  <li>Each palette row shows the name and a <strong>swatch strip preview</strong> of the first 32 colours.</li>
+  <li><strong>↑ button</strong> — saves the palette to the global library for reuse across projects.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
+</ul>
+<p>Right-click a palette row: <strong>Save to Library</strong> or <strong>Delete Palette</strong>.</p>
+<p>To use a palette colour in a style, click the palette icon (🎨) next to Fill or Stroke in the RENDER section — see <a href="um-help://help/qa-style">Style (RENDER)</a>.</p>
+
+<div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
+
+<h2>Library tab</h2>
+<p>Shows your global user library — styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
+<ul>
+  <li>Style, motion, shape, and palette rows show whether the item is already in the current project. If not, a <strong>↓</strong> button imports it.</li>
+  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions/palettes) and <code>~/Library/Application Support/UM/shapes/</code> (shapes).</li>
   <li>Right-click any library row to remove it from the library.</li>
 </ul>
 """#
@@ -1116,6 +1144,5 @@ private let pendingBody = #"""
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
-  <tr><td>Color</td><td>Color map palette extraction</td><td>An Extract Palette… button that samples a reference image (or the loaded color source) using k-means clustering and presents swatches for review. Confirmed swatches create new CellStyle entries in the project. Bridges the live Color Map and the Style Palette.</td></tr>
 </table>
 """#

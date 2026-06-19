@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -563,15 +563,17 @@ struct UMGridDocument: Codable {
 **AppController** holds project-level palettes shared across all layers:
 
 ```swift
-var projectStyles:     [CellStyle]      // render palette (all layers share these)
-var projectMotionSets: [UMMotionSet]    // motion palette (new — §6.9)
-var projectShapes:     [UMShape]        // shape palette
+var projectStyles:        [CellStyle]       // render palette (all layers share these)
+var projectMotionSets:    [UMMotionSet]     // motion palette (§6.9)
+var projectShapes:        [UMShape]         // shape palette
+var projectColorPalettes: [UMColorPalette]  // colour palettes (§15.10)
 
 // Active palette selections (written into new cells at paint time)
-var activeStyleID:  UUID?
-var activeMotionID: UUID?
-var activeShapeID:  UUID?
-var activePathID:   UUID?
+var activeStyleID:        UUID?
+var activeMotionID:       UUID?
+var activeShapeID:        UUID?
+var activePathID:         UUID?
+var activeColorPaletteID: UUID?
 ```
 
 The project is saved as a directory package (`.umproj/`) containing:
@@ -1435,12 +1437,23 @@ Everything in this list is implemented and functional in the current build (`mai
 - Style variants: Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only (right-click context menu)
 
 **Style Palette and Library**
-- Project tab: STYLES, PATHS, SHAPES sections with promote (↑), import (↓), delete
-- Library tab: global styles/paths/shapes with promote and import
-- Global style/path library at `~/Library/Application Support/UM/library.json`
+- Project tab: STYLES, MOTIONS, PATHS, SHAPES, PALETTES sections with promote (↑), import (↓), delete
+- Library tab: global styles/motions/paths/shapes/palettes with promote and import
+- Global style/path library at `~/Library/Application Support/UM/library.json`; now also includes `colorPalettes: [UMColorPalette]`
 - Shape library manager: `UMShape`, project shapes embedded in `.umproj`, global shapes at `~/Library/Application Support/UM/shapes/`
 - Import Loom polygon-set JSON files; shapes survive resave (geometry embedded, not file-referenced)
 - Shape rows support multi-select: clicking a row toggles the shape into/out of the active style's `shapeIDs` list; a sequence-position badge shows the order
+
+**Colour palette chooser** (built 2026-06-19 — §15.10)
+- `UMColorPalette`: `id: UUID`, `name: String`, `colors: [UMColor]`, `sourceDescription: String`
+- Stored in `projectColorPalettes: [UMColorPalette]` in AppController and `[UMColorPalette]` in `UMLibrary`
+- Serialised in `ProjectConfig` with `decodeIfPresent` for backward compatibility
+- `UMColorMapEngine.buildPaletteColors(rows:cols:)` — samples the stored source image (or first video frame) using the same GPU bilinear path as the live colour map engine; returns flat `[UMColor]`
+- `AppController.generateColorPalette(name:rows:cols:)` — builds a palette from the active colour map and appends it to `projectColorPalettes`
+- Full CRUD: `deleteColorPalette`, `promoteColorPaletteToLibrary`, `importColorPaletteFromLibrary`, `removeColorPaletteFromLibrary`
+- PALETTES section in Project tab: swatch strip preview per palette; rename on double-click; promote (↑) and delete in context menu; "Generate from Color Map…" sheet (name field + 4×4/4×8/8×8 size picker) — visible only when a colour map is loaded
+- PALETTES section in Library tab: strip preview, import (↓), remove
+- `ColorPalettePickerView` — popover triggered by a `swatchpalette` icon button next to Fill and Stroke `ColorWell`s in the RENDER section; shows a swatch grid (always 8 columns), palette selector when multiple palettes exist, alpha slider at bottom; tapping a swatch applies `color.withAlpha(alpha)` to the bound style property and dismisses
 
 **Canvas and rendering**
 - Live animated canvas (SwiftUI Canvas, `@Observable` engine, 24 fps)
@@ -1782,33 +1795,28 @@ SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUE
 
 ---
 
-### 15.10 Color Map Palette Extraction
+### 15.10 Colour Palette Chooser ✓ Built 2026-06-19
 
-**Goal:** Let the user sample an image to extract a palette of representative colors, then use those colors to create or update `CellStyle` entries in the project. This bridges the Color Map (per-frame per-cell live recolor) and the Style Palette (named design colors), giving the user a way to derive a coherent style set from any reference image or from the same image used as a live color map.
+**What was built** differs from the original k-means extraction plan. Rather than deriving a palette algorithmically and creating new `CellStyle` entries, a simpler and more direct approach was taken:
 
-**Proposed workflow**
+- Palettes are independent `UMColorPalette` entities (not wrappers around `CellStyle`)
+- Sampling uses the same GPU bilinear averaging already in `UMColorMapEngine` — no k-means needed
+- Colors are applied directly to an existing style's fill or stroke via a popover picker — no new style creation
+- Alpha is controllable at the point of picking, not baked into the palette
 
-1. In the Color Map section of Quick Adjust (or a dedicated panel), a **"Extract Palette…"** button opens an image picker (same file types as the color source — JPEG, PNG, TIFF, HEIC, MP4 frame).
-2. The image is sampled using a palette extraction algorithm (e.g. k-means clustering on Lab color space, or median-cut). The user selects the number of colors (4, 6, 8, 12…).
-3. The extracted swatches are presented in a sheet — the user can:
-   - Accept/reject individual swatches
-   - Click a swatch to edit its color before committing
-   - Choose whether to **create new styles** (one per accepted swatch) or **update existing styles** (remapping the project's style fill colors to the nearest palette color)
-4. Confirmed swatches are added as new `CellStyle` entries to `projectStyles` with auto-generated names (e.g. "Warm Ochre", "Deep Teal") or simple sequential names ("Palette 1"…). The user can rename them in the Style Palette afterwards.
+**Workflow**
+1. Load a Color Map source (static image or video) in the CANVAS section.
+2. In the PALETTES section of the left panel (Project tab), click **Generate from Color Map…**.
+3. Enter a name and choose a size: 4×4 (16 colors), 4×8 (32 colors), or 8×8 (64 colors). UM samples the source image into the selected grid and stores it as a named `UMColorPalette`.
+4. The palette appears as a swatch strip in the PALETTES list. Multiple palettes can coexist.
+5. In the RENDER section of Quick Adjust, click the `swatchpalette` icon next to Fill or Stroke. A popover shows the palette's swatch grid (8 per row). Adjust the alpha slider, then click any swatch to apply that color + alpha to the active style.
+6. Promote a palette to the global library (↑ button) to reuse it across projects.
 
-**Data model impact**
-
-No persistent changes needed — the extraction result is ephemeral (a `[UMColor]` array). Only the resulting new `CellStyle` entries are persisted. The extraction can run on a background thread and post results back on the main actor.
-
-**Connection to existing Color Map**
-
-If a Color Map source is already loaded, "Extract Palette" should default to sampling from it — the user has already chosen a reference image, so extracting a palette from it is a natural next step. If no color map is loaded, the button opens a fresh file picker.
-
-**Scope:** medium — roughly 2–3 days:
-- Palette extraction (k-means or median-cut on `CGImage`): 1 day
-- Extraction sheet UI (swatches, count picker, accept/reject, edit): 0.75 days
-- Style creation / update logic + naming heuristic: 0.5 days
-- Integration with existing Color Map file picker: 0.25 days
+**What the original plan deferred to future work**
+- k-means / median-cut clustering to find representative colors (the bilinear grid average already produces useful, spatially coherent palettes for most use cases)
+- Accept/reject per-swatch review step
+- Auto-naming heuristics (e.g. "Warm Ochre")
+- Style-remapping mode (recolor all existing styles to the nearest palette entry)
 
 ---
 
@@ -1837,4 +1845,4 @@ If a Color Map source is already loaded, "Extract Palette" should default to sam
 | **Layers** | Animated layer opacity / parallax drivers | Loom driver integration |
 | **Layers** | Per-layer color maps | Layer system ✓ |
 | **Compat** | Legacy UM XML import | — |
-| **Color** | Color map palette extraction → styles | Color Map ✓ |
+| **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |
