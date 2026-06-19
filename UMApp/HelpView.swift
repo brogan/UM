@@ -92,7 +92,7 @@ private let helpPages: [String: String] = [
     "transforms": page("Grid Transforms",         transformsBody),
     "phase":      page("Phase Policy & Scatter",  phaseBody),
     "playback":   page("Playback & Recording",    playbackBody),
-    "qa-project": page("PROJECT / CANVAS",        qaProjectBody),
+    "qa-project": page("PROJECT / CANVAS / CAMERA", qaProjectBody),
     "qa-style":   page("Style (RENDER section)",    qaStyleBody),
     "qa-motion":  page("Motion Palette",           qaMotionBody),
     "qa-path":    page("PATH EDITOR",             qaPathBody),
@@ -591,9 +591,9 @@ private let playbackBody = #"""
 """#
 
 private let qaProjectBody = #"""
-<h1>Quick Adjust: PROJECT / EXPORT / CANVAS</h1>
-<p class="subtitle">Project-wide settings for output dimensions, export, and the canvas appearance.</p>
-<p>These three sections affect the whole document. They sit at the top of the Quick Adjust panel and are always accessible regardless of which style is active.</p>
+<h1>Quick Adjust: PROJECT / CANVAS / CAMERA</h1>
+<p class="subtitle">Project-wide settings for output dimensions, canvas appearance, and the virtual camera.</p>
+<p>These sections affect the whole document. They sit at the top of the Quick Adjust panel and are always accessible regardless of which style is active.</p>
 
 <h2>PROJECT</h2>
 <table>
@@ -681,6 +681,19 @@ private let qaProjectBody = #"""
 
 <h2>Color map palette extraction</h2>
 <p>When a Color Map source is loaded, UM can sample it to build a named <strong>colour palette</strong> — a set of swatches you can use to hand-pick fill and stroke colours for your styles. See <a href="um-help://help/palette">Style Palette &amp; Library → PALETTES</a> for how to generate and manage palettes, and <a href="um-help://help/qa-style">Style (RENDER)</a> for how to apply palette colours to a style's fill or stroke.</p>
+
+<h2>CAMERA</h2>
+<p>The CAMERA section sits below CANVAS in the Quick Adjust panel. It positions a virtual camera over the entire composition — all layers render through it. Camera state is saved in the project and applied to all PNG and video exports.</p>
+<table>
+  <tr><th>Control</th><th>Range</th><th>Description</th></tr>
+  <tr><td><strong>Pan X</strong></td><td>−500 … 500 px</td><td>Shift the viewport left (negative) or right (positive) in canvas pixels.</td></tr>
+  <tr><td><strong>Pan Y</strong></td><td>−500 … 500 px</td><td>Shift the viewport up (negative) or down (positive) in canvas pixels.</td></tr>
+  <tr><td><strong>Zoom</strong></td><td>0.1 – 4.0×</td><td>Scale the canvas around its centre point. 1.0 = native size.</td></tr>
+  <tr><td><strong>Rotation</strong></td><td>−180° … 180°</td><td>Rotate the canvas clockwise (positive) or counter-clockwise (negative) around its centre.</td></tr>
+  <tr><td><strong>Reset</strong></td><td>—</td><td>Return all values to neutral (Pan 0, Zoom 1×, Rotation 0°). Greyed out when already at identity.</td></tr>
+</table>
+<p>Parallax per layer is controlled by the small slider (camera icon) in each layer row — see <a href="um-help://help/layers">Working with Layers</a> for details on how parallax interacts with camera pan.</p>
+<div class="note"><strong>Phase 1 — constant values only.</strong> The camera currently supports static positioning (constant mode). Oscillator and keyframe animation of camera movement (camera moves over the timeline) will be added in a future release.</div>
 """#
 
 private let qaStyleBody = #"""
@@ -1184,7 +1197,7 @@ private let pendingBody = #"""
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>A toggleable overlay colouring each cell by its phaseOffset value (blue = 0, red = max) to make temporal structure visible without playing the animation.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>CANVAS supports a solid background colour. Loading a visible image composited behind the grid is planned (distinct from the Color Map).</td></tr>
-  <tr><td>Layers</td><td>Camera &amp; parallax</td><td>A virtual camera (pan, zoom, rotation) with per-layer parallax factors for depth simulation.</td></tr>
+  <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>Camera pan, zoom, and rotation support constant values today. Oscillator and keyframe modes (driving camera motion over time) and the per-layer opacity/offset drivers are Phase 2.</td></tr>
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
