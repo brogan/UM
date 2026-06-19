@@ -315,6 +315,16 @@ public final class UMGridEngine {
                 cell.phaseOffset = 0
             }
 
+            // ResizePositionScatter — add random sub-cell offset
+            if cfg.resizePositionScatter > 0 {
+                let maxDx = 0.5 * cfg.resizePositionScatter
+                let maxDy = 0.5 * cfg.resizePositionScatter
+                cell.positionOffset = UMOffset(
+                    dx: cell.positionOffset.dx + Double.random(in: -maxDx ... maxDx),
+                    dy: cell.positionOffset.dy + Double.random(in: -maxDy ... maxDy)
+                )
+            }
+
             return cell
         }
 

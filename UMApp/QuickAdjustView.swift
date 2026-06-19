@@ -44,6 +44,7 @@ struct QuickAdjustView: View {
     @State private var placeTimeCollapsed  = false
     @State private var scaleLocked         = true
     @State private var renderCollapsed     = false
+    @State private var motionCollapsed     = false
     @State private var pathCollapsed       = false
     @State private var advancedCollapsed   = true
     @State private var exportCollapsed     = false
@@ -62,6 +63,7 @@ struct QuickAdjustView: View {
                     exportSection
                     placeTimeSection
                     renderSection
+                    motionSection
                     pathSection
                     advancedSection
                 }
@@ -507,6 +509,55 @@ struct QuickAdjustView: View {
         }
     }
 
+    // MARK: - Motion section
+
+    @ViewBuilder
+    private var motionSection: some View {
+        if let ms = controller.activeMotionSet {
+            InspectorSection("MOTION — \(ms.name)", isCollapsed: $motionCollapsed) {
+                InspectorField("Preset") {
+                    Picker("", selection: motionPresetBinding) {
+                        ForEach(MotionPreset.allCases, id: \.self) { p in
+                            Text(p.displayName).tag(p)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 130)
+                }
+                InspectorField("Speed") {
+                    Slider(value: motionSpeedBinding, in: 0...2)
+                        .frame(maxWidth: 100)
+                    Text(String(format: "%.2f×", ms.motionSpeed))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(width: 38, alignment: .trailing)
+                }
+                InspectorField("Amount") {
+                    Slider(value: motionAmountBinding, in: 0...1)
+                        .frame(maxWidth: 100)
+                    Text(String(format: "%.2f", ms.motionAmount))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(width: 38, alignment: .trailing)
+                }
+                InspectorField("Phase") {
+                    Slider(value: motionPhaseBinding, in: 0...1)
+                        .frame(maxWidth: 100)
+                    Text(String(format: "%.2f", ms.motionPhase))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(width: 38, alignment: .trailing)
+                }
+                Divider().padding(.horizontal, 12).padding(.vertical, 3)
+                InspectorField("Order/Chaos") {
+                    Slider(value: motionOrderChaosBinding, in: 0...1)
+                        .frame(maxWidth: 100)
+                    Text(String(format: "%.2f", ms.orderChaos))
+                        .font(.system(size: 11, design: .monospaced))
+                        .frame(width: 38, alignment: .trailing)
+                }
+            }
+        }
+    }
+
     // MARK: - Path editor section
 
     private var pathSection: some View {
@@ -550,8 +601,8 @@ struct QuickAdjustView: View {
                 // Path name field
                 InspectorField("Name") {
                     TextField("Name", text: Binding(
-                        get: { controller.engine.document.paths[pi].name },
-                        set: { controller.engine.document.paths[pi].name = $0 }
+                        get: { pi < controller.engine.document.paths.count ? controller.engine.document.paths[pi].name : "" },
+                        set: { if pi < controller.engine.document.paths.count { controller.engine.document.paths[pi].name = $0 } }
                     ))
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
@@ -560,8 +611,8 @@ struct QuickAdjustView: View {
                 // Loop toggle + duration read-out
                 HStack(spacing: 0) {
                     Toggle("Loop", isOn: Binding(
-                        get: { controller.engine.document.paths[pi].loops },
-                        set: { controller.engine.document.paths[pi].loops = $0 }
+                        get: { pi < controller.engine.document.paths.count && controller.engine.document.paths[pi].loops },
+                        set: { if pi < controller.engine.document.paths.count { controller.engine.document.paths[pi].loops = $0 } }
                     ))
                     .toggleStyle(.checkbox)
                     .font(.system(size: 12))
@@ -672,8 +723,14 @@ struct QuickAdjustView: View {
             InspectorField("Frame") {
                 Stepper("\(kf.frame) fr",
                         value: Binding(
-                            get: { controller.engine.document.paths[pi].keyframes[ki].frame },
+                            get: {
+                                guard pi < controller.engine.document.paths.count,
+                                      ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
+                                return controller.engine.document.paths[pi].keyframes[ki].frame
+                            },
                             set: { val in
+                                guard pi < controller.engine.document.paths.count,
+                                      ki < controller.engine.document.paths[pi].keyframes.count else { return }
                                 controller.engine.document.paths[pi].keyframes[ki].frame = max(0, val)
                                 controller.engine.document.paths[pi].keyframes.sort { $0.frame < $1.frame }
                             }
@@ -685,8 +742,16 @@ struct QuickAdjustView: View {
             InspectorField("Offset X") {
                 ResettableSlider(
                     value: Binding(
-                        get: { controller.engine.document.paths[pi].keyframes[ki].dx },
-                        set: { controller.engine.document.paths[pi].keyframes[ki].dx = $0 }
+                        get: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
+                            return controller.engine.document.paths[pi].keyframes[ki].dx
+                        },
+                        set: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                            controller.engine.document.paths[pi].keyframes[ki].dx = $0
+                        }
                     ),
                     range: -3...3,
                     defaultValue: 0
@@ -697,8 +762,16 @@ struct QuickAdjustView: View {
             InspectorField("Offset Y") {
                 ResettableSlider(
                     value: Binding(
-                        get: { controller.engine.document.paths[pi].keyframes[ki].dy },
-                        set: { controller.engine.document.paths[pi].keyframes[ki].dy = $0 }
+                        get: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
+                            return controller.engine.document.paths[pi].keyframes[ki].dy
+                        },
+                        set: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                            controller.engine.document.paths[pi].keyframes[ki].dy = $0
+                        }
                     ),
                     range: -3...3,
                     defaultValue: 0
@@ -709,8 +782,16 @@ struct QuickAdjustView: View {
             InspectorField("Rotation") {
                 ResettableSlider(
                     value: Binding(
-                        get: { controller.engine.document.paths[pi].keyframes[ki].rotation },
-                        set: { controller.engine.document.paths[pi].keyframes[ki].rotation = $0 }
+                        get: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
+                            return controller.engine.document.paths[pi].keyframes[ki].rotation
+                        },
+                        set: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                            controller.engine.document.paths[pi].keyframes[ki].rotation = $0
+                        }
                     ),
                     range: -360...360,
                     defaultValue: 0
@@ -721,8 +802,16 @@ struct QuickAdjustView: View {
             InspectorField("Scale X") {
                 ResettableSlider(
                     value: Binding(
-                        get: { controller.engine.document.paths[pi].keyframes[ki].scaleX },
-                        set: { controller.engine.document.paths[pi].keyframes[ki].scaleX = max(0.01, $0) }
+                        get: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 1 }
+                            return controller.engine.document.paths[pi].keyframes[ki].scaleX
+                        },
+                        set: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                            controller.engine.document.paths[pi].keyframes[ki].scaleX = max(0.01, $0)
+                        }
                     ),
                     range: 0.1...3,
                     defaultValue: 1
@@ -732,8 +821,16 @@ struct QuickAdjustView: View {
             InspectorField("Scale Y") {
                 ResettableSlider(
                     value: Binding(
-                        get: { controller.engine.document.paths[pi].keyframes[ki].scaleY },
-                        set: { controller.engine.document.paths[pi].keyframes[ki].scaleY = max(0.01, $0) }
+                        get: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 1 }
+                            return controller.engine.document.paths[pi].keyframes[ki].scaleY
+                        },
+                        set: {
+                            guard pi < controller.engine.document.paths.count,
+                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                            controller.engine.document.paths[pi].keyframes[ki].scaleY = max(0.01, $0)
+                        }
                     ),
                     range: 0.1...3,
                     defaultValue: 1
@@ -742,8 +839,16 @@ struct QuickAdjustView: View {
             }
             InspectorField("Easing") {
                 Picker("", selection: Binding(
-                    get: { controller.engine.document.paths[pi].keyframes[ki].easing },
-                    set: { controller.engine.document.paths[pi].keyframes[ki].easing = $0 }
+                    get: {
+                        guard pi < controller.engine.document.paths.count,
+                              ki < controller.engine.document.paths[pi].keyframes.count else { return PathEasing.easeInOut }
+                        return controller.engine.document.paths[pi].keyframes[ki].easing
+                    },
+                    set: {
+                        guard pi < controller.engine.document.paths.count,
+                              ki < controller.engine.document.paths[pi].keyframes.count else { return }
+                        controller.engine.document.paths[pi].keyframes[ki].easing = $0
+                    }
                 )) {
                     ForEach(PathEasing.allCases, id: \.self) { e in
                         Text(e.displayName).tag(e)
@@ -800,6 +905,48 @@ struct QuickAdjustView: View {
         Text(s)
             .font(.system(size: 11))
             .foregroundStyle(.quaternary)
+    }
+
+    // MARK: - Motion bindings
+
+    private var activeMotionIndex: Int? {
+        guard let id = controller.activeMotionID else { return nil }
+        return controller.projectMotionSets.firstIndex { $0.id == id }
+    }
+
+    private var motionPresetBinding: Binding<MotionPreset> {
+        Binding(
+            get: { controller.activeMotionSet?.motionPreset ?? .static },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionPreset = $0 } }
+        )
+    }
+
+    private var motionSpeedBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.motionSpeed ?? 1 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionSpeed = $0 } }
+        )
+    }
+
+    private var motionAmountBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.motionAmount ?? 0.5 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionAmount = $0 } }
+        )
+    }
+
+    private var motionPhaseBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.motionPhase ?? 0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionPhase = $0 } }
+        )
+    }
+
+    private var motionOrderChaosBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.orderChaos ?? 0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].orderChaos = $0 } }
+        )
     }
 
     // MARK: - Bindings

@@ -65,11 +65,11 @@ final class AppController {
         UMLogger.shared.log("selectLayer \(activeLayerIndex)→\(index) styles:\(projectStyles.count)")
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         activeLayerIndex = index
+        activePathID    = nil   // nil before engine swap so stale Binding gets never fire
         let layer = layerStates[index]
         engine          = layer.engine
         activeStyleID   = layer.activeStyleID
         selectedIndices = []
-        activePathID    = nil
     }
 
     func addLayer(name: String? = nil) {
@@ -89,6 +89,7 @@ final class AppController {
         layerStates.remove(at: index)
         let newIndex = min(activeLayerIndex, layerStates.count - 1)
         activeLayerIndex = newIndex
+        activePathID     = nil
         engine          = layerStates[newIndex].engine
         activeStyleID   = layerStates[newIndex].activeStyleID
         selectedIndices = []

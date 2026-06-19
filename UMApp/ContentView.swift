@@ -706,7 +706,6 @@ struct GridCanvasPlaceholder: View {
                     captureTask = Task.detached(priority: .utility) { [controller] in
                         guard !Task.isCancelled else { return }
                         let image = renderAccumulationCG(snapshot)
-                        guard !Task.isCancelled else { return }
                         await MainActor.run { controller.updateFrameBuffer(image) }
                     }
                 }
@@ -1458,6 +1457,23 @@ struct ResampleSheetView: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 32, alignment: .trailing)
                 }
+            }
+
+            sectionLabel("POSITION SCATTER")
+            InspectorField("Scatter") {
+                ResettableSlider(
+                    value: Binding(
+                        get: { controller.engine.document.gridConfig.resizePositionScatter },
+                        set: { controller.engine.document.gridConfig.resizePositionScatter = $0 }
+                    ),
+                    range: 0...1,
+                    defaultValue: 0
+                )
+                Text(controller.engine.document.gridConfig.resizePositionScatter
+                        .formatted(.number.precision(.fractionLength(2))))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 32, alignment: .trailing)
             }
 
             // Preview
