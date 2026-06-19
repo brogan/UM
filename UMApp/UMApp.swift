@@ -38,6 +38,13 @@ struct UMApp: App {
                     .keyboardShortcut("s", modifiers: .command)
                 Button("Save As…") { controller.saveDocumentAs() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
+                Divider()
+                Button("Show Project in Finder") {
+                    if let url = controller.currentFileURL {
+                        NSWorkspace.shared.activateFileViewerSelecting([url])
+                    }
+                }
+                .disabled(controller.currentFileURL == nil)
             }
         }
 

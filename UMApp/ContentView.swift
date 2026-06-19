@@ -1325,6 +1325,16 @@ struct TransportBarView: View {
 
             Spacer()
 
+            if let projURL = controller.currentFileURL {
+                Text((projURL.deletingLastPathComponent().path as NSString).abbreviatingWithTildeInPath)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .frame(maxWidth: 220, alignment: .leading)
+                Spacer(minLength: 12)
+            }
+
             Button("PNG") {
                 controller.exportPNG()
             }

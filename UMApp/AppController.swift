@@ -171,7 +171,7 @@ final class AppController {
     // MARK: Init
 
     init() {
-        let doc = UMGridDocument.makeTestGrid()
+        let doc = UMGridDocument.makeDefault()
         let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
         layerStates      = [ls]
         engine           = ls.engine
@@ -182,12 +182,12 @@ final class AppController {
         loadShapePolygons()
         rebuildShapePolygonMap()
         ensureProjectsDirectory()
-        // Initialise logger (creates log file, registers exception handler)
         UMLogger.shared.logState(prefix: "init", layers: 1,
                                   styles: doc.styles.count, cells: doc.cells.count)
         loadGlobalLibrary()
         loadGlobalShapes()
         loadGlobalResolutionPresets()
+        seedDefaultShape()
         startKeyMonitor()
     }
 
@@ -405,7 +405,7 @@ final class AppController {
 
     func newDocument() {
         UMLogger.shared.log("newDocument")
-        let doc = UMGridDocument.makeTestGrid()
+        let doc = UMGridDocument.makeDefault()
         let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
         layerStates       = [ls]
         engine            = ls.engine
@@ -426,6 +426,7 @@ final class AppController {
         selectedIndices           = []
         currentFileURL            = nil
         rebuildShapePolygonMap()
+        seedDefaultShape()
     }
 
     func saveDocument() {
@@ -1258,6 +1259,15 @@ final class AppController {
             globalShapes.append(shape)
             globalShapes.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         }
+    }
+
+    private func seedDefaultShape() {
+        guard let sq = globalShapes.first(where: { $0.name.lowercased() == "square" }) else { return }
+        if !projectShapes.contains(where: { $0.id == sq.id }) {
+            projectShapes.append(sq)
+            rebuildShapePolygonMap()
+        }
+        activeShapeID = sq.id
     }
 
     func importShapeFromLibrary(_ id: UUID) {
