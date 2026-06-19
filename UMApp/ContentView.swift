@@ -347,7 +347,11 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
         let strokeW = (style?.strokeWidth ?? 1.5) * dsf
         let mode    = style?.renderMode ?? .filledStroked
 
-        let polygons = resolvePolygons(shapeID: cell.shapeID,
+        let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
+                                                      cellShapeID: cell.shapeID,
+                                                      frame: snap.frame,
+                                                      phaseOffset: cell.phaseOffset)
+        let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                        shapeMap: snap.shapePolygonMap,
                                        fallback: snap.fallbackPolygons)
 
@@ -514,7 +518,11 @@ struct GridCanvasPlaceholder: View {
                                 let my = Double(r) * lCellH + lCellH / 2 - lFracY * lCellH + cell.positionOffset.dy * lScaleY + motion.dy
                                 let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
 
-                                let polygons = resolvePolygons(shapeID: cell.shapeID,
+                                let lEffectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
+                                                                               cellShapeID: cell.shapeID,
+                                                                               frame: currentFrame,
+                                                                               phaseOffset: cell.phaseOffset)
+                                let polygons = resolvePolygons(shapeID: lEffectiveShapeID,
                                                                shapeMap: shapePolyMap,
                                                                fallback: fallbackPolys)
 
@@ -1127,7 +1135,11 @@ struct FrameCapture: View {
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                 let mode    = style?.renderMode  ?? .filledStroked
 
-                let polygons = resolvePolygons(shapeID: cell.shapeID,
+                let fcEffectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
+                                                               cellShapeID: cell.shapeID,
+                                                               frame: currentFrame,
+                                                               phaseOffset: cell.phaseOffset)
+                let polygons = resolvePolygons(shapeID: fcEffectiveShapeID,
                                                shapeMap: shapePolygonMap,
                                                fallback: fallbackPolygons)
 

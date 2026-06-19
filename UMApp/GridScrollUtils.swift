@@ -1,6 +1,35 @@
 import Foundation
 import UMEngine
 
+// MARK: - Shape sequence resolver
+
+/// Returns the effective shapeID for a cell, accounting for SEQUENCE cycling on the motionSet.
+/// When sequenceMode is `.off` or shapeIDs is empty, falls back to the cell's own shapeID.
+func resolveSequenceShapeID(
+    motionSet: UMMotionSet?,
+    cellShapeID: UUID?,
+    frame: Int,
+    phaseOffset: Int
+) -> UUID? {
+    guard let ms = motionSet,
+          ms.sequenceMode != .off,
+          !ms.shapeIDs.isEmpty
+    else { return cellShapeID }
+
+    let step = (frame + phaseOffset) / max(1, ms.framesPerStep)
+    switch ms.sequenceMode {
+    case .off:
+        return cellShapeID
+    case .sequential:
+        let idx = ((step % ms.shapeIDs.count) + ms.shapeIDs.count) % ms.shapeIDs.count
+        return ms.shapeIDs[idx]
+    case .random:
+        // Multiply by a large prime to break periodic patterns across cells/frames
+        let seed = abs(step &* 2654435761 &+ phaseOffset)
+        return ms.shapeIDs[seed % ms.shapeIDs.count]
+    }
+}
+
 // MARK: - Grid-scroll render spec
 
 /// Describes which source cell to draw and at which display grid position.

@@ -869,6 +869,30 @@ struct QuickAdjustView: View {
                 .frame(maxWidth: 150)
                 .disabled(!hasSelection)
             }
+            InspectorField("Motion") {
+                Picker("", selection: selectionMotionBinding) {
+                    Text("—").tag(nil as UUID?)
+                    ForEach(controller.projectMotionSets) { ms in
+                        Text(ms.name).tag(Optional(ms.id))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 150)
+                .disabled(!hasSelection)
+            }
+            InspectorField("Shape") {
+                Picker("", selection: selectionShapeBinding) {
+                    Text("—").tag(nil as UUID?)
+                    ForEach(controller.projectShapes) { sq in
+                        Text(sq.name).tag(Optional(sq.id))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 150)
+                .disabled(!hasSelection)
+            }
             InspectorField("Path") {
                 Picker("", selection: selectionPathBinding) {
                     Text("None").tag(nil as UUID?)
@@ -1080,6 +1104,69 @@ struct QuickAdjustView: View {
                     Text(String(format: "%.2f", ms.orderChaos))
                         .font(.system(size: 11, design: .monospaced))
                         .frame(width: 38, alignment: .trailing)
+                }
+
+                Divider().padding(.horizontal, 12).padding(.vertical, 3)
+                InspectorField("Sequence") {
+                    Picker("", selection: sequenceModeBinding) {
+                        ForEach(SequenceMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(maxWidth: 110)
+                }
+                if ms.sequenceMode != .off {
+                    InspectorField("Step") {
+                        Stepper(value: framesPerStepBinding, in: 1...480) {
+                            Text("\(ms.framesPerStep) fr")
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 44, alignment: .trailing)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(Array(ms.shapeIDs.enumerated()), id: \.offset) { idx, _ in
+                            HStack(spacing: 4) {
+                                Text("\(idx + 1).")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 18, alignment: .trailing)
+                                Picker("", selection: sequenceShapeBinding(at: idx)) {
+                                    Text("—").tag(nil as UUID?)
+                                    ForEach(controller.projectShapes) { sq in
+                                        Text(sq.name).tag(Optional(sq.id))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                Button {
+                                    if let i = activeMotionIndex {
+                                        controller.projectMotionSets[i].shapeIDs.remove(at: idx)
+                                    }
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        Button {
+                            if let i = activeMotionIndex {
+                                let firstID = controller.projectShapes.first?.id ?? UUID()
+                                controller.projectMotionSets[i].shapeIDs.append(firstID)
+                            }
+                        } label: {
+                            Label("Add Shape", systemImage: "plus")
+                                .font(.system(size: 11))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                        .disabled(controller.projectShapes.isEmpty)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
                 }
             }
         }
@@ -1473,6 +1560,50 @@ struct QuickAdjustView: View {
         Binding(
             get: { controller.activeMotionSet?.orderChaos ?? 0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].orderChaos = $0 } }
+        )
+    }
+
+    private var sequenceModeBinding: Binding<SequenceMode> {
+        Binding(
+            get: { controller.activeMotionSet?.sequenceMode ?? .off },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].sequenceMode = $0 } }
+        )
+    }
+
+    private var framesPerStepBinding: Binding<Int> {
+        Binding(
+            get: { controller.activeMotionSet?.framesPerStep ?? 4 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].framesPerStep = max(1, $0) } }
+        )
+    }
+
+    private func sequenceShapeBinding(at idx: Int) -> Binding<UUID?> {
+        Binding(
+            get: {
+                guard let ms = controller.activeMotionSet, idx < ms.shapeIDs.count else { return nil }
+                return ms.shapeIDs[idx]
+            },
+            set: { newID in
+                guard let i = self.activeMotionIndex,
+                      let id = newID,
+                      idx < self.controller.projectMotionSets[i].shapeIDs.count
+                else { return }
+                self.controller.projectMotionSets[i].shapeIDs[idx] = id
+            }
+        )
+    }
+
+    private var selectionMotionBinding: Binding<UUID?> {
+        Binding(
+            get: { focusedCell?.motionID },
+            set: { controller.assignMotionToSelection($0) }
+        )
+    }
+
+    private var selectionShapeBinding: Binding<UUID?> {
+        Binding(
+            get: { focusedCell?.shapeID },
+            set: { controller.assignShapeToSelection($0) }
         )
     }
 

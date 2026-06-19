@@ -1387,6 +1387,22 @@ final class AppController {
         }
     }
 
+    func assignMotionToSelection(_ motionID: UUID?) {
+        guard !selectedIndices.isEmpty else { return }
+        engine.pushUndoSnapshot()
+        for i in selectedIndices where i < engine.document.cells.count {
+            engine.document.cells[i].motionID = motionID
+        }
+    }
+
+    func assignShapeToSelection(_ shapeID: UUID?) {
+        guard !selectedIndices.isEmpty else { return }
+        engine.pushUndoSnapshot()
+        for i in selectedIndices where i < engine.document.cells.count {
+            engine.document.cells[i].shapeID = shapeID
+        }
+    }
+
     // MARK: Nudge
 
     func nudgeSelection(dx: Double, dy: Double, isRepeat: Bool = false) {
