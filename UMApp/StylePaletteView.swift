@@ -11,8 +11,10 @@ struct StylePaletteView: View {
     @State private var renamingMotionID:  UUID? = nil
     @State private var renamingPathID:    UUID? = nil
     @State private var renamingShapeID:   UUID? = nil
-    @State private var dropTargetLayerID: UUID? = nil
-    @State private var showResampleSheet: Bool  = false
+    @State private var dropTargetLayerID:    UUID? = nil
+    @State private var showResampleSheet:    Bool  = false
+    @State private var showGeneratePalette:  Bool  = false
+    @State private var renamingPaletteID:    UUID? = nil
 
     private enum PaletteTab { case project, library }
 
@@ -133,6 +135,36 @@ struct StylePaletteView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("PALETTES")
+
+                ForEach(controller.projectColorPalettes) { palette in
+                    projectPaletteRow(palette)
+                }
+
+                if controller.colorMapEngine.isLoaded {
+                    Button("+ Generate from Color Map…") {
+                        showGeneratePalette = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .sheet(isPresented: $showGeneratePalette) {
+                        GeneratePaletteSheet(isPresented: $showGeneratePalette)
+                            .environment(controller)
+                    }
+                } else {
+                    Text("Load a Color Map to generate palettes.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.quaternary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -204,6 +236,22 @@ struct StylePaletteView: View {
                 } else {
                     ForEach(controller.globalShapes) { shape in
                         libraryShapeRow(shape)
+                    }
+                }
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("PALETTES")
+
+                if controller.globalLibrary.colorPalettes.isEmpty {
+                    Text("No palettes saved.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.quaternary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                } else {
+                    ForEach(controller.globalLibrary.colorPalettes) { palette in
+                        libraryPaletteRow(palette)
                     }
                 }
             }
@@ -764,6 +812,106 @@ struct StylePaletteView: View {
         }
     }
 
+    // MARK: - Palette rows
+
+    private func projectPaletteRow(_ palette: UMColorPalette) -> some View {
+        let active = controller.activeColorPaletteID == palette.id
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .frame(width: 6, height: 6)
+                if renamingPaletteID == palette.id {
+                    TextField("Palette name", text: Binding(
+                        get: { palette.name },
+                        set: { newName in
+                            if let i = controller.projectColorPalettes.firstIndex(where: { $0.id == palette.id }) {
+                                controller.projectColorPalettes[i].name = newName
+                            }
+                        }
+                    ))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .onSubmit { renamingPaletteID = nil }
+                } else {
+                    Text(palette.name)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) { renamingPaletteID = palette.id }
+                }
+                Spacer()
+                Button {
+                    controller.promoteColorPaletteToLibrary(palette.id)
+                } label: {
+                    Image(systemName: "arrow.up.circle")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Save to library")
+            }
+            swatchStrip(palette.colors)
+                .padding(.leading, 16)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            renamingPaletteID = nil
+            controller.activeColorPaletteID = palette.id
+        }
+        .contextMenu {
+            Button("Rename") { renamingPaletteID = palette.id }
+            Button("Save to Library") { controller.promoteColorPaletteToLibrary(palette.id) }
+            Divider()
+            Button("Delete Palette", role: .destructive) { controller.deleteColorPalette(palette.id) }
+        }
+    }
+
+    private func libraryPaletteRow(_ palette: UMColorPalette) -> some View {
+        let inProject = controller.projectColorPalettes.contains { $0.id == palette.id }
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Text(palette.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .foregroundStyle(inProject ? .secondary : .primary)
+                Spacer()
+                Button {
+                    controller.importColorPaletteFromLibrary(palette.id)
+                } label: {
+                    Image(systemName: "arrow.down.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(inProject ? Color.quaternary : Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .disabled(inProject)
+                .help(inProject ? "Already in project" : "Import to project")
+            }
+            swatchStrip(palette.colors)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Remove from library", role: .destructive) {
+                controller.removeColorPaletteFromLibrary(palette.id)
+            }
+        }
+    }
+
+    private func swatchStrip(_ colors: [UMColor]) -> some View {
+        HStack(spacing: 1) {
+            ForEach(Array(colors.prefix(32).enumerated()), id: \.offset) { _, color in
+                Rectangle()
+                    .fill(Color(red: color.r, green: color.g, blue: color.b, opacity: color.a))
+                    .frame(height: 8)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 2))
+    }
+
     private func importShapesFromFile() {
         let panel = NSOpenPanel()
         panel.title = "Import Loom Shape"
@@ -788,6 +936,68 @@ struct StylePaletteView: View {
             .padding(.horizontal, 10)
             .padding(.top, 8)
             .padding(.bottom, 3)
+    }
+}
+
+// MARK: - Generate palette sheet
+
+private struct GeneratePaletteSheet: View {
+    @Environment(AppController.self) private var controller
+    @Binding var isPresented: Bool
+
+    @State private var name:         String = ""
+    @State private var selectedSize: PaletteSize = .medium
+
+    private enum PaletteSize: String, CaseIterable, Identifiable {
+        case small  = "4×4  (16 colors)"
+        case medium = "4×8  (32 colors)"
+        case large  = "8×8  (64 colors)"
+        var id: String { rawValue }
+        var rows: Int { self == .large ? 8 : 4 }
+        var cols: Int { self == .small ? 4 : 8 }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Generate Color Palette")
+                .font(.headline)
+            HStack {
+                Text("Name")
+                    .frame(width: 44, alignment: .leading)
+                TextField("Palette name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+            }
+            HStack {
+                Text("Size")
+                    .frame(width: 44, alignment: .leading)
+                Picker("", selection: $selectedSize) {
+                    ForEach(PaletteSize.allCases) { s in
+                        Text(s.rawValue).tag(s)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .frame(width: 140)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { isPresented = false }
+                Button("Generate") {
+                    let n = name.trimmingCharacters(in: .whitespaces)
+                    let label = n.isEmpty ? "Palette \(controller.projectColorPalettes.count + 1)" : n
+                    controller.generateColorPalette(name: label,
+                                                    rows: selectedSize.rows,
+                                                    cols: selectedSize.cols)
+                    isPresented = false
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
+        .onAppear {
+            name = "Palette \(controller.projectColorPalettes.count + 1)"
+        }
     }
 }
 

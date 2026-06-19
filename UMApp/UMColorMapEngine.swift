@@ -50,6 +50,14 @@ final class UMColorMapEngine {
         return staticGrid.isEmpty ? nil : staticGrid
     }
 
+    // Sample the source image (or first video frame) at rows×cols and return as a flat array.
+    func buildPaletteColors(rows: Int, cols: Int) -> [UMColor] {
+        guard isLoaded else { return [] }
+        let img = isVideo ? sourceFrames.first : sourceImage
+        guard let image = img else { return [] }
+        return Self.sample(image, rows: rows, cols: cols).flatMap { $0 }
+    }
+
     // MARK: - Load
 
     func load(url: URL, rows: Int, cols: Int) {

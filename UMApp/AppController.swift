@@ -145,6 +145,8 @@ final class AppController {
     var globalShapes:               [UMShape] = []
     var projectShapes:              [UMShape] = []
     var projectMotionSets:          [UMMotionSet] = []
+    var projectColorPalettes:       [UMColorPalette] = []
+    var activeColorPaletteID:       UUID? = nil
     var projectResolutionPresets:   [UMResolutionPreset] = []
     var globalResolutionPresets:    [UMResolutionPreset] = []
 
@@ -395,6 +397,8 @@ final class AppController {
         projectStyles             = doc.styles
         projectShapes             = []
         projectMotionSets         = []
+        projectColorPalettes      = []
+        activeColorPaletteID      = nil
         projectResolutionPresets  = []
         activeStyleID             = doc.styles.first?.id
         activeMotionID            = nil
@@ -472,35 +476,39 @@ final class AppController {
         var projectStyles: [CellStyle]
         var projectShapes: [ShapeRecord]
         var projectMotionSets: [UMMotionSet]
+        var projectColorPalettes: [UMColorPalette]
         var projectResolutionPresets: [UMResolutionPreset]
         var layers: [LayerRecord]
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
-            case projectMotionSets, projectResolutionPresets, layers
+            case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
         }
 
         init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
              projectShapes: [ShapeRecord], projectMotionSets: [UMMotionSet],
+             projectColorPalettes: [UMColorPalette],
              projectResolutionPresets: [UMResolutionPreset], layers: [LayerRecord]) {
             self.version                  = version
             self.activeLayerIndex         = activeLayerIndex
             self.projectStyles            = projectStyles
             self.projectShapes            = projectShapes
             self.projectMotionSets        = projectMotionSets
+            self.projectColorPalettes     = projectColorPalettes
             self.projectResolutionPresets = projectResolutionPresets
             self.layers                   = layers
         }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            version              = try  c.decode(Int.self,             forKey: .version)
-            activeLayerIndex     = try  c.decode(Int.self,             forKey: .activeLayerIndex)
-            projectStyles        = try  c.decode([CellStyle].self,     forKey: .projectStyles)
-            projectShapes        = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
+            version                  = try  c.decode(Int.self,             forKey: .version)
+            activeLayerIndex         = try  c.decode(Int.self,             forKey: .activeLayerIndex)
+            projectStyles            = try  c.decode([CellStyle].self,     forKey: .projectStyles)
+            projectShapes            = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
             projectMotionSets        = (try? c.decodeIfPresent([UMMotionSet].self,        forKey: .projectMotionSets))        ?? []
+            projectColorPalettes     = (try? c.decodeIfPresent([UMColorPalette].self,     forKey: .projectColorPalettes))     ?? []
             projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self, forKey: .projectResolutionPresets)) ?? []
-            layers               = try  c.decode([LayerRecord].self,   forKey: .layers)
+            layers                   = try  c.decode([LayerRecord].self,   forKey: .layers)
         }
     }
 
@@ -630,6 +638,7 @@ final class AppController {
                 ProjectConfig.ShapeRecord(id: $0.id, name: $0.name, sourceFilename: $0.sourceFilename)
             },
             projectMotionSets: projectMotionSets,
+            projectColorPalettes: projectColorPalettes,
             projectResolutionPresets: projectResolutionPresets,
             layers: layerStates.map { ls in
                 ProjectConfig.LayerRecord(
@@ -711,6 +720,8 @@ final class AppController {
         projectStyles             = styles
         projectShapes             = loaded
         projectMotionSets         = config.projectMotionSets
+        projectColorPalettes      = config.projectColorPalettes
+        activeColorPaletteID      = config.projectColorPalettes.first?.id
         projectResolutionPresets  = config.projectResolutionPresets
         activeStyleID             = layerStates[idx].activeStyleID ?? styles.first?.id
         activeMotionID    = projectMotionSets.first?.id
@@ -910,6 +921,44 @@ final class AppController {
 
     func removeMotionSetFromLibrary(_ id: UUID) {
         globalLibrary.motionSets.removeAll { $0.id == id }
+        saveGlobalLibrary()
+    }
+
+    // MARK: Color palette management
+
+    func generateColorPalette(name: String, rows: Int, cols: Int) {
+        let colors = colorMapEngine.buildPaletteColors(rows: rows, cols: cols)
+        guard !colors.isEmpty else { return }
+        let desc    = "\(colorMapEngine.displayName) \(rows)×\(cols)"
+        let palette = UMColorPalette(name: name, colors: colors, sourceDescription: desc)
+        projectColorPalettes.append(palette)
+        activeColorPaletteID = palette.id
+    }
+
+    func deleteColorPalette(_ id: UUID) {
+        projectColorPalettes.removeAll { $0.id == id }
+        if activeColorPaletteID == id { activeColorPaletteID = projectColorPalettes.first?.id }
+    }
+
+    func promoteColorPaletteToLibrary(_ id: UUID) {
+        guard let p = projectColorPalettes.first(where: { $0.id == id }) else { return }
+        if let idx = globalLibrary.colorPalettes.firstIndex(where: { $0.id == id }) {
+            globalLibrary.colorPalettes[idx] = p
+        } else {
+            globalLibrary.colorPalettes.append(p)
+        }
+        saveGlobalLibrary()
+    }
+
+    func importColorPaletteFromLibrary(_ id: UUID) {
+        guard let p = globalLibrary.colorPalettes.first(where: { $0.id == id }) else { return }
+        guard !projectColorPalettes.contains(where: { $0.id == id }) else { return }
+        projectColorPalettes.append(p)
+        activeColorPaletteID = p.id
+    }
+
+    func removeColorPaletteFromLibrary(_ id: UUID) {
+        globalLibrary.colorPalettes.removeAll { $0.id == id }
         saveGlobalLibrary()
     }
 

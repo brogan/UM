@@ -24,6 +24,7 @@
 		AA00003C000000000000001A /* UMExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003D000000000000001A /* UMExporter.swift */; };
 		AA00003E000000000000001A /* HelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00003F000000000000001A /* HelpView.swift */; };
 		AA000040000000000000001A /* UMLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000041000000000000001A /* UMLogger.swift */; };
+		AA000042000000000000001A /* ColorPalettePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000043000000000000001A /* ColorPalettePickerView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -43,6 +44,7 @@
 		AA00003D000000000000001A /* UMExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMExporter.swift; sourceTree = "<group>"; };
 		AA00003F000000000000001A /* HelpView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpView.swift; sourceTree = "<group>"; };
 		AA000041000000000000001A /* UMLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMLogger.swift; sourceTree = "<group>"; };
+		AA000043000000000000001A /* ColorPalettePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPalettePickerView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -90,6 +92,7 @@
 				AA00003D000000000000001A /* UMExporter.swift */,
 				AA00003F000000000000001A /* HelpView.swift */,
 				AA000041000000000000001A /* UMLogger.swift */,
+				AA000043000000000000001A /* ColorPalettePickerView.swift */,
 				AA000009000000000000001A /* Assets.xcassets */,
 				AA000031000000000000001A /* polygonSets */,
 			);
@@ -187,6 +190,7 @@
 				AA00003C000000000000001A /* UMExporter.swift in Sources */,
 				AA00003E000000000000001A /* HelpView.swift in Sources */,
 				AA000040000000000000001A /* UMLogger.swift in Sources */,
+				AA000042000000000000001A /* ColorPalettePickerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

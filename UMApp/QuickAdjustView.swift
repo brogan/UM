@@ -44,6 +44,8 @@ struct QuickAdjustView: View {
     @State private var placeTimeCollapsed  = false
     @State private var scaleLocked         = true
     @State private var renderCollapsed     = false
+    @State private var showFillPalette     = false
+    @State private var showStrokePalette   = false
     @State private var motionCollapsed     = false
     @State private var pathCollapsed       = false
     @State private var advancedCollapsed   = true
@@ -483,11 +485,43 @@ struct QuickAdjustView: View {
                 ColorWell(color: colorBinding(\.fillColor), supportsOpacity: true)
                     .frame(width: 40, height: 24)
                     .disabled(disabled)
+                Button {
+                    showFillPalette.toggle()
+                } label: {
+                    Image(systemName: "swatchpalette")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(disabled || controller.projectColorPalettes.isEmpty ? Color.secondary.opacity(0.3) : Color.secondary)
+                .disabled(disabled || controller.projectColorPalettes.isEmpty)
+                .popover(isPresented: $showFillPalette, arrowEdge: .trailing) {
+                    ColorPalettePickerView { color in
+                        guard let i = activeStyleIndex else { return }
+                        controller.projectStyles[i].fillColor = color
+                    }
+                    .environment(controller)
+                }
             }
             InspectorField("Stroke") {
                 ColorWell(color: colorBinding(\.strokeColor), supportsOpacity: true)
                     .frame(width: 40, height: 24)
                     .disabled(disabled)
+                Button {
+                    showStrokePalette.toggle()
+                } label: {
+                    Image(systemName: "swatchpalette")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(disabled || controller.projectColorPalettes.isEmpty ? Color.secondary.opacity(0.3) : Color.secondary)
+                .disabled(disabled || controller.projectColorPalettes.isEmpty)
+                .popover(isPresented: $showStrokePalette, arrowEdge: .trailing) {
+                    ColorPalettePickerView { color in
+                        guard let i = activeStyleIndex else { return }
+                        controller.projectStyles[i].strokeColor = color
+                    }
+                    .environment(controller)
+                }
             }
             InspectorField("Width") {
                 FloatEntryField(value: styleBinding(\.strokeWidth, fallback: 1.5),
