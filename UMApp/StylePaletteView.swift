@@ -6,7 +6,10 @@ import UMEngine
 struct StylePaletteView: View {
     @Environment(AppController.self) private var controller
     @State private var tab: PaletteTab = .project
-    @State private var renamingLayerID: UUID? = nil
+    @State private var renamingLayerID:  UUID? = nil
+    @State private var renamingStyleID:  UUID? = nil
+    @State private var renamingPathID:   UUID? = nil
+    @State private var renamingShapeID:  UUID? = nil
     @State private var dropTargetLayerID: UUID? = nil
 
     private enum PaletteTab { case project, library }
@@ -285,9 +288,24 @@ struct StylePaletteView: View {
             Circle()
                 .fill(active ? Color.accentColor : Color.secondary.opacity(0.3))
                 .frame(width: 6, height: 6)
-            Text(style.name)
+            if renamingStyleID == style.id {
+                TextField("Style name", text: Binding(
+                    get: { controller.projectStyles.first { $0.id == style.id }?.name ?? style.name },
+                    set: { newName in
+                        if let i = controller.projectStyles.firstIndex(where: { $0.id == style.id }) {
+                            controller.projectStyles[i].name = newName
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
+                .onSubmit { renamingStyleID = nil }
+            } else {
+                Text(style.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) { renamingStyleID = style.id }
+            }
             Spacer()
             Button {
                 controller.promoteStyleToLibrary(style.id)
@@ -303,8 +321,9 @@ struct StylePaletteView: View {
         .padding(.vertical, 6)
         .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
-        .onTapGesture { controller.activeStyleID = style.id }
+        .onTapGesture { renamingStyleID = nil; controller.activeStyleID = style.id }
         .contextMenu {
+            Button("Rename") { renamingStyleID = style.id }
             Menu("Create Variant") {
                 ForEach(StyleTransform.allCases, id: \.label) { t in
                     Button(t.label) { controller.applyTransform(t, to: style.id) }
@@ -323,9 +342,24 @@ struct StylePaletteView: View {
             Image(systemName: "point.topleft.down.curvedto.point.bottomright.up")
                 .font(.system(size: 9))
                 .foregroundStyle(active ? Color.accentColor : Color.secondary)
-            Text(path.name)
+            if renamingPathID == path.id {
+                TextField("Path name", text: Binding(
+                    get: { controller.engine.document.paths.first { $0.id == path.id }?.name ?? path.name },
+                    set: { newName in
+                        if let i = controller.engine.document.paths.firstIndex(where: { $0.id == path.id }) {
+                            controller.engine.document.paths[i].name = newName
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
+                .onSubmit { renamingPathID = nil }
+            } else {
+                Text(path.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) { renamingPathID = path.id }
+            }
             Spacer()
             Text("\(path.keyframes.count) kf")
                 .font(.system(size: 10, design: .monospaced))
@@ -345,9 +379,11 @@ struct StylePaletteView: View {
         .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
+            renamingPathID = nil
             controller.activePathID = (controller.activePathID == path.id) ? nil : path.id
         }
         .contextMenu {
+            Button("Rename") { renamingPathID = path.id }
             Button("Save to Library") { controller.promotePathToLibrary(path.id) }
             Divider()
             Button("Delete Path", role: .destructive) { controller.deletePath(path.id) }
@@ -426,9 +462,24 @@ struct StylePaletteView: View {
             Image(systemName: "pentagon")
                 .font(.system(size: 9))
                 .foregroundStyle(assigned ? Color.accentColor : Color.secondary)
-            Text(shape.name)
+            if renamingShapeID == shape.id {
+                TextField("Shape name", text: Binding(
+                    get: { controller.engine.document.shapes.first { $0.id == shape.id }?.name ?? shape.name },
+                    set: { newName in
+                        if let i = controller.engine.document.shapes.firstIndex(where: { $0.id == shape.id }) {
+                            controller.engine.document.shapes[i].name = newName
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
+                .onSubmit { renamingShapeID = nil }
+            } else {
+                Text(shape.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) { renamingShapeID = shape.id }
+            }
             Spacer()
             if let idx = seqIndex {
                 Text("\(idx + 1)")
@@ -451,10 +502,12 @@ struct StylePaletteView: View {
         .background(assigned ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
+            renamingShapeID = nil
             guard let styleID = controller.activeStyleID else { return }
             controller.toggleShape(shape.id, inStyle: styleID)
         }
         .contextMenu {
+            Button("Rename") { renamingShapeID = shape.id }
             Button("Save to Library") { controller.promoteShapeToLibrary(shape.id) }
             Divider()
             Button("Delete Shape", role: .destructive) { controller.deleteShape(shape.id) }
