@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -423,11 +423,17 @@ When the user changes resolution (via presets or custom fields), a compact sheet
 │  ○ Inherit + scatter  amount ──●──              │
 │  ○ Reset to zero                                │
 │                                                 │
+│  Position scatter  ──●──                        │
+│  (random sub-cell offset added to each cell;   │
+│   0 = none, 1 = ±½ cell width/height)          │
+│                                                 │
 │                    [Cancel]  [Apply]            │
 └─────────────────────────────────────────────────┘
 ```
 
 The user's choice is remembered per project and pre-filled next time. "Preserve absolute" + "Inherit" is the default — it's the option that most faithfully carries the composition forward.
+
+**Position Scatter on Resize** (`resizePositionScatter`, 0–1) adds a random sub-cell position offset to every cell after the offset policy is applied. At 1.0 each sprite can be displaced up to ±½ cell width/height. This is independent of the per-policy offset — it layers on top of whatever the offset policy preserved or reset. Values are in cell-fraction units (same as `positionOffset`), so scatter is resolution-independent.
 
 ---
 
@@ -516,9 +522,10 @@ struct UMGridConfig: Codable {
     var phaseStepFrames:  Int             // used by .sequential, .spatial, .radial
     var spatialScatter:   Double          // 0.0–1.0; position randomness at paint time
     // Resolution-change policies (remembered per project)
-    var resizeOffsetPolicy: ResizeOffsetPolicy
-    var resizePhasePolicy:  ResizePhasePolicy
-    var resizePhaseScatter: Double        // 0.0–1.0; scatter added to inherited phase on resize
+    var resizeOffsetPolicy:    ResizeOffsetPolicy
+    var resizePhasePolicy:     ResizePhasePolicy
+    var resizePhaseScatter:    Double     // 0.0–1.0; scatter added to inherited phase on resize
+    var resizePositionScatter: Double     // 0.0–1.0; random sub-cell offset added to cells on resample
 }
 
 enum PhasePolicy: String, Codable {
@@ -1391,7 +1398,7 @@ Everything in this list is implemented and functional in the current build (`mai
 - All grid transforms: flip H/V, rotate L/R, clear, invert — all carry `positionOffset` vectors correctly
 - Transform Mode: Move vs Stamp, including Δφ stamp phase offset
 - Undo/redo (40 steps) covering all painting, transform, nudge, and quick-adjust operations
-- Resample Grid sheet with offset and phase policies (Preserve / Scale / Reset; Inherit / Scatter / Reset)
+- Resample Grid sheet with offset and phase policies (Preserve / Scale / Reset; Inherit / Scatter / Reset) and Position Scatter slider (`resizePositionScatter`, 0–1)
 
 **Phase and scatter**
 - All five Phase Policies: Synchronized, Random, Sequential, Spatial, Radial
@@ -1437,7 +1444,7 @@ Everything in this list is implemented and functional in the current build (`mai
 
 **Canvas and rendering**
 - Live animated canvas (SwiftUI Canvas, `@Observable` engine, 24 fps)
-- Background draw / accumulation mode (`backgroundDraw` flag, `FrameCapture` struct)
+- Background draw / accumulation mode (`backgroundDraw` flag, `FrameCapture` struct); accumulation correctly captures path motion trails — fixed: a second `guard !Task.isCancelled` inside `captureTask` was killing every completed render before it could store its result; the guard is removed so completed renders always commit to the frame buffer
 - Color map system: `UMColorMapEngine`, static image and video (up to 240 extracted frames) sampling
 - Color map UI in CANVAS section: apply target, style alpha preserve, video loop mode
 - Open curves, points, ovals, line polygons imported from Loom — all geometry types rendered
@@ -1460,8 +1467,8 @@ Everything in this list is implemented and functional in the current build (`mai
 - ORDER/CHAOS section: slider wired to `CellStyle.orderChaos`; live jitter visible on canvas
 - PLACE & TIME section: style, path, offset X/Y, phase, scale X/Y (linkable), rotation, Rescatter
 - RENDER section: fill colour, stroke colour, stroke width, render mode
-- MOTION section: preset picker, speed, amount, phase
-- PATH EDITOR section: path picker, name, loop toggle, keyframe list, add keyframe, keyframe property editor (frame, dx, dy, rotation, scale X/Y, easing)
+- MOTION section: appears when `controller.activeMotionSet != nil` (a motion set is selected in the left MOTIONS palette); exposes Preset picker, Speed slider, Amount slider, Phase slider, Order/Chaos slider — all bound via UUID-indexed Bindings to `projectMotionSets`; section title shows the motion set name ("MOTION — \(ms.name)")
+- PATH EDITOR section: path picker, name, loop toggle, keyframe list, add keyframe, keyframe property editor (frame, dx, dy, rotation, scale X/Y, easing: Linear, Ease In, Ease Out, Ease In/Out, Step, Back In, Back Out, Back In/Out, Bounce Out)
 - SEQUENCE section: mode picker (Sequential/All/Random), Frames/Step stepper — fully wired to renderer
 - ADVANCED section (placeholder)
 
@@ -1481,6 +1488,7 @@ Everything in this list is implemented and functional in the current build (`mai
 - Layer rename: double-click the name to edit inline; Return or clicking another row commits; context menu "Rename" also available
 - Layer reordering: drag-and-drop within the LAYERS list using SwiftUI `draggable`/`dropDestination` (UUID string payload); accent-colour line overlay marks the drop target row
 - Layer opacity slider: mini `Slider` (56 px) in each row bound directly to `ls.opacity`; live percentage label alongside; context-menu presets (100/75/50/25%) remain
+- Layer-switch crash fixed: `selectLayer` now nils `activePathID` before swapping `engine` (prevents stale Binding `get` closures firing against the wrong `paths` array); `removeLayer` also nils `activePathID` (was missing entirely); all 9 Binding `get`/`set` closures in `pathSection` and `keyframeEditor` guard against stale `pi`/`ki` indices
 
 **Project and preferences**
 - Cmd+N / Cmd+O / Cmd+S / Cmd+Shift+S
@@ -1651,7 +1659,7 @@ Shape rendering, Order/Chaos jitter, and SEQUENCE cycling are now built (§12.4)
 ### 15.4 Path Editor
 
 **Bezier tangent handles**
-- The PATH EDITOR currently uses a per-segment easing enum (Linear, Ease In, Ease Out, Ease In/Out, Step).
+- The PATH EDITOR uses a per-segment easing enum: Linear, Ease In, Ease Out, Ease In/Out, Step, Back In, Back Out, Back In/Out, Bounce Out (9 curves — Robert Penner formulas). The easing enum is retained as the fast-path default when bezier tangent handles are added.
 - Required: cubic bezier tangent handles (`inTangent`, `outTangent`) on each keyframe, drawn as draggable handle circles on the canvas path overlay.
 - Full design in §12.1. Data model change is backward-compatible (zero-length tangent = current linear interpolation).
 
@@ -1758,17 +1766,19 @@ Move resolution controls from the tool strip into the LAYERS section. The sectio
 - A `+` button to add the current rows×cols to the palette
 - Project / Library tabs so the user can save resolution presets globally
 
-**Motion palette detail in right panel (Option C)**
+**Motion palette detail in right panel (partial — built 2026-06-19)**
 
-The right panel should adapt based on left panel context:
+A MOTION section now appears in QuickAdjustView when `controller.activeMotionSet != nil` (i.e. when a motion set row is selected in the left MOTIONS palette). It exposes Preset, Speed, Amount, Phase, and Order/Chaos — the full set of `UMMotionSet` parameters. This is an incremental partial implementation of Option C; the full version requires left panel restructure (below).
+
+Full Option C would adapt the right panel based on left panel context:
 
 - When a **cell is selected**: show a cell inspector with all four axis assignments (style, motion, shape, path), each as a mini-picker
 - When **no cell is selected** and a palette item is active: show the detail panel for the active palette item (e.g. motion set parameters — preset, speed, amount, phase, orderChaos)
 - When **nothing active**: show a contextual hint
 
-The ORDER/CHAOS, MOTION, and SEQUENCE sections were removed from QuickAdjustView in the 4-axis refactor. Their controls will reappear in the right panel's motion palette detail view when a motion set is selected in the left panel.
+SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUENCE cycling is re-introduced as a `UMMotionSet` feature.
 
-**Scope:** large — roughly 5–8 days for full left panel restructure + motion palette detail + right panel Option C wiring.
+**Remaining scope for full Option C:** medium-large — roughly 4–6 days (left panel restructure + full right panel context-switching + SEQUENCE re-integration).
 
 ---
 
@@ -1807,7 +1817,7 @@ If a Color Map source is already loaded, "Extract Palette" should default to sam
 | Area | Item | Depends on |
 |---|---|---|
 | **UI** | Motion palette UI (MOTIONS section in left panel) | 4-axis model ✓ |
-| **UI** | Right panel Option C (4-axis cell inspector / palette detail) | 4-axis model ✓ |
+| **UI** | Right panel Option C (4-axis cell inspector / palette detail) — MOTION section partial ✓ | 4-axis model ✓ |
 | **UI** | Resolution palette in LAYERS section | — |
 | **UI** | SEQUENCE cycling UI (shape cycling in motion set) | Motion palette UI |
 | **Rendering** | Subdivision integration (polygon-level warp) | — |

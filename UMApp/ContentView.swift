@@ -281,7 +281,6 @@ private nonisolated func renderAccumulationCG(_ snap: AccumulationSnapshot) -> C
     }
 
     for layer in snap.layers {
-        guard !Task.isCancelled else { return nil }
         guard let layerImage = renderLayerCG(layer, snap: snap) else { continue }
         mainCtx.setAlpha(layer.opacity)
         mainCtx.draw(layerImage, in: frame)
@@ -705,7 +704,7 @@ struct GridCanvasPlaceholder: View {
                     captureTask?.cancel()
                     captureTask = Task.detached(priority: .utility) { [controller] in
                         guard !Task.isCancelled else { return }
-                        let image = renderAccumulationCG(snapshot)
+                        guard let image = renderAccumulationCG(snapshot) else { return }
                         await MainActor.run { controller.updateFrameBuffer(image) }
                     }
                 }
