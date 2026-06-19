@@ -93,7 +93,8 @@ private let helpPages: [String: String] = [
     "phase":      page("Phase Policy & Scatter",  phaseBody),
     "playback":   page("Playback & Recording",    playbackBody),
     "qa-project": page("PROJECT / CANVAS",        qaProjectBody),
-    "qa-style":   page("Style & Motion",          qaStyleBody),
+    "qa-style":   page("Style (RENDER section)",    qaStyleBody),
+    "qa-motion":  page("Motion Palette",           qaMotionBody),
     "qa-path":    page("PATH EDITOR",             qaPathBody),
     "qa-place":   page("PLACE & TIME",            qaPlaceBody),
     "palette":    page("Style Palette",           paletteBody),
@@ -192,7 +193,8 @@ private let nav = #"""
 <a href="um-help://help/playback">Playback &amp; Recording</a>
 <div class="nav-group">Quick Adjust</div>
 <a href="um-help://help/qa-project">PROJECT / CANVAS</a>
-<a href="um-help://help/qa-style">Style &amp; Motion</a>
+<a href="um-help://help/qa-style">Style (RENDER)</a>
+<a href="um-help://help/qa-motion">Motion Palette</a>
 <a href="um-help://help/qa-path">PATH EDITOR</a>
 <a href="um-help://help/qa-place">PLACE &amp; TIME</a>
 <div class="nav-group">Assets &amp; Files</div>
@@ -224,16 +226,18 @@ private let introBody = #"""
 </ul>
 <p>The practical result: you can work quickly with the grid's structural tools and still end up with compositions that feel organic and hand-placed rather than mechanical.</p>
 
-<h2>Animation model</h2>
-<p>Every cell blends two independent animation layers:</p>
+<h2>Four independent creative axes</h2>
+<p>Every drawn cell carries four independent axis assignments that are combined at render time:</p>
 <ul>
-  <li><strong>Parametric presets</strong> — attached to a <em>style</em>. Eight built-in oscillator patterns (Spin, Pulse, Wave, Wander, Jitter, Color Cycle, and more) driven by continuous sine/cosine functions. Zero setup — pick a preset and the motion starts immediately.</li>
-  <li><strong>Keyframe motion paths</strong> — attached to individual <em>cells</em>. A named, reusable sequence of keyframes (position, rotation, scale) that loops at a set frame rate. Multiple cells can share one path; their phase offsets place them at different points around the loop automatically.</li>
+  <li><strong>Style</strong> — the visual character: fill colour, stroke colour, stroke width, and render mode (filled, stroked, or both). Styles are palette items shared across all layers.</li>
+  <li><strong>Motion</strong> — the animation behaviour: a named <em>motion set</em> that carries a parametric preset (Spin, Wave, Jitter…), speed, amount, phase, and an Order/Chaos value. Motion sets are palette items; changing the active motion set before painting affects newly drawn cells only.</li>
+  <li><strong>Shape</strong> — the geometry: a named Loom polygon file imported into the project. One shape per cell; changing the active shape affects newly drawn cells only.</li>
+  <li><strong>Path</strong> — a keyframe motion path: a named, reusable sequence of position/rotation/scale keyframes that loops at a set rate.</li>
 </ul>
-<p>Both layers are additive: a cell with the Spin preset and an Orbit path will spin in place <em>while</em> following the orbit.</p>
+<p>Motion and path are <strong>additive</strong>: a cell with the Spin motion preset and an Orbit path will spin in place <em>while</em> following the orbit.</p>
 
 <h2>ORDER / CHAOS</h2>
-<p>A single slider per style controls the amount of organic irregularity. At full <strong>Order</strong>, sprites are precise and regular. At full <strong>Chaos</strong>, layered sine-wave jitter displaces each sprite's position (±30% of cell size), rotation (±90°), and scale (±40%) — each cell getting a unique seed so no two are ever in sync.</p>
+<p>A single slider per <em>motion set</em> controls the amount of organic irregularity. At full <strong>Order</strong>, sprites behave precisely. At full <strong>Chaos</strong>, layered sine-wave jitter displaces each sprite's position (±30% of cell size), rotation (±90°), and scale (±40%) — each cell getting a unique seed so no two are ever in sync.</p>
 
 <h2>Multiple layers</h2>
 <p>Compositions can stack multiple independent layers, each with its own grid, styles, and opacity. Layers composite bottom-to-top in real time, and each layer exports at its configured opacity.</p>
@@ -262,13 +266,13 @@ private let layoutBody = #"""
 │               │                             │  ▶ PROJECT            │
 │  Project  Lib │  ·  ·  ■  ·  ·  ·          │  ▶ EXPORT             │
 │               │  ·  ■  ■  ■  ·  ·          │  ▶ CANVAS             │
-│  ● LAYERS     │  ·  ·  ■  ·  ·  ·          │  ▶ ORDER/CHAOS        │
-│  ● STYLES     │                             │  ▶ PLACE & TIME       │
-│  ● PATHS      │                             │  ▶ RENDER             │
-│  ● SHAPES     │                             │  ▶ MOTION             │
-│               │                             │  ▶ PATH EDITOR        │
-│               │                             │  ▶ SEQUENCE           │
-│               │                             │  ▶ ADVANCED           │
+│  ● LAYERS     │  ·  ·  ■  ·  ·  ·          │  ▶ PLACE & TIME       │
+│  ● STYLES     │                             │  ▶ RENDER             │
+│  ● MOTIONS    │                             │  ▶ PATH EDITOR        │
+│  ● PATHS      │                             │  ▶ ADVANCED           │
+│  ● SHAPES     │                             │                       │
+│               │                             │  (Motion palette      │
+│               │                             │   detail — pending)   │
 ├───────────────┴─────────────────────────────┴───────────────────────┤
 │  TRANSPORT BAR  ⏮  ▶  ●  frame 0 / 120  [PNG] [SVG] [Video]       │
 └─────────────────────────────────────────────────────────────────────┘
@@ -284,7 +288,7 @@ private let layoutBody = #"""
 
 <h2>Style Palette</h2>
 <p>The left panel. Two tabs: <strong>Project</strong> and <strong>Library</strong>.</p>
-<p>The Project tab lists everything belonging to the current document — layers, styles, motion paths, and imported shapes. Click a style to make it the active painting style. Click a path to start editing its keyframes in the PATH EDITOR panel.</p>
+<p>The Project tab lists everything belonging to the current document — layers, styles, motion sets, motion paths, and imported shapes. Click a style to make it the active painting style. Click a motion set to make it the active motion. Click a shape to make it the active shape. Click a path to start editing its keyframes in the PATH EDITOR panel.</p>
 <p>The Library tab shows your global user library of saved styles, paths, and shapes — shared across all projects.</p>
 <p>See <a href="um-help://help/layers">Working with Layers</a> and <a href="um-help://help/palette">Style Palette</a> for full details.</p>
 
@@ -372,11 +376,14 @@ private let paintingBody = #"""
 <div class="note"><strong>Keyboard shortcuts</strong> are suppressed while a text field has focus. They're also blocked when Command, Option, or Control is held, so they won't conflict with menu shortcuts.</div>
 
 <h2>Drawing cells</h2>
-<p>When a cell is drawn with the Draw tool:</p>
+<p>When a cell is drawn with the Draw tool, all four active palette selections are captured simultaneously:</p>
 <ul>
-  <li>It is assigned the currently active style from the Style Palette.</li>
-  <li>Its <strong>position offset</strong> is set by the <strong>Scatter</strong> slider in the Tool Strip. At 0 (default) the sprite lands exactly at the cell centre. At higher scatter values, a random offset is applied within ±scatter × cell dimensions.</li>
-  <li>Its <strong>phase offset</strong> is set by the current <strong>Phase Policy</strong> and <strong>φ step</strong> values. See <a href="um-help://help/phase">Phase Policy &amp; Scatter</a>.</li>
+  <li><strong>Style</strong> — the active style (fill, stroke, mode) from the STYLES section.</li>
+  <li><strong>Motion</strong> — the active motion set (preset, speed, Order/Chaos) from the MOTIONS section. If none is selected, the cell has no motion (Static).</li>
+  <li><strong>Shape</strong> — the active shape from the SHAPES section. If none is selected, the cell uses the default built-in polygon.</li>
+  <li><strong>Path</strong> — the active keyframe path from the PATHS section. If none is selected, the cell has no path.</li>
+  <li><strong>Position offset</strong> — set by the <strong>Scatter</strong> slider in the Tool Strip.</li>
+  <li><strong>Phase offset</strong> — set by the current <strong>Phase Policy</strong> and <strong>φ step</strong> values. See <a href="um-help://help/phase">Phase Policy &amp; Scatter</a>.</li>
 </ul>
 <p>A paint stroke — from first touch to release — is a single undo operation regardless of how many cells it crosses.</p>
 
@@ -630,71 +637,96 @@ private let qaProjectBody = #"""
 """#
 
 private let qaStyleBody = #"""
-<h1>Quick Adjust: Style &amp; Motion</h1>
-<p class="subtitle">ORDER/CHAOS, RENDER, MOTION, and SEQUENCE — per-style controls for the active style.</p>
+<h1>Quick Adjust: RENDER</h1>
+<p class="subtitle">Visual rendering properties for the active style — fill, stroke, and render mode.</p>
 
-<p>All sections below PROJECT/EXPORT/CANVAS operate on the <strong>currently active style</strong> (selected in the Style Palette). Changing these controls changes the style immediately and affects every cell using that style on the canvas.</p>
+<h2>The four-axis model</h2>
+<p>Each drawn cell has four independent creative axes that are combined at render time:</p>
+<table>
+  <tr><th>Axis</th><th>What it controls</th><th>Palette section</th></tr>
+  <tr><td><strong>Style</strong></td><td>Fill colour, stroke colour, stroke width, render mode</td><td>STYLES (left panel)</td></tr>
+  <tr><td><strong>Motion</strong></td><td>Parametric preset, speed, amount, phase, Order/Chaos</td><td>MOTIONS (left panel) — <em>pending UI</em></td></tr>
+  <tr><td><strong>Shape</strong></td><td>Polygon geometry (imported from Loom)</td><td>SHAPES (left panel)</td></tr>
+  <tr><td><strong>Path</strong></td><td>Keyframe motion path</td><td>PATHS (left panel)</td></tr>
+</table>
+<p>Changing the active style in the STYLES section only affects newly drawn cells — existing cells keep the axis values they had when they were painted.</p>
 
-<h2>ORDER / CHAOS</h2>
-<p>A single slider from <strong>Order</strong> (left, 0) to <strong>Chaos</strong> (right, 1). This is the primary feel control for a style.</p>
-<p>At full <strong>Order</strong>: sprites behave precisely and predictably — only the explicit motion preset and path drive their movement.</p>
-<p>At full <strong>Chaos</strong>: layered sine-wave jitter is added on top of everything else. Each cell gets a unique phase seed (derived from its grid index using a golden-ratio multiplier), so no two cells ever synchronise:</p>
-<ul>
-  <li>Position drift: ±30% of cell size on each axis</li>
-  <li>Rotation jitter: ±90°</li>
-  <li>Scale jitter: ±40% (X axis) / ±32% (Y axis)</li>
-</ul>
-<p>All jitter is smooth (sinusoidal) — no per-frame random. The chaos feels organic rather than flickery.</p>
-<p>Double-click the slider to reset it to 0.</p>
-<div class="tip"><strong>Creative use</strong> — set ORDER/CHAOS to around 0.3 for subtle aliveness: sprites breathe and drift slightly while still reading as a coherent composition. Use 0.8–1.0 when you want maximum organic turbulence.</div>
-
-<h2>RENDER</h2>
+<h2>RENDER section</h2>
+<p>Edits the <strong>active style</strong> (highlighted in the STYLES section of the Style Palette). Changes are reflected immediately on every cell that uses this style.</p>
 <table>
   <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><strong>Fill</strong></td><td>Fill colour and opacity. Click the colour swatch to open the colour panel.</td></tr>
+  <tr><td><strong>Fill</strong></td><td>Fill colour and opacity. Click the swatch to open the colour panel.</td></tr>
   <tr><td><strong>Stroke</strong></td><td>Stroke colour and opacity.</td></tr>
-  <tr><td><strong>Width</strong></td><td>Stroke width in pixels.</td></tr>
+  <tr><td><strong>Width</strong></td><td>Stroke width in pixels. Double-click to reset to 1.5.</td></tr>
   <tr><td><strong>Mode</strong></td><td>Filled (fill only), Stroked (outline only), or Fill &amp; Stroke (both, default).</td></tr>
 </table>
 
-<h2>MOTION</h2>
-<p>Controls the parametric animation preset — a continuous oscillator function applied to every cell using this style.</p>
+<h2>Style variants</h2>
+<p>Right-click any style row in the palette to create a derived variant:</p>
 <table>
-  <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><strong>Preset</strong></td><td>The motion pattern. See table below.</td></tr>
-  <tr><td><strong>Speed</strong></td><td>Cycle rate multiplier (0–2, default 1). Double-click to reset.</td></tr>
-  <tr><td><strong>Amount</strong></td><td>Amplitude of the effect (0–1, default 0.5). Double-click to reset.</td></tr>
-  <tr><td><strong>Phase</strong></td><td>Shifts the starting point of the oscillation within the cycle (0–1). This is the <em>motion cycle phase</em> — a per-style design value, independent of the per-cell phase offset in PLACE &amp; TIME.</td></tr>
+  <tr><th>Variant</th><th>Effect</th></tr>
+  <tr><td>Inverted</td><td>Fill and stroke RGB values inverted; alpha preserved.</td></tr>
+  <tr><td>Faint</td><td>Fill alpha 0.15, stroke alpha 0.25.</td></tr>
+  <tr><td>Strong</td><td>Fill and stroke alpha set to 1.0.</td></tr>
+  <tr><td>Swap Colors</td><td>Fill and stroke colours exchanged.</td></tr>
+  <tr><td>Outline Only</td><td>Stroked mode; fill alpha 0.</td></tr>
+  <tr><td>Filled Only</td><td>Filled mode; stroke alpha 0.</td></tr>
 </table>
 
+<div class="note"><strong>Motion, Order/Chaos, and Sequence controls</strong> have moved out of Quick Adjust and will be accessible via the MOTIONS palette section in the left panel (currently being built — see <a href="um-help://help/qa-motion">Motion Palette</a> and <a href="um-help://help/pending">Not Yet Built</a>).</div>
+"""#
+
+private let qaMotionBody = #"""
+<h1>Motion Palette</h1>
+<p class="subtitle">Named motion sets — the animation axis of the four-axis cell model.</p>
+
+<h2>What a motion set is</h2>
+<p>A <strong>motion set</strong> is a named, saveable entity that controls how a cell animates. It is one of the four independent creative axes — decoupled from the style (rendering), shape (geometry), and path (keyframe trajectory).</p>
+<p>Each motion set stores:</p>
+<table>
+  <tr><th>Property</th><th>Description</th></tr>
+  <tr><td><strong>Preset</strong></td><td>The parametric animation pattern. See below.</td></tr>
+  <tr><td><strong>Speed</strong></td><td>Cycle rate multiplier (0–2, default 1).</td></tr>
+  <tr><td><strong>Amount</strong></td><td>Amplitude of the effect (0–1, default 0.5).</td></tr>
+  <tr><td><strong>Phase</strong></td><td>Starting phase within the oscillation cycle (0–1). Distinct from the per-cell phase offset in PLACE &amp; TIME — this shifts the waveform shape, not when the cell starts animating.</td></tr>
+  <tr><td><strong>Order/Chaos</strong></td><td>A 0–1 scalar that adds layered sine-wave jitter on top of the preset. See below.</td></tr>
+</table>
+
+<h2>Motion presets</h2>
 <table>
   <tr><th>Preset</th><th>What it does</th></tr>
-  <tr><td><strong>Static</strong></td><td>No motion. Default.</td></tr>
+  <tr><td><strong>Static</strong></td><td>No motion. Default for cells with no motion set assigned.</td></tr>
   <tr><td><strong>Spin</strong></td><td>Continuous rotation. At Speed 1, Amount 1: roughly one full rotation every 3 seconds.</td></tr>
   <tr><td><strong>Pulse</strong></td><td>Sine-wave scale oscillation on both axes simultaneously. Sprites breathe in and out.</td></tr>
   <tr><td><strong>Wave</strong></td><td>Horizontal sine displacement. Sprites swing left and right.</td></tr>
-  <tr><td><strong>Wander</strong></td><td>Slow 2D drift using two sine waves at a golden-ratio frequency ratio. Each cell drifts on a unique Lissajous figure.</td></tr>
-  <tr><td><strong>Jitter</strong></td><td>High-frequency small-amplitude noise on both axes plus rotation noise. Fast, twitchy character.</td></tr>
+  <tr><td><strong>Wander</strong></td><td>Slow 2D drift using two sine waves at a golden-ratio frequency ratio. Each cell follows a unique Lissajous figure.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>High-frequency small-amplitude noise on both axes plus rotation. Fast, twitchy character.</td></tr>
   <tr><td><strong>Color Cycle</strong></td><td>Continuously rotates fill and stroke hues. Achromatic colours (grey, white, black) are unaffected.</td></tr>
   <tr><td><strong>Custom</strong></td><td>Reserved — no effect in the current build.</td></tr>
 </table>
 
-<p>Parametric motion and keyframe path motion are <strong>additive</strong>: position offsets add, rotations add, scale multiplies. A cell with Jitter preset and an Orbit path will jitter in place <em>while</em> following the orbit.</p>
+<h2>ORDER / CHAOS</h2>
+<p>Every motion set carries an Order/Chaos value (0–1). At <strong>0</strong> — sprites behave exactly as the preset dictates. At <strong>1</strong> — layered sine-wave jitter is added on top, each cell getting a unique seed derived from its grid index:</p>
+<ul>
+  <li>Position drift: ±30% of cell size on each axis</li>
+  <li>Rotation jitter: ±90°</li>
+  <li>Scale jitter: ±40% (X) / ±32% (Y)</li>
+</ul>
+<p>All jitter is smooth (sinusoidal) — no per-frame random. The chaos feels organic rather than flickery.</p>
+<p>Motion and chaos are <strong>additive with keyframe path motion</strong>: position offsets add, rotations add, scale multiplies.</p>
+<div class="tip"><strong>Order/Chaos around 0.3</strong> gives subtle aliveness — sprites breathe and drift slightly while still reading as a coherent composition. 0.8–1.0 gives maximum turbulence.</div>
 
-<h2>SEQUENCE</h2>
-<p>Controls how the active style cycles through its assigned shapes over time. Shapes are assigned to a style via the SHAPES section in the Style Palette.</p>
-<table>
-  <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><strong>Mode</strong></td><td>Sequential, All, or Random.</td></tr>
-  <tr><td><strong>Frames/Step</strong></td><td>How many animation frames each shape holds before advancing (1–240 fr).</td></tr>
-</table>
-<table>
-  <tr><th>Mode</th><th>Behaviour</th></tr>
-  <tr><td><strong>Sequential</strong></td><td>Cycles through assigned shapes one at a time. The current shape is: shapeIDs[(frame + phaseOffset) / framesPerStep % count]. Each cell with a different phase offset is at a different point in the sequence.</td></tr>
-  <tr><td><strong>All</strong></td><td>All assigned shapes are drawn simultaneously. Every sprite renders all its shapes at once — useful for layering geometries.</td></tr>
-  <tr><td><strong>Random</strong></td><td>Deterministic hash of (cellIndex, frameBucket) selects a shape each step. Each cell independently picks a shape that changes every framesPerStep frames without flickering.</td></tr>
-</table>
-<div class="note"><strong>SEQUENCE requires assigned shapes</strong> — if no shapes are assigned to the active style, the style renders using its default hard-wired geometry regardless of this mode setting. Assign shapes via the SHAPES section in the Style Palette.</div>
+<h2>Using motion sets</h2>
+<p>Motion sets work like the other three palette axes:</p>
+<ol class="steps">
+  <li>Create a new motion set in the MOTIONS section of the Style Palette (Project tab).</li>
+  <li>It becomes the active motion selection — highlighted in the palette.</li>
+  <li>Paint cells with the Draw or Fill tool. Each new cell captures the active motion set ID.</li>
+  <li>Cells painted with this motion set animate according to its preset and Order/Chaos value.</li>
+  <li>Click a different motion set row to change the active selection. Previously painted cells are unaffected.</li>
+  <li>Click the highlighted row again to deselect — new cells will be painted with no motion (Static).</li>
+</ol>
+<div class="warn"><strong>Motion palette UI is not yet built</strong> — the MOTIONS section in the left panel and the motion detail editor in the right panel are pending. The data model and rendering are complete; the controls to edit motion sets will appear in a future update. See <a href="um-help://help/pending">Not Yet Built</a>.</div>
 """#
 
 private let qaPathBody = #"""
@@ -810,16 +842,17 @@ private let paletteBody = #"""
 <p>The Style Palette sits on the left side of the window. It has two tabs: <strong>Project</strong> and <strong>Library</strong>.</p>
 
 <h2>Project tab</h2>
-<p>Lists everything owned by the current document. Organised into four sections: LAYERS, STYLES, PATHS, and SHAPES.</p>
+<p>Lists everything owned by the current document. Organised into five sections: LAYERS, STYLES, MOTIONS, PATHS, and SHAPES — corresponding to the four creative axes plus layers.</p>
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
 
 <h3>STYLES</h3>
-<p>Click a style row to make it the active painting style. New cells you draw will use it. The active style is highlighted with an accent indicator.</p>
+<p>A style controls rendering only: fill colour, stroke colour, stroke width, and render mode. Click a style row to make it the <strong>active style</strong> — new cells you draw will carry this style. The active style is highlighted with an accent indicator.</p>
 <ul>
   <li><strong>+ New Style</strong> — adds a blank style to the project.</li>
-  <li><strong>↑ button</strong> — saves a copy to the global library. If a style with the same ID is already in the library, it is updated.</li>
+  <li><strong>↑ button</strong> — saves a copy to the global library.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
 </ul>
 <p>Right-click a style row for the context menu:</p>
 <table>
@@ -834,28 +867,40 @@ private let paletteBody = #"""
   <tr><td>Delete Style</td><td>Removes the style. Cells using it are reassigned to the first remaining style. Disabled when only one style exists.</td></tr>
 </table>
 
+<h3>MOTIONS</h3>
+<p>Motion sets control animation: parametric preset, speed, amount, phase, and Order/Chaos. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. Click the highlighted row again to deselect (new cells will be painted with no motion — Static).</p>
+<ul>
+  <li><strong>+ New Motion</strong> — adds a blank motion set (Static preset, all defaults).</li>
+  <li><strong>↑ button</strong> — saves a copy to the global library.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
+</ul>
+<div class="note"><strong>Motion detail editing</strong> — the controls to edit a motion set's preset, speed, amount, phase, and Order/Chaos value are pending (not yet in this build). See <a href="um-help://help/pending">Not Yet Built</a>. The motion set data is stored correctly and rendered — only the editing UI is missing.</div>
+
 <h3>PATHS</h3>
 <p>Click a path row to make it the <strong>active path</strong> for editing — its keyframes appear in the PATH EDITOR section of Quick Adjust, and the path overlay appears on the canvas. Click the highlighted row again to deselect it (newly drawn cells will have no path assignment).</p>
 <ul>
   <li><strong>+ New Path</strong> — creates a path with two identity keyframes (frames 0 and 48) and selects it.</li>
   <li>Each row shows a keyframe count badge (e.g. <code>4 kf</code>) and a <strong>↑</strong> button to promote to the library.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
 </ul>
 <p>Right-click a path row: <strong>Save to Library</strong> or <strong>Delete Path</strong> (removes from project and clears its reference from all cells).</p>
 
 <h3>SHAPES</h3>
-<p>Shapes are Loom polygon-set geometry files imported into the project. Each shape is a named set of bezier polygons stored inside the .umproj file.</p>
+<p>Shapes are Loom polygon-set geometry files imported into the project. Each shape is a named set of bezier polygons. Clicking a shape sets it as the <strong>active shape</strong> — new cells you draw will be rendered with this geometry. Click the highlighted row again to deselect (new cells will use the default built-in polygon).</p>
 <ul>
-  <li><strong>Click a shape row</strong> — toggles the shape into or out of the active style's shape sequence (shapeIDs list). The row highlights when the active style uses the shape; a sequence-position badge shows its index.</li>
-  <li><strong>+ Import Shape…</strong> — opens a file picker (defaults to ~/.loom_projects). Select one or more Loom .json polygon-set files. Multiple files can be selected at once.</li>
-  <li><strong>↑ button</strong> — saves the shape to the global library (~Library/Application Support/UM/shapes/).</li>
+  <li><strong>+ Import Shape…</strong> — opens a file picker (defaults to ~/.loom_projects). Select one or more Loom .json polygon-set files.</li>
+  <li><strong>↑ button</strong> — saves the shape to the global library.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
 </ul>
-<p>Right-click: <strong>Delete Shape</strong> removes it from the project and removes its UUID from any styles that referenced it.</p>
+<p>Right-click: <strong>Delete Shape</strong> removes it from the project. Any cells that referenced this shape fall back to the default geometry.</p>
+
+<div class="note"><strong>One shape per cell</strong> — each cell now carries a single direct shape reference (the 4-axis model). The old system where multiple shapes were assigned to a style for SEQUENCE cycling has been replaced. Shape cycling over time will be re-introduced as a motion set feature in a future update.</div>
 
 <h2>Library tab</h2>
-<p>Shows your global user library — styles, paths, and shapes saved across all projects.</p>
+<p>Shows your global user library — styles, motion sets, paths, and shapes saved across all projects.</p>
 <ul>
-  <li>Style and shape rows show whether the item is already in the current project. If not, a <strong>↓</strong> button imports it.</li>
-  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths) and <code>~/Library/Application Support/UM/shapes/</code> (shapes).</li>
+  <li>Style, motion, and shape rows show whether the item is already in the current project. If not, a <strong>↓</strong> button imports it.</li>
+  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions) and <code>~/Library/Application Support/UM/shapes/</code> (shapes).</li>
   <li>Right-click any library row to remove it from the library.</li>
 </ul>
 """#
@@ -1048,9 +1093,13 @@ private let pendingBody = #"""
 
 <table>
   <tr><th>Area</th><th>Feature</th><th>Notes</th></tr>
-  <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed (§6.5 Phase 2) but not yet wired.</td></tr>
+  <tr><td>Motion palette</td><td>MOTIONS section UI in left panel</td><td>The motion set data model and rendering are complete (four-axis model). What's missing is the UI: a MOTIONS list in the left panel with + New, rename, delete, promote-to-library — and a detail editor in the right panel for preset, speed, amount, phase, and Order/Chaos.</td></tr>
+  <tr><td>Motion palette</td><td>Right panel cell inspector (Option C)</td><td>When a cell is selected, the right panel should show all four axis assignments (style, motion, shape, path) as mini-pickers. When nothing is selected and a palette item is active, it should show the detail editor for that item. Currently the right panel always shows Quick Adjust sections.</td></tr>
+  <tr><td>Motion palette</td><td>Shape cycling (SEQUENCE) in motion sets</td><td>The old per-style SEQUENCE mode (sequential/all/random cycling through multiple shapes) was removed in the four-axis refactor. It will be re-introduced as a property of motion sets — a motion set will be able to cycle through a list of shapes over time.</td></tr>
+  <tr><td>Left panel</td><td>Resolution palette in LAYERS section</td><td>Resolution controls are currently in the tool strip. Plan: move them into the LAYERS section with a palette of clickable preset chips (4×4, 6×6, 8×8…), a + button to save the current size, and Project/Library tabs for global presets.</td></tr>
+  <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed but not yet wired.</td></tr>
   <tr><td>Rendering</td><td>Full Loom render modes</td><td>Brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of geometry). Current build: Filled, Stroked, Fill &amp; Stroke only.</td></tr>
-  <tr><td>Rendering</td><td>Animated style thumbnails</td><td>Style rows in the palette show a static coloured dot. Live animated miniature previews are planned but require throttled per-style canvas passes.</td></tr>
+  <tr><td>Rendering</td><td>Animated style thumbnails</td><td>Style rows in the palette show a static coloured dot. Live animated miniature previews are planned.</td></tr>
   <tr><td>Canvas</td><td>Zoom and pan</td><td>The canvas fills the panel and resizes with the window. Pinch-to-zoom, two-finger pan, ⌘0 to fit, ⌘= / ⌘− are planned.</td></tr>
   <tr><td>Canvas</td><td>Hover preview</td><td>No visual feedback on undrawn cells before committing a stroke. A faint style preview on hover is planned.</td></tr>
   <tr><td>Export</td><td>SVG export</td><td>The SVG button in the Transport Bar is present but has no action yet.</td></tr>
@@ -1058,10 +1107,10 @@ private let pendingBody = #"""
   <tr><td>Path Editor</td><td>Bezier tangent handles</td><td>The PATH EDITOR uses per-segment easing (Linear, Ease In/Out, Step). Cubic bezier tangent handles (in/out per keyframe, drawn on the canvas as draggable circles) are designed but not yet built.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>A toggleable overlay colouring each cell by its phaseOffset value (blue = 0, red = max) to make temporal structure visible without playing the animation.</td></tr>
-  <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>CANVAS supports a solid background colour. Loading a visible image composited behind the grid is planned. This is distinct from the Color Map (which recolors sprites but never renders the image itself).</td></tr>
-  <tr><td>Layers</td><td>Camera &amp; parallax</td><td>A virtual camera (pan, zoom, rotation) with per-layer parallax factors for depth simulation. Designed in the spec; deferred until the basic layer system is in everyday use.</td></tr>
+  <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>CANVAS supports a solid background colour. Loading a visible image composited behind the grid is planned (distinct from the Color Map).</td></tr>
+  <tr><td>Layers</td><td>Camera &amp; parallax</td><td>A virtual camera (pan, zoom, rotation) with per-layer parallax factors for depth simulation.</td></tr>
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
-  <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately and are visible in live playback, but are not tracked in the undo stack. Undo for keyframe editing is planned.</td></tr>
-  <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Planned for migrating existing Java UM work.</td></tr>
+  <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
+  <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
 </table>
 """#

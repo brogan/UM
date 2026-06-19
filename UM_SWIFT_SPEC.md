@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -435,54 +435,70 @@ The user's choice is remembered per project and pre-filled next time. "Preserve 
 
 ### 6.1 Cell Style
 
-The central concept — merging Drawer, DrawSet, AnimatorParams, and BRenderer into one named unit:
+A **style** is now render-only: it controls only the visual appearance of a sprite's fill, stroke, and render mode. Motion, shape, and path are independent axes assigned separately to each cell (see §6.9).
 
 ```swift
 struct CellStyle: Codable, Identifiable {
     var id:              UUID
     var name:            String
-    // Shape sequence (replaces DrawSet + Drawers)
-    var shapeNames:      [String]        // ordered; each references a ShapeDef
-    var sequenceMode:    SequenceMode    // .sequential / .all / .random
-    var framesPerStep:   Int
-    // Renderer
-    var rendererSetName: String
-    var lockedFill:      LoomColor?
-    var lockedStroke:    LoomColor?
-    // Motion preset
-    var motionPreset:    MotionPreset
-    var motionSpeed:     Double
-    var motionAmount:    Double
-    var motionPhase:     Double          // oscillator phase, not cell phase offset
-    var customAnimation: SpriteAnimation?
-    // Order/Chaos
-    var orderChaos:      Double          // 0.0 = ordered, 1.0 = chaotic
-    // Subdivision
-    var subdivParamsSetName: String
+    // Render-only visual properties
+    var lockedFillHex:   String?         // nil = use fillColor, non-nil = palette-locked hex
+    var lockedStrokeHex: String?
+    var fillColor:       UMColor
+    var strokeColor:     UMColor
+    var strokeWidth:     Double
+    var renderMode:      UMRenderMode    // .filled / .stroked / .filledStroked
 }
 
-enum SequenceMode: String, Codable { case sequential, all, random }
-enum MotionPreset: String, Codable {
-    case `static`, spin, pulse, wave, wander, jitter, colorCycle, custom
-}
+enum UMRenderMode: String, Codable { case filled, stroked, filledStroked }
 ```
 
+Backward compatibility: old project files that contain motion/shape/sequence fields in a style's JSON are silently ignored on read — the removed fields produce a no-op `decodeIfPresent` miss, not a decode error. The legacy migration path (§6.10) converts those fields into the new independent palettes.
+
+**Style variants** (right-click context menu in palette): Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only — all transform only the visual fields that remain in the slim struct.
+
+### 6.10 Legacy Migration
+
+When opening a project file written by an earlier build (pre-4-axis model), `AppController.readLegacy` runs a one-time migration:
+
+1. **`LegacyCellStyle` decoder** — re-encodes each old `CellStyle` to JSON and re-decodes it through a private `LegacyCellStyle: Decodable` struct that reads the old motion/shape fields (`motionPreset`, `motionSpeed`, `motionAmount`, `motionPhase`, `orderChaos`, `framesPerStep`, `shapeIDs`).
+
+2. **`migrateLegacyMotion`** — creates one `UMMotionSet` per old style (carrying its motion and orderChaos values) and patches every cell in every layer with the derived `motionID` and `shapeID` (first shape in the old style's `shapeIDs` list).
+
+3. The migrated `projectMotionSets` array is stored at project level and saved with the next write (v3 format). The old per-style motion fields are discarded.
+
+The migration is transparent: the user opens an old file and sees their composition unchanged, with styles converted to render-only and motion now available as named motion sets in the motion palette.
+
 ### 6.2 Grid Cell
+
+Each cell carries four independent creative axis references — any combination of nil (use default) or a specific palette entry:
 
 ```swift
 struct UMGridCell: Codable, Identifiable {
     var id:             UUID
     var gridIndex:      Int          // row * cols + col
     var isDrawn:        Bool
-    var styleID:        UUID         // references CellStyle
+
+    // Four independent axes — all optional; nil = use project default or fallback
+    var styleID:        UUID         // references CellStyle (render: fill, stroke, mode)
+    var motionID:       UUID?        // references UMMotionSet (animation + orderChaos)
+    var shapeID:        UUID?        // references UMShape in project shape palette
+    var pathID:         UUID?        // references UMMotionPath in document.paths
 
     // Spatial nuance — preserved across all grid operations
-    var positionOffset: CGVector     // absolute pixels from nominal cell centre; default .zero
+    var positionOffset: UMOffset     // absolute pixels from nominal cell centre; default .zero
 
     // Temporal nuance — preserved across all grid operations
     var phaseOffset:    Int          // frames; cell animates at (currentFrame + phaseOffset)
+
+    // Resting-pose transform (combined multiplicatively with animated values)
+    var scaleX:         Double       // default 1.0
+    var scaleY:         Double       // default 1.0
+    var rotation:       Double       // degrees; default 0.0
 }
 ```
+
+When a cell is drawn with the Draw or Fill tool, all four active palette selections are captured into the cell's four axis IDs simultaneously. This means the composition is a snapshot of the palette state at paint time — changing a style/motion/shape after drawing does not retroactively change cells that were painted before.
 
 ### 6.3 Grid Config
 
@@ -524,18 +540,47 @@ enum ResizePhasePolicy: String, Codable {
 
 ### 6.4 Grid Document
 
+`UMGridDocument` is the per-layer document stored within each `UMLayer`. Styles, shapes, and motion sets are **project-level**, not per-layer — they are held in `AppController` and shared across all layers.
+
 ```swift
 struct UMGridDocument: Codable {
-    var gridConfig:    UMGridConfig
-    var cells:         [UMGridCell]
-    var styles:        [CellStyle]
-    var projectConfig: ProjectConfig    // Loom ProjectConfig (shapes, renderers, subdivision)
+    var gridConfig:   UMGridConfig
+    var cells:        [UMGridCell]
+    var styles:       [CellStyle]        // render styles — project-level (mirrored from AppController)
+    var paths:        [UMMotionPath]     // keyframe paths — per-layer
+    var colorSource:  UMColorSource?     // color map — per-layer
+    var timeline:     [UMTimelineState]  // recorded states — per-layer
 }
+```
+
+**AppController** holds project-level palettes shared across all layers:
+
+```swift
+var projectStyles:     [CellStyle]      // render palette (all layers share these)
+var projectMotionSets: [UMMotionSet]    // motion palette (new — §6.9)
+var projectShapes:     [UMShape]        // shape palette
+
+// Active palette selections (written into new cells at paint time)
+var activeStyleID:  UUID?
+var activeMotionID: UUID?
+var activeShapeID:  UUID?
+var activePathID:   UUID?
+```
+
+The project is saved as a directory package (`.umproj/`) containing:
+
+```
+config.json               ← v3: layerStates + projectMotionSets + projectStyles + projectShapes (by ref)
+shapes/
+    <uuid>.json           ← individual UMShape geometry JSON files
+renders/
+    stills/
+    animations/
 ```
 
 ### 6.5 Order/Chaos Materialisation
 
-`CellStyle.orderChaos` is a 0–1 scalar. Materialisation happens in two phases — the first is built; the second (polygon-level warping) is pending subdivision integration.
+`UMMotionSet.orderChaos` is a 0–1 scalar (moved from CellStyle in the 4-axis refactor). Materialisation happens in two phases — the first is built; the second (polygon-level warping) is pending subdivision integration.
 
 **Phase 1 — built: per-cell sine-oscillator jitter**
 
@@ -686,6 +731,32 @@ Tap a row to switch the active layer. Drag a row to reorder layers (an accent-co
 
 ---
 
+### 6.9 UMMotionSet
+
+A **motion set** is a named, saveable entity that carries all animation-related properties for a cell. It is the motion axis of the four-axis cell model.
+
+```swift
+public struct UMMotionSet: Codable, Identifiable, Sendable {
+    public var id:           UUID
+    public var name:         String
+    public var motionPreset: MotionPreset   // .static / .spin / .pulse / .wave / .wander
+                                            //   .jitter / .colorCycle / .custom
+    public var motionSpeed:  Double         // 0.0–2.0; default 1.0
+    public var motionAmount: Double         // 0.0–1.0; default 0.5
+    public var motionPhase:  Double         // 0.0–1.0; starting phase within the oscillation cycle
+    public var orderChaos:   Double         // 0.0 = ordered, 1.0 = chaotic (moved from CellStyle)
+    public var framesPerStep: Int           // for future SEQUENCE-style cycling; default 4
+}
+```
+
+Motion sets live in `AppController.projectMotionSets` — a project-level palette shared across all layers, analogous to `projectStyles`. They are listed in the MOTIONS section of the Style Palette (not yet built as a distinct UI panel — see §15.9).
+
+**Rendering:** In the render loop, `cell.motionID` is looked up in a `motionMap: [UUID: UMMotionSet]` built from `projectMotionSets`. The resulting `UMMotionSet?` is passed to `computeMotion(motionSet:style:path:...)` and `computeParametric(motionSet:style:...)`. If `motionID` is nil, the cell renders with no motion (Static preset, no orderChaos).
+
+**Library integration:** Motion sets can be promoted to the global library (`UMLibrary.motionSets: [UMMotionSet]`) and imported back into any project, following the same promote/import pattern as styles and paths.
+
+---
+
 ### 6.7 Project Structure on Disk
 
 ```
@@ -717,9 +788,11 @@ UMEngine (Swift Package — library)
 │   ├── UMGridTransforms.swift
 │   └── UMGridLoader.swift
 ├── Style/
-│   ├── CellStyle.swift
+│   ├── CellStyle.swift              // render-only (fill, stroke, mode) — ✓ built
+│   ├── UMMotionSet.swift            // named motion entity with preset/speed/amount/phase/orderChaos — ✓ built
+│   ├── UMLibrary.swift              // global library container (styles + paths + motionSets) — ✓ built
 │   ├── MotionPreset.swift
-│   └── OrderChaosEngine.swift
+│   └── OrderChaosEngine.swift       // pending: maps orderChaos → SubdivisionParams
 ├── Composition/
 │   └── UMLayer.swift            // Codable layer value type — ✓ built
 ├── Placement/
@@ -1320,14 +1393,32 @@ Everything in this list is implemented and functional in the current build (`mai
 - Spatial Scatter slider in Tool Strip (0–1)
 - Rescatter Selection in PLACE & TIME
 
-**Styles and animation**
-- `CellStyle` with fill, stroke, render mode, stroke width, motion preset, sequence mode, framesPerStep
-- `CellStyle.shapeIDs: [UUID]` — ordered list of assigned shapes (migrates from legacy single `shapeID`)
-- Parametric motion presets: Static, Spin, Pulse, Wave, Wander, Jitter, Color Cycle (all wired in renderer)
+**Four-axis cell model** (built 2026-06-19)
+- `CellStyle` is now render-only: `fillColor`, `strokeColor`, `strokeWidth`, `renderMode`, locked hex overrides — all other fields removed
+- `UMMotionSet`: new named palette entity carrying `motionPreset`, `motionSpeed`, `motionAmount`, `motionPhase`, `orderChaos`, `framesPerStep`
+- `UMGridCell` gains `motionID: UUID?`, `shapeID: UUID?`, `pathID: UUID?` alongside `styleID`
+- `UMGridEngine.setCellDrawn` and `floodFill` accept all four axis IDs
+- `AppController.projectMotionSets: [UMMotionSet]` — project-level motion palette; `activeMotionID`, `activeShapeID` active selections
+- Full CRUD for motion sets: `addMotionSet`, `deleteMotionSet`, `promoteMotionSetToLibrary`, `importMotionSetFromLibrary`
+- `UMLibrary.motionSets: [UMMotionSet]` — global library includes motion sets
+- Legacy migration: `LegacyCellStyle` decoder extracts old motion fields; `migrateLegacyMotion` builds `UMMotionSet` per old style and patches cells — old projects open seamlessly
+- Config format bumped to v3; old v1/v2 files auto-detected and migrated
+- Paint call sites (Draw, Fill tools) pass all four active IDs to the engine
+- `computeMotion(motionSet:style:path:...)` / `computeParametric(motionSet:style:...)` — function signatures updated
+- `resolvePolygons(shapeID:shapeMap:fallback:)` — simplified: direct UUID lookup (no SEQUENCE cycling in renderer for now)
+- All render paths (live Canvas, background CG, FrameCapture, UMVideoExporter) updated for 4-axis model
+- Style variants (Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only) operate on render-only fields — unchanged in behaviour
+
+**Styles palette — shape selection updated**
+- Clicking a shape row in the palette sets `activeShapeID` (toggle on/off) — newly drawn cells get this shape
+- Shape rows no longer toggle into a style's `shapeIDs` list (that list is removed)
+- `deleteShape` now clears `shapeID` from any cells that referenced it
+
+**Styles and paths (legacy — still built)**
+- Parametric motion presets: Static, Spin, Pulse, Wave, Wander, Jitter, Color Cycle (wired via `UMMotionSet`)
 - Keyframe motion paths: `UMMotionPath`, `PathKeyframe`, full PATH EDITOR UI, path overlay on canvas
 - Path deselect (click active path row again to draw without path assignment)
-- SEQUENCE mode fully wired: sequential, all, random — cycles through `style.shapeIDs` each `framesPerStep` frames, phase-offset per cell
-- ORDER/CHAOS jitter fully wired: layered sine oscillators (position ±30%, rotation ±90°, scale ±40%), per-cell seed, additive on top of parametric preset and path
+- QuickAdjustView updated: ORDER/CHAOS, MOTION, and SEQUENCE sections removed (now belong to motion palette UI — pending §15.9)
 - Style variants: Inverted, Faint, Strong, Swap Colors, Outline Only, Filled Only (right-click context menu)
 
 **Style Palette and Library**
@@ -1407,9 +1498,10 @@ These items appeared in the §12.4 "not yet implemented" list in prior revisions
 | Shape library manager | ✓ Built — see §13 |
 | Open curves / points / ovals | ✓ Built — all five `PolygonType` cases rendered |
 | Shape rendering via assigned geometry | ✓ Built — `shapePolygonMap: [UUID: [Polygon2D]]`, decoded once per shape, looked up per cell at render time |
-| `shapeID: UUID?` → `shapeIDs: [UUID]` | ✓ Built — ordered list enables SEQUENCE; backward-compat Codable migration from old files |
-| Order/Chaos jitter | ✓ Built — sine-oscillator position/rotation/scale jitter in `computeMotion`; subdivision-level warp remains pending |
-| SEQUENCE shape cycling | ✓ Built — sequential, all (simultaneous), random; phase-offset per cell; `resolvePolygons()` helper |
+| `shapeID: UUID?` → `shapeIDs: [UUID]` | ✓ Built then superseded — `shapeIDs` on `CellStyle` was the multi-shape model; now replaced by direct `cell.shapeID: UUID?` (4-axis model) |
+| Order/Chaos jitter | ✓ Built — sine-oscillator position/rotation/scale jitter in `computeMotion`; moved from `CellStyle.orderChaos` to `UMMotionSet.orderChaos`; subdivision-level warp remains pending |
+| SEQUENCE shape cycling | ✓ Built in prior iteration then removed from renderer during 4-axis refactor — `resolvePolygons` is now a direct shapeID lookup; SEQUENCE cycling will be re-introduced as a `UMMotionSet` feature (§15.9) |
+| Four-axis cell model (style / motion / shape / path) | ✓ Built 2026-06-19 — see §12.3 above |
 
 ---
 
@@ -1438,31 +1530,30 @@ These items appeared in the §12.4 "not yet implemented" list in prior revisions
 #### Data model
 
 ```
-UMShape                                     (UMEngine/Shape/UMShape.swift)
+UMShape                                          (UMEngine/Shape/UMShape.swift)
   id:             UUID
-  name:           String                    — display name (defaults to filename stem)
-  sourceFilename: String                    — original Loom file name, for reference
-  geometryJSON:   String                    — raw Loom polygonSet JSON content
+  name:           String                         — display name (defaults to filename stem)
+  sourceFilename: String                         — original Loom file name, for reference
+  geometryJSON:   String                         — raw Loom polygonSet JSON content
 
-CellStyle.shapeIDs: [UUID]                  — ordered list of assigned shapes (SEQUENCE cycles this)
-CellStyle.shapeID:  UUID? { shapeIDs.first }  — computed convenience accessor
-UMGridDocument.shapes: [UMShape]            — project-local shape assets
-AppController.shapePolygonMap: [UUID: [Polygon2D]]  — decoded at import/load, looked up per cell per frame
+UMGridCell.shapeID: UUID?                        — direct reference to a project shape (4-axis model)
+AppController.projectShapes: [UMShape]           — project-level shape palette (shared across layers)
+AppController.activeShapeID: UUID?               — the palette selection written into newly drawn cells
+AppController.shapePolygonMap: [UUID: [Polygon2D]] — decoded at import/load, looked up per cell per frame
 ```
 
 #### Storage
 
-- **Project shapes** — embedded in `.umproj` JSON as `"shapes": [...]`. Backward-compatible: older projects without this key default to an empty array.
-- **Global library shapes** — individual files at `~/Library/Application Support/UM/shapes/<uuid>.json`. The directory is created on first promote. Shapes are not embedded in `library.json`; they are scanned from the directory at startup into `AppController.globalShapes`.
+- **Project shapes** — stored as individual `.json` files in the `shapes/` subdirectory of the `.umproj` directory package. `config.json` references shapes by UUID filename. Backward-compatible: older single-file projects load shapes from inline JSON or treat missing shapes as empty.
+- **Global library shapes** — individual files at `~/Library/Application Support/UM/shapes/<uuid>.json`. Scanned from the directory at startup into `AppController.globalShapes`.
 
-#### Shape–style assignment
+#### Shape–cell assignment (4-axis model)
 
-A `CellStyle` carries `shapeIDs: [UUID]` — an ordered list of shapes used by SEQUENCE mode. The list is per-style (not per-cell). `AppController.shapePolygonMap` caches the decoded `[Polygon2D]` for every project shape keyed by UUID; the renderer looks up the right entry per cell per frame via `resolvePolygons()` in ContentView.swift.
+Shape selection is a **direct per-cell property**, not a per-style list. `cell.shapeID: UUID?` references one `UMShape` from the project palette. At paint time, `activeShapeID` is captured into the cell.
 
-**SEQUENCE mode uses `shapeIDs` as follows:**
-- **Sequential** — cycles through the list by frame bucket: `shapeIDs[(frame + phaseOffset) / framesPerStep % count]`
-- **All** — concatenates all shapes' polygon lists; every sprite renders all assigned shapes simultaneously
-- **Random** — deterministic hash of `(cellIndex, frameBucket)` → index into `shapeIDs`; each cell independently picks a shape that changes every `framesPerStep` frames without flickering
+`AppController.shapePolygonMap: [UUID: [Polygon2D]]` caches decoded geometry for every project shape, rebuilt whenever shapes are added, removed, or the project loads. `resolvePolygons(shapeID:shapeMap:fallback:)` is a direct lookup — no iteration, no sequencing.
+
+**SEQUENCE cycling** (shape animation over time) was implemented on the old per-style `shapeIDs` list. In the 4-axis model this will be re-introduced as a property of `UMMotionSet` (§15.9) — a motion set will be able to describe a cycling pattern over multiple shapes. For now, each cell renders one fixed shape.
 
 #### UI — Style Palette SHAPES sections
 
@@ -1472,10 +1563,10 @@ Both the **Project** and **Library** tabs of the Style Palette contain a SHAPES 
 
 | Action | Result |
 |---|---|
-| Click a shape row | Toggles the shape into/out of the active style's `shapeIDs` list. The row highlights in accent when assigned; a sequence-position number badge shows the shape's index in the list (1-based). |
-| **+ Import Shape…** | Opens `NSOpenPanel` (`.json` files, multiple selection, defaults to `~/.loom_projects`). Each selected file is read and added as a `UMShape` to the project. |
+| Click a shape row | Sets `controller.activeShapeID` to this shape (toggle: click again to deselect — newly drawn cells will have no shape). The row highlights with the accent colour when this is the active shape selection. |
+| **+ Import Shape…** | Opens `NSOpenPanel` (`.json` files, multiple selection, defaults to `~/.loom_projects`). Each selected file is read and added as a `UMShape` to the project; copied into `shapes/` subdirectory if project is saved. |
 | **↑** button | Promotes the shape to the global library (`~/Library/Application Support/UM/shapes/<uuid>.json`). |
-| Right-click → Delete Shape | Removes from project; removes the shape's UUID from any styles' `shapeIDs` that referenced it. |
+| Right-click → Delete Shape | Removes from project; clears `shapeID` on any cells that referenced it; clears `activeShapeID` if it matched. |
 
 **Library tab SHAPES:**
 
@@ -1497,7 +1588,7 @@ Until `LoomEditorKit` is ready, the toolbar Geometry mode button is absent and a
 
 ## 15. Outstanding Work — What Remains to Implement
 
-> **This section is the definitive statement of what is not yet done.** Everything listed here is unimplemented as of 2026-06-18. Items are grouped by the phase of work they naturally belong to, roughly in priority order.
+> **This section is the definitive statement of what is not yet done.** Updated 2026-06-19. Items are grouped by the phase of work they naturally belong to, roughly in priority order.
 
 ---
 
@@ -1639,10 +1730,50 @@ Per-layer opacity, parallaxFactor, and layerOffset could all be driven by `Anima
 
 ---
 
+### 15.9 Left Panel Restructure and Motion Palette UI
+
+The 4-axis model data is built (§12.3), but the UI for selecting and managing motion sets does not yet exist. This is the highest-priority pending UI work.
+
+**Left panel restructure**
+
+The Style Palette should be reorganised so all four palette axes are equally accessible:
+
+- **LAYERS** section — existing; add resolution preset palette (see below)
+- **STYLES** section — existing; render-only (fill, stroke, mode)
+- **MOTIONS** section — new; lists `projectMotionSets`; click a row to set `activeMotionID`; `+` to add, delete, promote/import
+- **PATHS** section — existing
+- **SHAPES** section — existing (click sets `activeShapeID`)
+
+**Resolution palette in LAYERS section**
+
+Move resolution controls from the tool strip into the LAYERS section. The section should include:
+- Rows / cols fields (live)
+- A palette of preset resolutions (4×4, 6×6, 8×8, 12×12, 16×16, 20×20, 32×32) shown as clickable chips
+- A `+` button to add the current rows×cols to the palette
+- Project / Library tabs so the user can save resolution presets globally
+
+**Motion palette detail in right panel (Option C)**
+
+The right panel should adapt based on left panel context:
+
+- When a **cell is selected**: show a cell inspector with all four axis assignments (style, motion, shape, path), each as a mini-picker
+- When **no cell is selected** and a palette item is active: show the detail panel for the active palette item (e.g. motion set parameters — preset, speed, amount, phase, orderChaos)
+- When **nothing active**: show a contextual hint
+
+The ORDER/CHAOS, MOTION, and SEQUENCE sections were removed from QuickAdjustView in the 4-axis refactor. Their controls will reappear in the right panel's motion palette detail view when a motion set is selected in the left panel.
+
+**Scope:** large — roughly 5–8 days for full left panel restructure + motion palette detail + right panel Option C wiring.
+
+---
+
 ### Summary Table
 
 | Area | Item | Depends on |
 |---|---|---|
+| **UI** | Motion palette UI (MOTIONS section in left panel) | 4-axis model ✓ |
+| **UI** | Right panel Option C (4-axis cell inspector / palette detail) | 4-axis model ✓ |
+| **UI** | Resolution palette in LAYERS section | — |
+| **UI** | SEQUENCE cycling UI (shape cycling in motion set) | Motion palette UI |
 | **Rendering** | Subdivision integration (polygon-level warp) | — |
 | **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | — |
 | **Rendering** | Animated style thumbnails | — |
