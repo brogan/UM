@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -1816,41 +1816,49 @@ var camera: UMCamera = .identity  // project-level
 
 ---
 
-### 15.9 Left Panel Restructure and Motion Palette UI
+### 15.9 Left Panel Restructure and Motion Palette UI ✓ Built 2026-06-20
 
-The 4-axis model data is built (§12.3), but the UI for selecting and managing motion sets does not yet exist. This is the highest-priority pending UI work.
+**What was built (2026-06-19 + 2026-06-20)**
 
-**Left panel restructure**
+The full 4-axis UI is now implemented across the left panel and the right panel:
 
-The Style Palette should be reorganised so all four palette axes are equally accessible:
+**Left panel (StylePaletteView)**
 
-- **LAYERS** section — existing; add resolution preset palette (see below)
-- **STYLES** section — existing; render-only (fill, stroke, mode)
-- **MOTIONS** section — new; lists `projectMotionSets`; click a row to set `activeMotionID`; `+` to add, delete, promote/import
-- **PATHS** section — existing
-- **SHAPES** section — existing (click sets `activeShapeID`)
+- **LAYERS** section — layer CRUD, visibility, opacity slider, parallax slider, drag-to-reorder, rename ✓
+  - Resolution preset chips embedded in section (4×4 through 32×32 + project presets) ✓
+- **STYLES** section — full CRUD, variants, library promote/import ✓
+- **MOTIONS** section ✓ — lists `projectMotionSets`; click to set `activeMotionID` (highlighted row); click highlighted row again to deselect; double-click name to rename; `+` New Motion; ↑ promote to library; delete via context menu
+- **PATHS** section — full CRUD, keyframe count badge, library promote/import ✓
+- **SHAPES** section — import, library promote/import, click to set `activeShapeID` ✓
+- **PALETTES** section — generate from color map, library promote/import ✓
 
-**Resolution palette in LAYERS section**
+**Right panel (QuickAdjustView)**
 
-Move resolution controls from the tool strip into the LAYERS section. The section should include:
-- Rows / cols fields (live)
-- A palette of preset resolutions (4×4, 6×6, 8×8, 12×12, 16×16, 20×20, 32×32) shown as clickable chips
-- A `+` button to add the current rows×cols to the palette
-- Project / Library tabs so the user can save resolution presets globally
+- **MOTION section** (when `activeMotionSet != nil`): Preset, Speed, Amount, Phase, Order/Chaos ✓
+  - **SEQUENCE subsection** ✓: Sequence Mode picker (Off / Sequential / Random); Step field (frames per shape, 1–480); shape slot list (per-slot shape picker + − remove button; + Add Shape button)
+- **PLACE & TIME section** — all four axis pickers now present ✓:
+  - Style, Motion, Shape, Path — each a Picker over the project palette for that axis; shows focused-cell value, writes to all selected cells via `assignXxxToSelection`
 
-**Motion palette detail in right panel (partial — built 2026-06-19)**
+**Model changes (2026-06-20)**
 
-A MOTION section now appears in QuickAdjustView when `controller.activeMotionSet != nil` (i.e. when a motion set row is selected in the left MOTIONS palette). It exposes Preset, Speed, Amount, Phase, and Order/Chaos — the full set of `UMMotionSet` parameters. This is an incremental partial implementation of Option C; the full version requires left panel restructure (below).
+`UMMotionSet` gained:
+```swift
+public enum SequenceMode: String, Codable, CaseIterable, Sendable {
+    case off, sequential, random
+}
+public var sequenceMode: SequenceMode  // default .off
+public var shapeIDs: [UUID]            // shapes to cycle through; omitted from JSON when empty
+```
 
-Full Option C would adapt the right panel based on left panel context:
+`resolveSequenceShapeID(motionSet:cellShapeID:frame:phaseOffset:)` — pure function in `GridScrollUtils.swift` applied at all three render paths (CG accumulation, live canvas, FrameCapture/export) before `resolvePolygons`.
 
-- When a **cell is selected**: show a cell inspector with all four axis assignments (style, motion, shape, path), each as a mini-picker
-- When **no cell is selected** and a palette item is active: show the detail panel for the active palette item (e.g. motion set parameters — preset, speed, amount, phase, orderChaos)
-- When **nothing active**: show a contextual hint
+**What remains (still pending)**
 
-SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUENCE cycling is re-introduced as a `UMMotionSet` feature.
+- **Full right-panel context-switching** — when a STYLE or SHAPE palette item is active and no cell is selected, the right panel could show a dedicated detail section for that item (currently only MOTION does this). Medium scope.
+- **"Nothing active" hint** — a contextual hint row shown when nothing is selected and no palette item is active.
+- **Resolution palette Project/Library tabs** — the preset chips exist in the LAYERS section but there is no separate library tab for saving/loading resolution presets globally. Small scope.
 
-**Remaining scope for full Option C:** medium-large — roughly 4–6 days (left panel restructure + full right panel context-switching + SEQUENCE re-integration).
+---
 
 ---
 
@@ -2113,10 +2121,11 @@ Phase A can be started immediately alongside Phase 2 oscillator wiring. Phase B 
 
 | Area | Item | Depends on |
 |---|---|---|
-| **UI** | Motion palette UI (MOTIONS section in left panel) | 4-axis model ✓ |
-| **UI** | Right panel Option C (4-axis cell inspector / palette detail) — MOTION section partial ✓ | 4-axis model ✓ |
-| **UI** | Resolution palette in LAYERS section | — |
-| **UI** | SEQUENCE cycling UI (shape cycling in motion set) | Motion palette UI |
+| **UI** | Motion palette UI (MOTIONS section in left panel) | ✓ Built 2026-06-20 |
+| **UI** | 4-axis cell inspector in PLACE & TIME (Style, Motion, Shape, Path pickers) | ✓ Built 2026-06-20 |
+| **UI** | SEQUENCE cycling (motion set shapeIDs + mode + step) | ✓ Built 2026-06-20 |
+| **UI** | Full right-panel context-switching (Style/Shape detail when those palette items active) | 4-axis model ✓ |
+| **UI** | Resolution palette Project/Library tabs (global presets) | — |
 | **Rendering** | Subdivision integration (polygon-level warp) | — |
 | **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | — |
 | **Rendering** | Animated style thumbnails | — |

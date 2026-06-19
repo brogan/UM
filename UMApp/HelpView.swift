@@ -789,14 +789,36 @@ private let qaMotionBody = #"""
 <h2>Using motion sets</h2>
 <p>Motion sets work like the other three palette axes:</p>
 <ol class="steps">
-  <li>Create a new motion set in the MOTIONS section of the Style Palette (Project tab).</li>
-  <li>It becomes the active motion selection — highlighted in the palette.</li>
-  <li>Paint cells with the Draw or Fill tool. Each new cell captures the active motion set ID.</li>
-  <li>Cells painted with this motion set animate according to its preset and Order/Chaos value.</li>
-  <li>Click a different motion set row to change the active selection. Previously painted cells are unaffected.</li>
+  <li>Open the <strong>MOTIONS</strong> section in the Style Palette (Project tab).</li>
+  <li>Click <strong>+ New Motion</strong> to create a motion set. It becomes the active motion — highlighted in the palette.</li>
+  <li>Click the motion set row in the MOTIONS section to select it. The <strong>MOTION</strong> section appears in Quick Adjust on the right, showing Preset, Speed, Amount, Phase, and Order/Chaos controls.</li>
+  <li>Edit the parameters. Changes take effect immediately on all cells that carry this motion set.</li>
+  <li>Paint cells with the Draw or Fill tool. Each new cell captures the active motion set.</li>
+  <li>To assign an existing motion set to already-drawn cells, select those cells and choose the motion set from the <strong>Motion</strong> picker in PLACE &amp; TIME.</li>
   <li>Click the highlighted row again to deselect — new cells will be painted with no motion (Static).</li>
 </ol>
-<div class="warn"><strong>Motion palette UI is not yet built</strong> — the MOTIONS section in the left panel and the motion detail editor in the right panel are pending. The data model and rendering are complete; the controls to edit motion sets will appear in a future update. See <a href="um-help://help/pending">Not Yet Built</a>.</div>
+
+<h2>SEQUENCE cycling</h2>
+<p>A motion set can cycle through a list of shapes over time, so each cell that carries this motion set automatically switches geometry on a schedule. This replaces the old per-style SEQUENCE mode with a more flexible, palette-based version.</p>
+
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><strong>Sequence</strong></td><td>Off (default), Sequential, or Random. Off means each cell uses its own assigned shape. Sequential steps through the list in order. Random picks deterministically from the list each step.</td></tr>
+  <tr><td><strong>Step</strong></td><td>How many frames each shape holds before advancing. Range: 1–480 fr. Works with the cell's phaseOffset so cells staggered by phase appear to be at different points in the sequence.</td></tr>
+  <tr><td><strong>Shape slots</strong></td><td>The ordered list of shapes the sequence cycles through. Each slot has a shape picker; use − to remove a slot and + Add Shape to append one.</td></tr>
+</table>
+
+<h3>Step-by-step: shape cycling on a motion set</h3>
+<ol class="steps">
+  <li>Import at least two shapes via the SHAPES section of the Style Palette (+ Import Shape…).</li>
+  <li>Select the motion set you want to add cycling to by clicking its row in MOTIONS. The MOTION section appears in Quick Adjust.</li>
+  <li>Scroll down to the <strong>Sequence</strong> picker inside MOTION and choose <strong>Sequential</strong>.</li>
+  <li>Set <strong>Step</strong> to the number of frames each shape should hold (e.g. 12 for half a second at 24 fps).</li>
+  <li>Click <strong>+ Add Shape</strong> (appears below Sequence and Step). A new shape slot appears — pick a shape from the dropdown.</li>
+  <li>Click <strong>+ Add Shape</strong> again and pick the second shape. Repeat for as many shapes as needed.</li>
+  <li>Press <kbd>Space</kbd> to play. Cells carrying this motion set will cycle through the shapes on schedule. Cells with different phase offsets will be at different points in the cycle simultaneously.</li>
+</ol>
+<div class="note"><strong>Sequence overrides per-cell shape</strong> — when Sequence mode is not Off, the motion set's shape list takes priority over whatever shape is assigned to each cell individually. To disable cycling, set Sequence back to Off.</div>
 """#
 
 private let qaPathBody = #"""
@@ -873,36 +895,52 @@ private let qaPathBody = #"""
 
 private let qaPlaceBody = #"""
 <h1>Quick Adjust: PLACE &amp; TIME</h1>
-<p class="subtitle">Edit the spatial position, animation phase, scale, rotation, and path assignment of selected cells.</p>
+<p class="subtitle">Edit all four axis assignments and the spatial, temporal, scale, and rotation properties of selected cells.</p>
 
 <p>All PLACE &amp; TIME controls apply simultaneously to every <strong>selected cell</strong>. Select cells first using the Select tool or Nudge tool, then edit here. When multiple cells with different values are selected, each control shows the value of the first selected cell — editing applies to all.</p>
 
+<h2>Four-axis assignment pickers</h2>
+<p>The top of PLACE &amp; TIME contains a picker for each of the four creative axes. These let you reassign any axis on selected cells after they have been painted:</p>
+
 <table>
   <tr><th>Field</th><th>Description</th></tr>
-  <tr><td><strong>Style</strong></td><td>Reassigns every selected cell to the chosen style immediately.</td></tr>
+  <tr><td><strong>Style</strong></td><td>Reassigns every selected cell to the chosen style. Affects rendering: fill, stroke, mode.</td></tr>
+  <tr><td><strong>Motion</strong></td><td>Assigns a motion set to the selected cells. Choose — to remove the motion assignment (cells revert to Static). Affects parametric animation: preset, speed, amount, Order/Chaos, SEQUENCE cycling.</td></tr>
+  <tr><td><strong>Shape</strong></td><td>Assigns a shape (Loom polygon set) to the selected cells. Choose — to remove it (cells revert to the default built-in shape). Note: when the assigned motion set has Sequence mode active, the motion set's shape list takes precedence over this per-cell assignment.</td></tr>
   <tr><td><strong>Path</strong></td><td>Assigns a keyframe motion path to the selected cells. Choose None to remove the path assignment.</td></tr>
-  <tr><td><strong>Offset X / Y</strong></td><td>The position offset of the selected cell(s) in reference pixels. Positive X = right; positive Y = down.</td></tr>
-  <tr><td><strong>Phase</strong></td><td>The phaseOffset in frames. The cell evaluates its animation at currentFrame + phaseOffset. Applies to both the parametric motion preset and the keyframe path.</td></tr>
-  <tr><td><strong>Scale X / Y</strong></td><td>Resting-pose size (0.1 – 3.0, double-click to reset to 1.0). Multiplicative with animated scale from the motion preset and path. X and Y are linked by default — click the link icon to unlock for non-uniform scaling.</td></tr>
-  <tr><td><strong>Rotation</strong></td><td>Resting-pose rotation (−180° to +180°, double-click to reset to 0°). Animated rotation from MOTION and PATH EDITOR is added on top.</td></tr>
-  <tr><td><strong>Rescatter</strong></td><td>Re-randomises positionOffset for each selected cell using the current Scatter amount, and re-assigns phaseOffset using the current Phase Policy.</td></tr>
+</table>
+
+<h3>Step-by-step: reassigning an axis on existing cells</h3>
+<ol class="steps">
+  <li>Switch to the <strong>Select</strong> tool (<kbd>S</kbd>) and rubber-band or click to select the cells you want to change.</li>
+  <li>In PLACE &amp; TIME, open the picker for the axis you want to change (Style, Motion, Shape, or Path).</li>
+  <li>Choose the new value. All selected cells update immediately — the change is undoable with <kbd>⌘Z</kbd>.</li>
+</ol>
+
+<h2>Spatial and temporal properties</h2>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><strong>Offset X / Y</strong></td><td>Position offset in reference pixels. Positive X = right; positive Y = down.</td></tr>
+  <tr><td><strong>Phase</strong></td><td>The phaseOffset in frames. The cell evaluates its animation at currentFrame + phaseOffset. Applies to the parametric motion preset, the keyframe path, and SEQUENCE cycling — cells with higher phase are further along in every cycle.</td></tr>
+  <tr><td><strong>Scale X / Y</strong></td><td>Resting-pose size (0.1 – 3.0, double-click to reset to 1.0). Multiplicative with animated scale from the motion preset and path. X and Y are linked by default — click the link icon to unlock.</td></tr>
+  <tr><td><strong>Rotation</strong></td><td>Resting-pose rotation (−180° to +180°, double-click to reset to 0°). Animated rotation from MOTION and PATH EDITOR adds on top.</td></tr>
+  <tr><td><strong>Rescatter</strong></td><td>Re-randomises positionOffset and re-assigns phaseOffset using the current Scatter and Phase Policy settings.</td></tr>
 </table>
 
 <h3>Phase offset vs motion phase</h3>
 <p>These are two different things that are easy to confuse:</p>
 <ul>
-  <li><strong>Phase offset</strong> (here in PLACE &amp; TIME) — shifts <em>when</em> a cell's animation begins. Cell A at offset 0 and Cell B at offset 24 are always 24 frames apart in their animation cycle.</li>
-  <li><strong>Motion phase</strong> (in the MOTION section) — shifts the starting point <em>within</em> the oscillation waveform of the parametric preset. It is a per-style design parameter that affects all cells using that style equally.</li>
+  <li><strong>Phase offset</strong> (here in PLACE &amp; TIME) — shifts <em>when</em> a cell's animation begins. Cell A at offset 0 and Cell B at offset 24 are always 24 frames apart in every cycle — the parametric preset, the path loop, and the SEQUENCE shape cycle.</li>
+  <li><strong>Motion phase</strong> (in the MOTION section) — shifts the starting point <em>within</em> the oscillation waveform of the parametric preset. It is a per-motion-set design parameter that affects all cells using that motion set equally.</li>
 </ul>
 
 <h3>Rescatter workflow</h3>
 <ol class="steps">
-  <li>Select the cells you want to re-randomise (rubber-band with Select, or Select All with <kbd>⌘A</kbd>).</li>
+  <li>Select the cells you want to re-randomise (rubber-band with Select, or <kbd>⌘A</kbd> for all).</li>
   <li>Set the Scatter slider in the Tool Strip to the desired scatter amount.</li>
   <li>Set the Phase Policy to the desired policy.</li>
   <li>Click <strong>Rescatter</strong>. Position offsets and phase offsets are re-randomised immediately.</li>
 </ol>
-<p>This is useful when you've painted a composition with Synchronized policy and want to add variety without repainting, or when you want to "un-lock-step" a region that came out too uniform.</p>
 """#
 
 private let paletteBody = #"""
@@ -938,13 +976,14 @@ private let paletteBody = #"""
 </table>
 
 <h3>MOTIONS</h3>
-<p>Motion sets control animation: parametric preset, speed, amount, phase, and Order/Chaos. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. Click the highlighted row again to deselect (new cells will be painted with no motion — Static).</p>
+<p>Motion sets control animation: parametric preset, speed, amount, phase, Order/Chaos, and SEQUENCE shape cycling. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. The <strong>MOTION</strong> section in Quick Adjust (right panel) shows its parameters immediately.</p>
 <ul>
   <li><strong>+ New Motion</strong> — adds a blank motion set (Static preset, all defaults).</li>
   <li><strong>↑ button</strong> — saves a copy to the global library.</li>
   <li><strong>Double-click the name</strong> — rename inline.</li>
+  <li><strong>Right-click</strong> — Rename, Save to Library, Delete Motion.</li>
 </ul>
-<div class="note"><strong>Motion detail editing</strong> — the controls to edit a motion set's preset, speed, amount, phase, and Order/Chaos value are pending (not yet in this build). See <a href="um-help://help/pending">Not Yet Built</a>. The motion set data is stored correctly and rendered — only the editing UI is missing.</div>
+<div class="tip"><strong>Editing a motion set</strong> — click the motion set row to select it, then adjust Preset, Speed, Amount, Phase, Order/Chaos, and SEQUENCE settings in the <strong>MOTION</strong> section of Quick Adjust on the right. Changes apply immediately to all cells that carry this motion set. See <a href="um-help://help/qa-motion">Motion Palette</a> for the full guide.</div>
 
 <h3>PATHS</h3>
 <p>Click a path row to make it the <strong>active path</strong> for editing — its keyframes appear in the PATH EDITOR section of Quick Adjust, and the path overlay appears on the canvas. Click the highlighted row again to deselect it (newly drawn cells will have no path assignment).</p>
@@ -964,7 +1003,7 @@ private let paletteBody = #"""
 </ul>
 <p>Right-click: <strong>Delete Shape</strong> removes it from the project. Any cells that referenced this shape fall back to the default geometry.</p>
 
-<div class="note"><strong>One shape per cell</strong> — each cell now carries a single direct shape reference (the 4-axis model). The old system where multiple shapes were assigned to a style for SEQUENCE cycling has been replaced. Shape cycling over time will be re-introduced as a motion set feature in a future update.</div>
+<div class="tip"><strong>Shape cycling over time</strong> — to cycle through multiple shapes on a schedule, use the SEQUENCE feature in the <strong>MOTION</strong> section: add shape slots to a motion set, set a step interval, and choose Sequential or Random mode. The motion set's shape list overrides the per-cell shape during playback. See <a href="um-help://help/qa-motion">Motion Palette → SEQUENCE cycling</a>.</div>
 
 <h3>PALETTES</h3>
 <p>Colour palettes are sets of swatches sampled from a Color Map source. They provide a way to apply coherent, image-sourced colours to your styles through the palette picker in the RENDER section.</p>
@@ -1182,10 +1221,8 @@ private let pendingBody = #"""
 
 <table>
   <tr><th>Area</th><th>Feature</th><th>Notes</th></tr>
-  <tr><td>Motion palette</td><td>MOTIONS section UI in left panel</td><td>The motion set data model and rendering are complete (four-axis model). What's missing is the UI: a MOTIONS list in the left panel with + New, rename, delete, promote-to-library — and a detail editor in the right panel for preset, speed, amount, phase, and Order/Chaos.</td></tr>
-  <tr><td>Motion palette</td><td>Right panel cell inspector (Option C)</td><td>When a cell is selected, the right panel should show all four axis assignments (style, motion, shape, path) as mini-pickers. When nothing is selected and a palette item is active, it should show the detail editor for that item. Currently the right panel always shows Quick Adjust sections.</td></tr>
-  <tr><td>Motion palette</td><td>Shape cycling (SEQUENCE) in motion sets</td><td>The old per-style SEQUENCE mode (sequential/all/random cycling through multiple shapes) was removed in the four-axis refactor. It will be re-introduced as a property of motion sets — a motion set will be able to cycle through a list of shapes over time.</td></tr>
-  <tr><td>Left panel</td><td>Resolution palette in LAYERS section</td><td>Resolution controls are currently in the tool strip. Plan: move them into the LAYERS section with a palette of clickable preset chips (4×4, 6×6, 8×8…), a + button to save the current size, and Project/Library tabs for global presets.</td></tr>
+  <tr><td>Right panel</td><td>Full palette-context right panel (Style / Shape detail sections)</td><td>When a STYLE or SHAPE palette item is active and no cell is selected, the right panel could show a dedicated detail section for that item. Currently only the MOTION section appears when a motion set is active. Style detail (RENDER) and Shape detail are not yet context-switched in — you must select cells and edit via PLACE &amp; TIME instead.</td></tr>
+  <tr><td>Left panel</td><td>Resolution preset library (global tabs)</td><td>The LAYERS section already shows preset resolution chips (4×4 through 32×32) and project-saved presets. What's missing is a Library tab to save resolution presets globally across projects.</td></tr>
   <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed but not yet wired.</td></tr>
   <tr><td>Rendering</td><td>Full Loom render modes</td><td>Brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of geometry). Current build: Filled, Stroked, Fill &amp; Stroke only.</td></tr>
   <tr><td>Rendering</td><td>Animated style thumbnails</td><td>Style rows in the palette show a static coloured dot. Live animated miniature previews are planned.</td></tr>
