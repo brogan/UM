@@ -21,25 +21,31 @@ final class UMLayerState: Identifiable {
     var parallaxFactor: Double
     var layerOffset: UMVectorDriver
     var opacityDriver: UMDoubleDriver
+    var gridScrollDriver: UMVectorDriver
+    var gridScrollMode: GridScrollMode
     var engine: UMGridEngine
     var activeStyleID: UUID?
 
     init(layer: UMLayer) {
-        self.id            = layer.id
-        self.name          = layer.name
-        self.isVisible     = layer.isVisible
-        self.opacity       = layer.opacity
-        self.parallaxFactor = layer.parallaxFactor
-        self.layerOffset    = layer.layerOffset
-        self.opacityDriver  = layer.opacityDriver
-        self.engine        = UMGridEngine(document: layer.document)
-        self.activeStyleID = layer.document.styles.first?.id
+        self.id               = layer.id
+        self.name             = layer.name
+        self.isVisible        = layer.isVisible
+        self.opacity          = layer.opacity
+        self.parallaxFactor   = layer.parallaxFactor
+        self.layerOffset      = layer.layerOffset
+        self.opacityDriver    = layer.opacityDriver
+        self.gridScrollDriver = layer.gridScrollDriver
+        self.gridScrollMode   = layer.gridScrollMode
+        self.engine           = UMGridEngine(document: layer.document)
+        self.activeStyleID    = layer.document.styles.first?.id
     }
 
     func toUMLayer() -> UMLayer {
         UMLayer(id: id, name: name, isVisible: isVisible, opacity: opacity,
                 parallaxFactor: parallaxFactor, layerOffset: layerOffset,
-                opacityDriver: opacityDriver, document: engine.document)
+                opacityDriver: opacityDriver,
+                gridScrollDriver: gridScrollDriver, gridScrollMode: gridScrollMode,
+                document: engine.document)
     }
 }
 
@@ -119,6 +125,8 @@ final class AppController {
                                               parallaxFactor: src.parallaxFactor,
                                               layerOffset: src.layerOffset,
                                               opacityDriver: src.opacityDriver,
+                                              gridScrollDriver: src.gridScrollDriver,
+                                              gridScrollMode: src.gridScrollMode,
                                               document: src.engine.document))
         // Give the duplicate its own engine; reload the same color source if present.
         let dupEngine = UMColorMapEngine()
@@ -523,9 +531,12 @@ final class AppController {
             var timeline: [UMTimelineState]
             var colorSource: UMColorSource?
             // Added in v4; optional for backward compat
-            var parallaxFactor: Double?
-            var layerOffset:    UMVectorDriver?
-            var opacityDriver:  UMDoubleDriver?
+            var parallaxFactor:   Double?
+            var layerOffset:      UMVectorDriver?
+            var opacityDriver:    UMDoubleDriver?
+            // Added in v6; optional for backward compat
+            var gridScrollDriver: UMVectorDriver?
+            var gridScrollMode:   GridScrollMode?
         }
         var version: Int
         var activeLayerIndex: Int
@@ -717,9 +728,11 @@ final class AppController {
                     paths:         ls.engine.document.paths,
                     timeline:      ls.engine.document.timeline,
                     colorSource:   ls.engine.document.colorSource,
-                    parallaxFactor: ls.parallaxFactor,
-                    layerOffset:   ls.layerOffset,
-                    opacityDriver: ls.opacityDriver
+                    parallaxFactor:   ls.parallaxFactor,
+                    layerOffset:      ls.layerOffset,
+                    opacityDriver:    ls.opacityDriver,
+                    gridScrollDriver: ls.gridScrollDriver,
+                    gridScrollMode:   ls.gridScrollMode
                 )
             },
             camera: camera,
@@ -781,10 +794,12 @@ final class AppController {
                 name:          record.name,
                 isVisible:     record.isVisible,
                 opacity:       record.opacity,
-                parallaxFactor: record.parallaxFactor ?? 1.0,
-                layerOffset:   record.layerOffset    ?? .zero,
-                opacityDriver: record.opacityDriver  ?? UMDoubleDriver(mode: .constant, base: record.opacity),
-                document:      doc
+                parallaxFactor:   record.parallaxFactor  ?? 1.0,
+                layerOffset:      record.layerOffset     ?? .zero,
+                opacityDriver:    record.opacityDriver   ?? UMDoubleDriver(mode: .constant, base: record.opacity),
+                gridScrollDriver: record.gridScrollDriver ?? .zero,
+                gridScrollMode:   record.gridScrollMode   ?? .wrap,
+                document:         doc
             )
             let ls = UMLayerState(layer: layer)
             ls.activeStyleID = record.activeStyleID ?? styles.first?.id

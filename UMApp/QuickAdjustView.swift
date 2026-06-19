@@ -50,7 +50,8 @@ struct QuickAdjustView: View {
     @State private var pathCollapsed       = false
     @State private var advancedCollapsed   = true
     @State private var exportCollapsed     = false
-    @State private var cameraCollapsed     = false
+    @State private var cameraCollapsed      = false
+    @State private var gridScrollCollapsed  = true
     @State private var kfInspectorCollapsed = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
@@ -66,6 +67,7 @@ struct QuickAdjustView: View {
                     projectSection
                     canvasSection
                     cameraSection
+                    gridScrollSection
                     exportSection
                     placeTimeSection
                     renderSection
@@ -353,6 +355,163 @@ struct QuickAdjustView: View {
 
     // MARK: - Camera section
 
+    // MARK: - Grid Scroll section
+
+    @ViewBuilder
+    private var gridScrollSection: some View {
+        let ls = controller.layerStates[safe: controller.activeLayerIndex]
+        InspectorSection("GRID SCROLL", isCollapsed: $gridScrollCollapsed) {
+            // Edge mode
+            InspectorField("Edge Mode") {
+                Picker("", selection: Binding(
+                    get: { ls?.gridScrollMode ?? .wrap },
+                    set: { ls?.gridScrollMode = $0 }
+                )) {
+                    ForEach(GridScrollMode.allCases, id: \.self) {
+                        Text($0.rawValue.capitalized).tag($0)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 100)
+            }
+            // Driver mode
+            InspectorField("Mode") {
+                Picker("", selection: Binding(
+                    get: { ls?.gridScrollDriver.mode ?? .constant },
+                    set: { ls?.gridScrollDriver.mode = $0 }
+                )) {
+                    ForEach(UMVectorDriverMode.allCases, id: \.self) {
+                        Text($0.displayName).tag($0)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            // Mode-specific fields
+            switch ls?.gridScrollDriver.mode ?? .constant {
+            case .constant:
+                InspectorField("Scroll X") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.base.x ?? 0 },
+                        set: { ls?.gridScrollDriver.base.x = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                    Text("cells").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Scroll Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.base.y ?? 0 },
+                        set: { ls?.gridScrollDriver.base.y = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                    Text("cells").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .oscillator:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorAmplitude.x ?? 0 },
+                        set: { ls?.gridScrollDriver.oscillatorAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorAmplitude.y ?? 0 },
+                        set: { ls?.gridScrollDriver.oscillatorAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorPeriod ?? 2 },
+                        set: { ls?.gridScrollDriver.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorPhase ?? 0 },
+                        set: { ls?.gridScrollDriver.oscillatorPhase = $0 }
+                    ), in: 0...1).frame(maxWidth: 100)
+                }
+                InspectorField("Offset X") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorOffset.x ?? 0 },
+                        set: { ls?.gridScrollDriver.oscillatorOffset.x = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Offset Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.oscillatorOffset.y ?? 0 },
+                        set: { ls?.gridScrollDriver.oscillatorOffset.y = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+            case .jitter:
+                InspectorField("Range X") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.jitterRange.x ?? 1 },
+                        set: { ls?.gridScrollDriver.jitterRange.x = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Range Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.jitterRange.y ?? 1 },
+                        set: { ls?.gridScrollDriver.jitterRange.y = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.jitterDuration ?? 12 },
+                        set: { ls?.gridScrollDriver.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.noiseAmplitude.x ?? 1 },
+                        set: { ls?.gridScrollDriver.noiseAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.noiseAmplitude.y ?? 1 },
+                        set: { ls?.gridScrollDriver.noiseAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                }
+                InspectorField("Freq") {
+                    TextField("", value: Binding(
+                        get: { ls?.gridScrollDriver.noiseFrequency ?? 0.5 },
+                        set: { ls?.gridScrollDriver.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 64)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                InspectorField("") {
+                    Text("Set keyframes in timeline")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+            // Reset button
+            InspectorField("") {
+                Button("Reset") {
+                    ls?.gridScrollDriver = .zero
+                    ls?.gridScrollMode   = .wrap
+                }
+                .font(.system(size: 11))
+            }
+        }
+    }
+
+    // MARK: - Camera section
+
     private var cameraSection: some View {
         @Bindable var ctrl = controller
         return InspectorSection("CAMERA", isCollapsed: $cameraCollapsed) {
@@ -433,9 +592,7 @@ struct QuickAdjustView: View {
         InspectorField("Lane") { Text(sel.lane.label).font(.system(size: 11)).foregroundStyle(.secondary) }
         InspectorField("Frame") {
             TextField("", value: Binding(
-                get: { sel.lane == .opacity
-                    ? (ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.frame ?? 0)
-                    : (ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.frame ?? 0) },
+                get: { layerKFFrame(ls: ls, sel: sel) },
                 set: { newF in moveLayerKF(sel: sel, toFrame: max(0, newF)) }
             ), format: .number)
             .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 54)
@@ -463,16 +620,50 @@ struct QuickAdjustView: View {
                     set: { v in ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.value.y = v }
                 ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
             }
+        case .gridScroll:
+            InspectorField("Scroll X") {
+                TextField("", value: Binding(
+                    get: { ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.value.x ?? 0 },
+                    set: { v in ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.value.x = v }
+                ), format: .number.precision(.fractionLength(2)))
+                .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
+            InspectorField("Scroll Y") {
+                TextField("", value: Binding(
+                    get: { ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.value.y ?? 0 },
+                    set: { v in ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.value.y = v }
+                ), format: .number.precision(.fractionLength(2)))
+                .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
         }
         easingField(
-            get: { sel.lane == .opacity
-                ? (ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut)
-                : (ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut) },
-            set: { e in
-                if sel.lane == .opacity { ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing = e }
-                else { ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing = e }
-            }
+            get: { layerKFEasing(ls: ls, sel: sel) },
+            set: { e in setLayerKFEasing(ls: ls, sel: sel, easing: e) }
         )
+    }
+
+    private func layerKFFrame(ls: UMLayerState?, sel: UMTimelineKFSelection) -> Int {
+        switch sel.lane {
+        case .opacity:    return ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        case .offset:     return ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        case .gridScroll: return ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        }
+    }
+
+    private func layerKFEasing(ls: UMLayerState?, sel: UMTimelineKFSelection) -> PathEasing {
+        switch sel.lane {
+        case .opacity:    return ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut
+        case .offset:     return ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut
+        case .gridScroll: return ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut
+        }
+    }
+
+    private func setLayerKFEasing(ls: UMLayerState?, sel: UMTimelineKFSelection, easing: PathEasing) {
+        switch sel.lane {
+        case .opacity:    ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        case .offset:     ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        case .gridScroll: ls?.gridScrollDriver.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        }
     }
 
     @ViewBuilder
@@ -549,6 +740,13 @@ struct QuickAdjustView: View {
             ls.layerOffset.keyframes[sel.keyframeIdx].frame = newFrame
             ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
             if let idx = ls.layerOffset.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: sel.layerIndex, lane: sel.lane, keyframeIdx: idx)
+            }
+        case .gridScroll:
+            guard sel.keyframeIdx < ls.gridScrollDriver.keyframes.count else { return }
+            ls.gridScrollDriver.keyframes[sel.keyframeIdx].frame = newFrame
+            ls.gridScrollDriver.keyframes.sort { $0.frame < $1.frame }
+            if let idx = ls.gridScrollDriver.keyframes.firstIndex(where: { $0.frame == newFrame }) {
                 controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: sel.layerIndex, lane: sel.lane, keyframeIdx: idx)
             }
         }

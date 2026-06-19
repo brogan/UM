@@ -34,7 +34,7 @@ private struct CameraKFHit: Equatable {
 
 private struct TLSnapshot {
     var camera: UMCamera
-    var layers: [(id: UUID, opacity: UMDoubleDriver, offset: UMVectorDriver)]
+    var layers: [(id: UUID, opacity: UMDoubleDriver, offset: UMVectorDriver, gridScroll: UMVectorDriver)]
 }
 
 // MARK: - UMTimelinePanel
@@ -296,9 +296,13 @@ struct UMTimelinePanel: View {
 
         case .layerLane(let i, let lane):
             let ls = controller.layerStates[i]
-            let isEnabled: Bool = lane == .opacity
-                ? ls.opacityDriver.mode != .constant
-                : ls.layerOffset.mode  != .constant
+            let isEnabled: Bool = {
+                switch lane {
+                case .opacity:    return ls.opacityDriver.mode    != .constant
+                case .offset:     return ls.layerOffset.mode      != .constant
+                case .gridScroll: return ls.gridScrollDriver.mode != .constant
+                }
+            }()
             laneHeaderRow(label: lane.label, color: lane.color, isEnabled: isEnabled,
                           onHide: { hiddenLanes.insert(layerLaneID(ls.id, lane)) })
         }
@@ -479,7 +483,9 @@ struct UMTimelinePanel: View {
 
             case .layerSummary(let i):
                 let ls = controller.layerStates[i]
-                let allFrames = Set(ls.opacityDriver.keyframes.map(\.frame) + ls.layerOffset.keyframes.map(\.frame))
+                let allFrames = Set(ls.opacityDriver.keyframes.map(\.frame)
+                                  + ls.layerOffset.keyframes.map(\.frame)
+                                  + ls.gridScrollDriver.keyframes.map(\.frame))
                 for frame in allFrames {
                     let x = CGFloat(frame) * px - CGFloat(hOffset)
                     guard x > -8 && x < size.width + 8 else { continue }
@@ -729,6 +735,9 @@ struct UMTimelinePanel: View {
                 case .offset:
                     guard let kf = ls.layerOffset.keyframes[safe: ki] else { continue }
                     items.append(.layerOffset(layerIndex: i, frameOffset: offset, value: kf.value, easing: kf.easing))
+                case .gridScroll:
+                    guard let kf = ls.gridScrollDriver.keyframes[safe: ki] else { continue }
+                    items.append(.layerGridScroll(layerIndex: i, frameOffset: offset, value: kf.value, easing: kf.easing))
                 }
             case .camera(let lane, let ki):
                 let frames = lane.keyframeFrames(from: controller.camera)
@@ -778,6 +787,16 @@ struct UMTimelinePanel: View {
                 ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
                 if let ki = ls.layerOffset.keyframes.firstIndex(where: { $0.frame == f }) {
                     selectedItems.insert(.layer(layerIndex: i, lane: .offset, keyframeIdx: ki))
+                }
+            case .layerGridScroll(let i, let offset, let value, let easing):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                let f = base + offset
+                ls.gridScrollDriver.mode = .keyframe
+                ls.gridScrollDriver.keyframes.removeAll { $0.frame == f }
+                ls.gridScrollDriver.keyframes.append(UMVectorKeyframe(frame: f, value: value, easing: easing))
+                ls.gridScrollDriver.keyframes.sort { $0.frame < $1.frame }
+                if let ki = ls.gridScrollDriver.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.layer(layerIndex: i, lane: .gridScroll, keyframeIdx: ki))
                 }
             case .cameraPan(let offset, let value, let easing):
                 let f = base + offset
@@ -834,6 +853,14 @@ struct UMTimelinePanel: View {
             d.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
             d.keyframes.sort { $0.frame < $1.frame }
             ls.layerOffset = d
+        case .gridScroll:
+            let val = DriverEvaluator.evaluate(ls.gridScrollDriver, frame: frame)
+            var d   = ls.gridScrollDriver
+            d.mode  = .keyframe
+            d.keyframes.removeAll { $0.frame == frame }
+            d.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
+            d.keyframes.sort { $0.frame < $1.frame }
+            ls.gridScrollDriver = d
         }
         let frames = lane.keyframeFrames(from: ls)
         if let idx = frames.firstIndex(of: frame) {
@@ -885,6 +912,10 @@ struct UMTimelinePanel: View {
             guard hit.keyframeIdx < ls.layerOffset.keyframes.count else { return }
             ls.layerOffset.keyframes[hit.keyframeIdx].frame = newFrame
             ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
+        case .gridScroll:
+            guard hit.keyframeIdx < ls.gridScrollDriver.keyframes.count else { return }
+            ls.gridScrollDriver.keyframes[hit.keyframeIdx].frame = newFrame
+            ls.gridScrollDriver.keyframes.sort { $0.frame < $1.frame }
         }
         let frames = hit.lane.keyframeFrames(from: ls)
         if let idx = frames.firstIndex(of: newFrame) {
@@ -947,6 +978,10 @@ struct UMTimelinePanel: View {
                     guard ki < ls.layerOffset.keyframes.count else { continue }
                     ls.layerOffset.keyframes.remove(at: ki)
                     if ls.layerOffset.keyframes.isEmpty { ls.layerOffset.mode = .constant }
+                case .gridScroll:
+                    guard ki < ls.gridScrollDriver.keyframes.count else { continue }
+                    ls.gridScrollDriver.keyframes.remove(at: ki)
+                    if ls.gridScrollDriver.keyframes.isEmpty { ls.gridScrollDriver.mode = .constant }
                 }
             case .camera(let lane, let ki):
                 switch lane {
@@ -1052,7 +1087,9 @@ struct UMTimelinePanel: View {
     private func recordUndo() {
         let snap = TLSnapshot(
             camera: controller.camera,
-            layers: controller.layerStates.map { (id: $0.id, opacity: $0.opacityDriver, offset: $0.layerOffset) }
+            layers: controller.layerStates.map {
+                (id: $0.id, opacity: $0.opacityDriver, offset: $0.layerOffset, gridScroll: $0.gridScrollDriver)
+            }
         )
         undoStack.append(snap)
         if undoStack.count > 50 { undoStack.removeFirst(undoStack.count - 50) }
@@ -1063,8 +1100,9 @@ struct UMTimelinePanel: View {
         controller.camera = snap.camera
         for item in snap.layers {
             guard let ls = controller.layerStates.first(where: { $0.id == item.id }) else { continue }
-            ls.opacityDriver = item.opacity
-            ls.layerOffset   = item.offset
+            ls.opacityDriver    = item.opacity
+            ls.layerOffset      = item.offset
+            ls.gridScrollDriver = item.gridScroll
         }
         clearSelection()
     }

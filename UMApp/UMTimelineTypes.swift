@@ -5,28 +5,32 @@ import UMEngine
 
 /// Driver lanes exposed per layer in the keyframe timeline.
 enum UMTimelineLane: Int, CaseIterable, Hashable {
-    case opacity = 0
-    case offset  = 1
+    case opacity    = 0
+    case offset     = 1
+    case gridScroll = 2
 
     var label: String {
         switch self {
-        case .opacity: return "Opacity"
-        case .offset:  return "Offset"
+        case .opacity:    return "Opacity"
+        case .offset:     return "Offset"
+        case .gridScroll: return "Scroll"
         }
     }
 
     var color: Color {
         switch self {
-        case .opacity: return .pink
-        case .offset:  return .blue
+        case .opacity:    return .pink
+        case .offset:     return .blue
+        case .gridScroll: return .orange
         }
     }
 
     @MainActor
     func keyframeFrames(from layer: UMLayerState) -> [Int] {
         switch self {
-        case .opacity: return layer.opacityDriver.keyframes.map(\.frame)
-        case .offset:  return layer.layerOffset.keyframes.map(\.frame)
+        case .opacity:    return layer.opacityDriver.keyframes.map(\.frame)
+        case .offset:     return layer.layerOffset.keyframes.map(\.frame)
+        case .gridScroll: return layer.gridScrollDriver.keyframes.map(\.frame)
         }
     }
 }
@@ -89,11 +93,12 @@ struct UMTimelineMarker: Codable, Identifiable {
 
 struct UMKFClipboard {
     enum Item {
-        case layerOpacity(layerIndex: Int, frameOffset: Int, value: Double,  easing: PathEasing)
-        case layerOffset( layerIndex: Int, frameOffset: Int, value: UMVec2,  easing: PathEasing)
-        case cameraPan(   frameOffset: Int, value: UMVec2,  easing: PathEasing)
-        case cameraZoom(  frameOffset: Int, value: Double,  easing: PathEasing)
-        case cameraRotation(frameOffset: Int, value: Double, easing: PathEasing)
+        case layerOpacity(   layerIndex: Int, frameOffset: Int, value: Double, easing: PathEasing)
+        case layerOffset(    layerIndex: Int, frameOffset: Int, value: UMVec2, easing: PathEasing)
+        case layerGridScroll(layerIndex: Int, frameOffset: Int, value: UMVec2, easing: PathEasing)
+        case cameraPan(      frameOffset: Int, value: UMVec2,  easing: PathEasing)
+        case cameraZoom(     frameOffset: Int, value: Double,  easing: PathEasing)
+        case cameraRotation( frameOffset: Int, value: Double,  easing: PathEasing)
     }
     var items:       [Item]
     var anchorFrame: Int

@@ -1,5 +1,12 @@
 import Foundation
 
+/// How the grid scroll behaves at its edges.
+public enum GridScrollMode: String, Codable, CaseIterable, Sendable {
+    case wrap    // toroidal: cells that exit one edge re-enter from the opposite edge
+    case consume // cells that exit are gone; vacated positions are empty
+    case clamp   // scroll stops at the boundary; edge cells pin in place
+}
+
 /// One sprite layer in a composition. Each layer owns an independent grid document
 /// (its own rows/cols, cells, styles, paths, shapes) and renders into the shared canvas
 /// area at a given opacity. Layers are composited bottom-to-top.
@@ -21,26 +28,35 @@ public struct UMLayer: Codable, Identifiable, Sendable {
     /// Non-constant modes override the opacity slider.
     public var opacityDriver: UMDoubleDriver
 
+    /// Tank-tread grid scroll, expressed in cell units (1.0 = one full cell width/height).
+    public var gridScrollDriver: UMVectorDriver
+    /// Edge behaviour when the scroll moves cells past the grid boundary.
+    public var gridScrollMode: GridScrollMode
+
     public var document:  UMGridDocument
 
     public init(
-        id:            UUID            = UUID(),
-        name:          String          = "Layer",
-        isVisible:     Bool            = true,
-        opacity:       Double          = 1.0,
-        parallaxFactor: Double         = 1.0,
-        layerOffset:   UMVectorDriver    = .zero,
-        opacityDriver: UMDoubleDriver    = .one,
-        document:      UMGridDocument  = UMGridDocument.makeDefault()
+        id:              UUID            = UUID(),
+        name:            String          = "Layer",
+        isVisible:       Bool            = true,
+        opacity:         Double          = 1.0,
+        parallaxFactor:  Double          = 1.0,
+        layerOffset:     UMVectorDriver  = .zero,
+        opacityDriver:   UMDoubleDriver  = .one,
+        gridScrollDriver: UMVectorDriver = .zero,
+        gridScrollMode:  GridScrollMode  = .wrap,
+        document:        UMGridDocument  = UMGridDocument.makeDefault()
     ) {
-        self.id            = id
-        self.name          = name
-        self.isVisible     = isVisible
-        self.opacity       = opacity
-        self.parallaxFactor = parallaxFactor
-        self.layerOffset   = layerOffset
-        self.opacityDriver  = opacityDriver
-        self.document      = document
+        self.id               = id
+        self.name             = name
+        self.isVisible        = isVisible
+        self.opacity          = opacity
+        self.parallaxFactor   = parallaxFactor
+        self.layerOffset      = layerOffset
+        self.opacityDriver    = opacityDriver
+        self.gridScrollDriver = gridScrollDriver
+        self.gridScrollMode   = gridScrollMode
+        self.document         = document
     }
 
     // MARK: - Codable (backward-compatible: new fields use decodeIfPresent)
@@ -48,17 +64,20 @@ public struct UMLayer: Codable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, isVisible, opacity, document
         case parallaxFactor, layerOffset, opacityDriver
+        case gridScrollDriver, gridScrollMode
     }
 
     public init(from decoder: Decoder) throws {
         let c          = try decoder.container(keyedBy: CodingKeys.self)
-        id             = try c.decode(UUID.self,          forKey: .id)
-        name           = try c.decode(String.self,        forKey: .name)
-        isVisible      = try c.decode(Bool.self,          forKey: .isVisible)
-        opacity        = try c.decode(Double.self,        forKey: .opacity)
+        id             = try c.decode(UUID.self,           forKey: .id)
+        name           = try c.decode(String.self,         forKey: .name)
+        isVisible      = try c.decode(Bool.self,           forKey: .isVisible)
+        opacity        = try c.decode(Double.self,         forKey: .opacity)
         document       = try c.decode(UMGridDocument.self, forKey: .document)
-        parallaxFactor = try c.decodeIfPresent(Double.self,        forKey: .parallaxFactor) ?? 1.0
-        layerOffset    = try c.decodeIfPresent(UMVectorDriver.self,   forKey: .layerOffset)   ?? .zero
+        parallaxFactor    = try c.decodeIfPresent(Double.self,        forKey: .parallaxFactor)    ?? 1.0
+        layerOffset       = try c.decodeIfPresent(UMVectorDriver.self, forKey: .layerOffset)      ?? .zero
+        gridScrollDriver  = try c.decodeIfPresent(UMVectorDriver.self, forKey: .gridScrollDriver) ?? .zero
+        gridScrollMode    = try c.decodeIfPresent(GridScrollMode.self, forKey: .gridScrollMode)   ?? .wrap
         // Backward compat: existing files have no opacityDriver; seed from opacity
         if let od = try c.decodeIfPresent(UMDoubleDriver.self, forKey: .opacityDriver) {
             opacityDriver = od
@@ -69,13 +88,15 @@ public struct UMLayer: Codable, Identifiable, Sendable {
 
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(id,             forKey: .id)
-        try c.encode(name,           forKey: .name)
-        try c.encode(isVisible,      forKey: .isVisible)
-        try c.encode(opacity,        forKey: .opacity)
-        try c.encode(document,       forKey: .document)
-        try c.encode(parallaxFactor, forKey: .parallaxFactor)
-        try c.encode(layerOffset,    forKey: .layerOffset)
-        try c.encode(opacityDriver,  forKey: .opacityDriver)
+        try c.encode(id,               forKey: .id)
+        try c.encode(name,             forKey: .name)
+        try c.encode(isVisible,        forKey: .isVisible)
+        try c.encode(opacity,          forKey: .opacity)
+        try c.encode(document,         forKey: .document)
+        try c.encode(parallaxFactor,   forKey: .parallaxFactor)
+        try c.encode(layerOffset,      forKey: .layerOffset)
+        try c.encode(opacityDriver,    forKey: .opacityDriver)
+        try c.encode(gridScrollDriver, forKey: .gridScrollDriver)
+        try c.encode(gridScrollMode,   forKey: .gridScrollMode)
     }
 }

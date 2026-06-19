@@ -27,6 +27,7 @@
 		AA000042000000000000001A /* ColorPalettePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000043000000000000001A /* ColorPalettePickerView.swift */; };
 		AA000044000000000000001A /* UMTimelineTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000045000000000000001A /* UMTimelineTypes.swift */; };
 		AA000046000000000000001A /* UMTimelinePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000047000000000000001A /* UMTimelinePanel.swift */; };
+		AA000048000000000000001A /* GridScrollUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000049000000000000001A /* GridScrollUtils.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -49,6 +50,7 @@
 		AA000043000000000000001A /* ColorPalettePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColorPalettePickerView.swift; sourceTree = "<group>"; };
 		AA000045000000000000001A /* UMTimelineTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMTimelineTypes.swift; sourceTree = "<group>"; };
 		AA000047000000000000001A /* UMTimelinePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMTimelinePanel.swift; sourceTree = "<group>"; };
+		AA000049000000000000001A /* GridScrollUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridScrollUtils.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +101,7 @@
 				AA000043000000000000001A /* ColorPalettePickerView.swift */,
 				AA000045000000000000001A /* UMTimelineTypes.swift */,
 				AA000047000000000000001A /* UMTimelinePanel.swift */,
+				AA000049000000000000001A /* GridScrollUtils.swift */,
 				AA000009000000000000001A /* Assets.xcassets */,
 				AA000031000000000000001A /* polygonSets */,
 			);
@@ -199,6 +202,7 @@
 				AA000042000000000000001A /* ColorPalettePickerView.swift in Sources */,
 				AA000044000000000000001A /* UMTimelineTypes.swift in Sources */,
 				AA000046000000000000001A /* UMTimelinePanel.swift in Sources */,
+				AA000048000000000000001A /* GridScrollUtils.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

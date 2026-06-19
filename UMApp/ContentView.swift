@@ -246,6 +246,9 @@ private struct LayerAccumulationData: @unchecked Sendable {
     let cellH: Double
     let scaleX: Double
     let scaleY: Double
+    // Grid scroll
+    let gridScrollDriver: UMVectorDriver
+    let gridScrollMode: GridScrollMode
 }
 
 private struct AccumulationSnapshot: @unchecked Sendable {
@@ -315,9 +318,16 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     let pathMap   = Dictionary(uniqueKeysWithValues: layer.paths.map   { ($0.id, $0) })
     let motionMap = Dictionary(uniqueKeysWithValues: snap.projectMotionSets.map { ($0.id, $0) })
 
-    for cell in layer.cells where cell.isDrawn {
-        let r         = cell.gridIndex / layer.config.cols
-        let c         = cell.gridIndex % layer.config.cols
+    let cgScroll = DriverEvaluator.evaluate(layer.gridScrollDriver, frame: snap.frame)
+    let cgFracX  = cgScroll.x - floor(cgScroll.x)
+    let cgFracY  = cgScroll.y - floor(cgScroll.y)
+    let cgSpecs  = gridScrollRenderSpecs(cells: layer.cells, scroll: cgScroll,
+                                          mode: layer.gridScrollMode,
+                                          rows: layer.config.rows, cols: layer.config.cols)
+    for spec in cgSpecs {
+        let cell      = spec.cell
+        let r         = spec.displayRow
+        let c         = spec.displayCol
         let style     = styleMap[cell.styleID]
         let motionSet = cell.motionID.flatMap { motionMap[$0] }
         let path      = cell.pathID.flatMap { pathMap[$0] }
@@ -329,8 +339,8 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
             applyColorMap(grid[r][c], source: src, style: style, to: &motion)
         }
 
-        let mx = (Double(c) * cellW + cellW/2 + cell.positionOffset.dx * layer.scaleX + motion.dx) * dsf
-        let my = (Double(r) * cellH + cellH/2 + cell.positionOffset.dy * layer.scaleY + motion.dy) * dsf
+        let mx = (Double(c) * cellW + cellW/2 - cgFracX * cellW + cell.positionOffset.dx * layer.scaleX + motion.dx) * dsf
+        let my = (Double(r) * cellH + cellH/2 - cgFracY * cellH + cell.positionOffset.dy * layer.scaleY + motion.dy) * dsf
 
         let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
         let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
@@ -471,12 +481,20 @@ struct GridCanvasPlaceholder: View {
                                                            parallaxFactor: ls.parallaxFactor,
                                                            layerOffset: lLayerOff,
                                                            canvasW: gridW, canvasH: gridH)
+                        let lScroll    = DriverEvaluator.evaluate(ls.gridScrollDriver, frame: currentFrame)
+                        let lFracX     = lScroll.x - floor(lScroll.x)
+                        let lFracY     = lScroll.y - floor(lScroll.y)
+                        let lSpecs     = gridScrollRenderSpecs(
+                            cells: ls.engine.document.cells, scroll: lScroll,
+                            mode: ls.gridScrollMode,
+                            rows: lConfig.rows, cols: lConfig.cols)
                         ctx.drawLayer { layerCtx in
                             layerCtx.opacity = lOpacity
                             if !lLayerXF.isIdentity { layerCtx.concatenate(lLayerXF) }
-                            for cell in ls.engine.document.cells where cell.isDrawn {
-                                let r         = cell.gridIndex / lConfig.cols
-                                let c         = cell.gridIndex % lConfig.cols
+                            for spec in lSpecs {
+                                let cell      = spec.cell
+                                let r         = spec.displayRow
+                                let c         = spec.displayCol
                                 let style     = lStyleMap[cell.styleID]
                                 let motionSet = cell.motionID.flatMap { lMotionMap[$0] }
                                 let path      = cell.pathID.flatMap { lPathMap[$0] }
@@ -492,8 +510,8 @@ struct GridCanvasPlaceholder: View {
                                           r < grid.count, c < grid[r].count {
                                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                                 }
-                                let mx = Double(c) * lCellW + lCellW / 2 + cell.positionOffset.dx * lScaleX + motion.dx
-                                let my = Double(r) * lCellH + lCellH / 2 + cell.positionOffset.dy * lScaleY + motion.dy
+                                let mx = Double(c) * lCellW + lCellW / 2 - lFracX * lCellW + cell.positionOffset.dx * lScaleX + motion.dx
+                                let my = Double(r) * lCellH + lCellH / 2 - lFracY * lCellH + cell.positionOffset.dy * lScaleY + motion.dy
                                 let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
 
                                 let polygons = resolvePolygons(shapeID: cell.shapeID,
@@ -700,7 +718,9 @@ struct GridCanvasPlaceholder: View {
                                     loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop),
                                 cellW: lCellW, cellH: lCellH,
                                 scaleX: lCellW / lConfig.cellWidth,
-                                scaleY: lCellH / lConfig.cellHeight
+                                scaleY: lCellH / lConfig.cellHeight,
+                                gridScrollDriver: ls.gridScrollDriver,
+                                gridScrollMode:   ls.gridScrollMode
                             )
                         },
                         previousBuffer:    controller.frameBuffer,
@@ -1049,6 +1069,8 @@ struct FrameCapture: View {
     var strokeScale: Double = 1.0
     var drawBackground: Bool = true
     var layerTransform: CGAffineTransform = .identity
+    var gridScrollDriver: UMVectorDriver = .zero
+    var gridScrollMode: GridScrollMode = .wrap
 
     var body: some View {
         Canvas { ctx, size in
@@ -1071,10 +1093,17 @@ struct FrameCapture: View {
             let styleMap  = Dictionary(uniqueKeysWithValues: styles.map         { ($0.id, $0) })
             let pathMap   = Dictionary(uniqueKeysWithValues: motionPaths.map    { ($0.id, $0) })
             let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
+            let fcScroll  = DriverEvaluator.evaluate(gridScrollDriver, frame: currentFrame)
+            let fcFracX   = fcScroll.x - floor(fcScroll.x)
+            let fcFracY   = fcScroll.y - floor(fcScroll.y)
+            let fcSpecs   = gridScrollRenderSpecs(cells: cells, scroll: fcScroll,
+                                                   mode: gridScrollMode,
+                                                   rows: config.rows, cols: config.cols)
 
-            for cell in cells where cell.isDrawn {
-                let r         = cell.gridIndex / config.cols
-                let c         = cell.gridIndex % config.cols
+            for spec in fcSpecs {
+                let cell      = spec.cell
+                let r         = spec.displayRow
+                let c         = spec.displayCol
                 let style     = styleMap[cell.styleID]
                 let motionSet = cell.motionID.flatMap { motionMap[$0] }
                 let path      = cell.pathID.flatMap { pathMap[$0] }
@@ -1091,8 +1120,8 @@ struct FrameCapture: View {
                           r < grid.count, c < grid[r].count {
                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                 }
-                let mx = Double(c) * cellW + cellW / 2 + cell.positionOffset.dx * scaleX + motion.dx
-                let my = Double(r) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY + motion.dy
+                let mx = Double(c) * cellW + cellW / 2 - fcFracX * cellW + cell.positionOffset.dx * scaleX + motion.dx
+                let my = Double(r) * cellH + cellH / 2 - fcFracY * cellH + cell.positionOffset.dy * scaleY + motion.dy
                 let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
                 let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
@@ -1277,7 +1306,9 @@ func umRenderComposited(
             colorSource:       ls.engine.document.colorSource,
             strokeScale:       strokeScale,
             drawBackground:    false,
-            layerTransform:    layerXF
+            layerTransform:    layerXF,
+            gridScrollDriver:  ls.gridScrollDriver,
+            gridScrollMode:    ls.gridScrollMode
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {

@@ -232,7 +232,9 @@ enum UMVideoExporter {
             colorSource:       layer.document.colorSource,
             strokeScale:       strokeScale,
             drawBackground:    false,
-            layerTransform:    layerXF
+            layerTransform:    layerXF,
+            gridScrollDriver:  layer.gridScrollDriver,
+            gridScrollMode:    layer.gridScrollMode
         ))
         renderer.scale = 1.0
         return renderer.cgImage
