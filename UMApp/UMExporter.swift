@@ -176,7 +176,7 @@ enum UMVideoExporter {
                                           exportW: exportW, exportH: exportH,
                                           strokeScale: strokeScale,
                                           cameraFrame: cameraFrame) {
-                ctx.setAlpha(layer.opacity)
+                ctx.setAlpha(DriverEvaluator.evaluate(layer.opacityDriver, frame: frame))
                 ctx.draw(img, in: destRect)
                 ctx.setAlpha(1.0)
             }

@@ -461,7 +461,7 @@ struct GridCanvasPlaceholder: View {
                             animationFrame: currentFrame,
                             loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop)
                         let lColorSrc  = ls.engine.document.colorSource
-                        let lOpacity   = ls.opacity
+                        let lOpacity   = DriverEvaluator.evaluate(ls.opacityDriver, frame: currentFrame)
 
                         let lMotionMap = Dictionary(uniqueKeysWithValues: controller.projectMotionSets.map { ($0.id, $0) })
                         let lLayerOff  = DriverEvaluator.evaluate(ls.layerOffset, frame: currentFrame)
@@ -1279,7 +1279,7 @@ func umRenderComposited(
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {
-            ctx.setAlpha(ls.opacity)
+            ctx.setAlpha(DriverEvaluator.evaluate(ls.opacityDriver, frame: frame))
             ctx.draw(img, in: destRect)
             ctx.setAlpha(1.0)
         }
@@ -1292,9 +1292,25 @@ func umRenderComposited(
 
 struct TransportBarView: View {
     @Environment(AppController.self) private var controller
-    @State private var showTimeline = false
+    @State private var showTimeline      = false
+    @State private var isScrubbing       = false
+    @State private var scrubValue        = 0.0
+    @State private var wasPlayingBefore  = false
 
     var body: some View {
+        VStack(spacing: 0) {
+            mainRow
+            if controller.showScrubBar {
+                scrubRow
+            }
+        }
+        .sheet(isPresented: $showTimeline) {
+            TimelineView()
+                .environment(controller)
+        }
+    }
+
+    private var mainRow: some View {
         HStack(spacing: 8) {
             // Rewind
             Button(action: { controller.rewindToStart() }) {
@@ -1326,12 +1342,51 @@ struct TransportBarView: View {
             .help(controller.isRecording ? "Stop recording" : "Record timeline states")
 
             // Frame counter
-            Text("\(controller.engine.currentFrame) fr")
+            Text("\(controller.engine.currentFrame)")
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundStyle(.secondary)
-                .frame(width: 52, alignment: .leading)
+                .frame(width: 40, alignment: .trailing)
 
-            // Timeline navigation (shown when states have been recorded)
+            // Start / End fields
+            HStack(spacing: 3) {
+                Text("S")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                TextField("", value: Binding(
+                    get: { controller.startFrame },
+                    set: { controller.startFrame = max(0, $0) }
+                ), format: .number)
+                .textFieldStyle(.squareBorder)
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 44)
+                .help("Start frame")
+
+                Text("E")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                TextField("", value: Binding(
+                    get: { controller.endFrame },
+                    set: { controller.endFrame = max(1, $0) }
+                ), format: .number)
+                .textFieldStyle(.squareBorder)
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 44)
+                .help("End frame")
+            }
+
+            // Scrub bar toggle
+            Button {
+                controller.showScrubBar.toggle()
+            } label: {
+                Image(systemName: controller.showScrubBar ? "slider.horizontal.below.rectangle" : "slider.horizontal.below.rectangle")
+                    .font(.system(size: 12))
+                    .frame(width: 18)
+                    .foregroundStyle(controller.showScrubBar ? Color.accentColor : Color.secondary)
+            }
+            .buttonStyle(.plain)
+            .help(controller.showScrubBar ? "Hide scrub bar" : "Show scrub bar")
+
+            // Timeline navigation (shown when cut states have been recorded)
             if !controller.engine.document.timeline.isEmpty {
                 Divider().frame(height: 14)
 
@@ -1351,7 +1406,7 @@ struct TransportBarView: View {
                         .foregroundStyle(pos < 0 ? Color.secondary : Color.primary)
                 }
                 .buttonStyle(.plain)
-                .help("Open timeline editor")
+                .help("Open cut timeline editor")
 
                 Button(action: { controller.stepTimeline(forward: true) }) {
                     Image(systemName: "chevron.right")
@@ -1405,9 +1460,46 @@ struct TransportBarView: View {
                 }
             }
         }
-        .sheet(isPresented: $showTimeline) {
-            TimelineView()
-                .environment(controller)
+        .padding(.horizontal, 8)
+    }
+
+    private var scrubRow: some View {
+        let maxF = Double(controller.maxScrubFrames)
+        let displayFrame = isScrubbing ? Int(scrubValue) : controller.engine.currentFrame
+        return HStack(spacing: 6) {
+            Text("\(displayFrame)")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .trailing)
+            Slider(
+                value: Binding(
+                    get: { isScrubbing ? scrubValue : Double(controller.engine.currentFrame) },
+                    set: { v in
+                        scrubValue = v
+                        controller.seekToFrame(Int(v.rounded()))
+                    }
+                ),
+                in: Double(controller.startFrame)...max(Double(controller.startFrame) + 1, maxF),
+                onEditingChanged: { editing in
+                    isScrubbing = editing
+                    if editing {
+                        wasPlayingBefore = controller.isPlaying
+                        if controller.isPlaying { controller.togglePlayback() }
+                    } else {
+                        if wasPlayingBefore { controller.togglePlayback() }
+                    }
+                }
+            )
+            Text("\(Int(maxF))")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .frame(width: 40, alignment: .leading)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 20)
+        .background(Color(NSColor.windowBackgroundColor))
+        .onChange(of: controller.engine.currentFrame) { _, val in
+            if !isScrubbing { scrubValue = Double(val) }
         }
     }
 }

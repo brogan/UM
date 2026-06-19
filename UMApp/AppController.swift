@@ -178,6 +178,21 @@ final class AppController {
     // MARK: Camera
     var camera: UMCamera = .identity
 
+    // MARK: Timeline panel state
+    var isTimelineCollapsed: Bool  = true
+    var showScrubBar: Bool         = false
+    var startFrame: Int            = 0
+    var endFrame: Int              = 240
+    var selectedTimelineKF: UMTimelineKFSelection? = nil
+    var selectedCameraKF:   UMCameraKFSelection?   = nil
+
+    var maxScrubFrames: Int { endFrame > 0 ? endFrame : 240 }
+
+    func seekToFrame(_ f: Int) {
+        let clamped = max(0, min(maxScrubFrames, f))
+        for ls in layerStates { ls.engine.seek(toFrame: clamped) }
+    }
+
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
 
