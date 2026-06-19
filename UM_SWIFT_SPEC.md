@@ -573,6 +573,9 @@ The project is saved as a directory package (`.umproj/`) containing:
 config.json               ← v3: layerStates + projectMotionSets + projectStyles + projectShapes (by ref)
 shapes/
     <uuid>.json           ← individual UMShape geometry JSON files
+colorSources/
+    backdrop.jpg          ← color map files copied in on load or first save
+    clouds.mp4
 renders/
     stills/
     animations/
@@ -1142,23 +1145,26 @@ The color map is a **project-level layer that sits above the style system**. Sty
 // In UMGridDocument
 var colorSource: UMColorSource?
 
-struct UMColorSource: Codable, Identifiable, Sendable {
-    var id:                 UUID
-    var name:               String
-    var type:               ColorSourceType     // .staticImage | .video
-    var relativeFilePath:   String?             // relative to .umproj file; nil = cleared
-    var applyTo:            ColorApplyTarget    // .fill | .stroke | .fillAndStroke
-    var preserveStyleAlpha: Bool                // when true, sampled color alpha is ignored;
-                                                // style fill/stroke alpha is kept instead
-    var videoLoopMode:      VideoLoopMode       // .loop | .clamp | .pingPong
+// UMEngine/Sources/UMEngine/Style/UMColorSource.swift
+public struct UMColorSource: Codable, Sendable, Equatable {
+    public var filePath:           String    // absolute path, resolved at load time; legacy fallback
+    public var relativeFilePath:   String?   // filename within project's colorSources/ dir (preferred)
+    public var applyTo:            ColorApplyTarget
+    public var preserveStyleAlpha: Bool
+    public var videoLoopMode:      VideoLoopMode
 }
 
-enum ColorSourceType:  String, Codable, Sendable { case staticImage, video }
-enum ColorApplyTarget: String, Codable, Sendable { case fill, stroke, fillAndStroke }
-enum VideoLoopMode:    String, Codable, Sendable { case loop, clamp, pingPong }
+public enum ColorApplyTarget: String, Codable, Sendable, CaseIterable { case fill, stroke, fillAndStroke }
+public enum VideoLoopMode:    String, Codable, Sendable, CaseIterable { case loop, clamp }
 ```
 
-The file itself (image or video) is **never embedded in the JSON**. The path stored is relative to the `.umproj` file so that projects remain portable when their folder is moved. The runtime layer (`UMColorMapEngine`) holds the loaded assets and the sampled color grids.
+The file is **never embedded in the JSON**. When a project is saved as a `.umproj` package:
+- If a color source was loaded while the project was already saved, it is copied into `colorSources/` immediately on load and `relativeFilePath` is set to the destination filename (e.g. `"backdrop.jpg"`).
+- If loaded before the project was first saved, it is copied on first save.
+- `relativeFilePath` stores just the filename — the `colorSources/` directory prefix is implied. At read time, each layer's `filePath` is patched to the resolved absolute URL so the rest of the code never needs to know about the directory convention.
+- Legacy projects with no `relativeFilePath` fall back to the stored absolute `filePath`.
+
+The runtime layer (`UMColorMapEngine`) holds the loaded assets and sampled color grids.
 
 #### Runtime layer: `UMColorMapEngine`
 
@@ -1345,16 +1351,16 @@ The section header shows a coloured dot (sampled center-cell color) when a color
 
 #### File storage
 
-Color source files are stored relative to the project:
+Color source files are copied into the project package and referenced by filename:
 
 ```
-MyProject.umproj
-colorSources/
-    backdrop.jpg
-    clouds.mp4
+MyProject.umproj/
+    colorSources/
+        backdrop.jpg
+        clouds.mp4
 ```
 
-`UMColorSource.relativeFilePath` stores the path component only (e.g. `"colorSources/backdrop.jpg"`). On save, UM copies the chosen file into the `colorSources/` directory if it is not already there. This keeps the project self-contained.
+`UMColorSource.relativeFilePath` stores the filename only (e.g. `"backdrop.jpg"`). The `colorSources/` prefix is implied. On pick (if the project is saved) or on first save (if picked beforehand), UM copies the file into `colorSources/` and sets `relativeFilePath`. Projects are self-contained — the source file travels with the `.umproj` directory.
 
 #### Per-style color map opt-out (future extension)
 

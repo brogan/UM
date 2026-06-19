@@ -633,7 +633,7 @@ private let qaProjectBody = #"""
 <h3>How sampling works</h3>
 <p>UM draws the source image into a tiny <em>rows × cols</em> pixel buffer using GPU-accelerated bilinear downscaling — one pixel per grid cell. The resulting pixel value is the average colour of all source pixels in that cell's region. A 4K source image sampled into a 6×6 grid takes microseconds.</p>
 <p>When the grid is resampled (resolution change), the colour source is automatically re-sampled at the new grid dimensions — no reload needed.</p>
-<div class="warn"><strong>File paths</strong> — the color source file is referenced by absolute path, not embedded in the .umproj. If you share the project or move it to another machine, copy the source file alongside it and reload it via Choose….</div>
+<div class="tip"><strong>Projects are self-contained</strong> — when you choose a color source, UM copies the file into a <code>colorSources/</code> folder inside the .umproj package. The project can be moved, renamed, or shared and the color source travels with it automatically.</div>
 """#
 
 private let qaStyleBody = #"""
