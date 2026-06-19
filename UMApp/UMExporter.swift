@@ -19,7 +19,7 @@ enum UMVideoExporter {
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
-        colorMapEngine: UMColorMapEngine,
+        colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
         frameCount: Int,
@@ -74,7 +74,7 @@ enum UMVideoExporter {
                 shapePolygonMap:   shapePolygonMap,
                 fallbackPolygons:  fallbackPolygons,
                 projectMotionSets: projectMotionSets,
-                colorMapEngine:    colorMapEngine,
+                colorMapEngines:   colorMapEngines,
                 backgroundDraw:    backgroundDraw,
                 stretchSprites:    stretchSprites,
                 frame:             frameIndex,
@@ -134,7 +134,7 @@ enum UMVideoExporter {
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
-        colorMapEngine: UMColorMapEngine,
+        colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
         frame: Int,
@@ -166,7 +166,7 @@ enum UMVideoExporter {
                                           shapePolygonMap: shapePolygonMap,
                                           fallbackPolygons: fallbackPolygons,
                                           projectMotionSets: projectMotionSets,
-                                          colorMapEngine: colorMapEngine,
+                                          colorMapEngine: colorMapEngines[layer.id],
                                           stretchSprites: stretchSprites,
                                           frame: frame,
                                           exportW: exportW, exportH: exportH,
@@ -186,7 +186,7 @@ enum UMVideoExporter {
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
-        colorMapEngine: UMColorMapEngine,
+        colorMapEngine: UMColorMapEngine?,
         stretchSprites: Bool,
         frame: Int,
         exportW: Double,
@@ -199,7 +199,7 @@ enum UMVideoExporter {
         let sx     = cellW / config.cellWidth
         let sy     = cellH / config.cellHeight
         let loopMode  = layer.document.colorSource?.videoLoopMode ?? .loop
-        let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
+        let colorGrid = colorMapEngine?.currentGrid(animationFrame: frame, loopMode: loopMode)
 
         let renderer = ImageRenderer(content: FrameCapture(
             existingBuffer:    nil,

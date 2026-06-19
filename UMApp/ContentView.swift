@@ -456,7 +456,7 @@ struct GridCanvasPlaceholder: View {
                             ls.engine.document.styles.map { ($0.id, $0) })
                         let lPathMap  = Dictionary(uniqueKeysWithValues:
                             ls.engine.document.paths.map { ($0.id, $0) })
-                        let lColorGrid = controller.colorMapEngine.currentGrid(
+                        let lColorGrid = controller.colorMapEngine(forLayerID: ls.id)?.currentGrid(
                             animationFrame: currentFrame,
                             loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop)
                         let lColorSrc  = ls.engine.document.colorSource
@@ -683,7 +683,7 @@ struct GridCanvasPlaceholder: View {
                                 config:      lConfig,
                                 opacity:     ls.opacity,
                                 colorSource: ls.engine.document.colorSource,
-                                colorGrid:   controller.colorMapEngine.currentGrid(
+                                colorGrid:   controller.colorMapEngine(forLayerID: ls.id)?.currentGrid(
                                     animationFrame: currentFrame,
                                     loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop),
                                 cellW: lCellW, cellH: lCellH,
@@ -1173,7 +1173,7 @@ func umRenderComposited(
     shapePolygonMap: [UUID: [Polygon2D]],
     fallbackPolygons: [Polygon2D],
     projectMotionSets: [UMMotionSet],
-    colorMapEngine: UMColorMapEngine,
+    colorMapEngines: [UUID: UMColorMapEngine],
     backgroundDraw: Bool,
     stretchSprites: Bool,
     frame: Int,
@@ -1208,7 +1208,7 @@ func umRenderComposited(
         let lSX     = lCellW / lConfig.cellWidth
         let lSY     = lCellH / lConfig.cellHeight
         let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
-        let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
+        let colorGrid = colorMapEngines[ls.id]?.currentGrid(animationFrame: frame, loopMode: loopMode)
 
         // Render layer cells on transparent background (drawBackground: false)
         let renderer = ImageRenderer(content: FrameCapture(

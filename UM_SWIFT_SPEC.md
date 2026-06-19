@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -736,7 +736,6 @@ Tap a row to switch the active layer. Drag a row to reorder layers (an accent-co
 
 #### Current limitations (deferred to §15.8)
 
-- All layers share the global `colorMapEngine` (no per-layer color maps)
 - No layer blend modes beyond normal (opacity)
 - No animated layer opacity
 - No camera/parallax or depth ordering — see §15.8
@@ -1139,9 +1138,9 @@ Features deferred for future implementation, recorded here to preserve intent an
 
 **Why:** Static style colors are adequate for solid-color compositions but cannot produce the spatially-varying, image-sourced palettes that are one of UM's most distinctive creative capabilities. The original Java UM supported both static images and per-frame image sequences. The Swift version should extend this to video, which avoids the file-management burden of numbered image sequences while being more expressive (smooth color changes, temporal colour sampling at sub-frame precision).
 
-#### Design principle: compositor layer, not style property
+#### Design principle: per-layer compositor, not style property
 
-The color map is a **project-level layer that sits above the style system**. Styles define character — shape, render mode, stroke width, alpha, motion preset — and the color map overrides the color component of that character at render time. This means:
+The color map is a **per-layer compositor that sits above the style system**. Each layer owns its own `UMColorMapEngine`; layers without a loaded color source are unaffected by any other layer's engine. Styles define character — shape, render mode, stroke width, alpha, motion preset — and the color map overrides the color component of that character at render time. This means:
 
 - `CellStyle` requires no changes for basic color map support
 - All drawn cells are equally affected by an active color map by default
@@ -1173,7 +1172,18 @@ The file is **never embedded in the JSON**. When a project is saved as a `.umpro
 - `relativeFilePath` stores just the filename — the `colorSources/` directory prefix is implied. At read time, each layer's `filePath` is patched to the resolved absolute URL so the rest of the code never needs to know about the directory convention.
 - Legacy projects with no `relativeFilePath` fall back to the stored absolute `filePath`.
 
-The runtime layer (`UMColorMapEngine`) holds the loaded assets and sampled color grids.
+The runtime layer (`UMColorMapEngine`) holds the loaded assets and sampled color grids. Each layer has its own engine, stored in `AppController`:
+
+```swift
+// Per-layer engines keyed by layer UUID
+var layerColorMapEngines: [UUID: UMColorMapEngine] = [:]
+// Active layer's engine — what the UI binds to; swapped on layer switch
+var colorMapEngine: UMColorMapEngine = UMColorMapEngine()
+// Render-time accessor used by the canvas loop and exporters
+func colorMapEngine(forLayerID id: UUID) -> UMColorMapEngine? { layerColorMapEngines[id] }
+```
+
+On project load, a `UMColorMapEngine` is created and (if `colorSource` is set) loaded for every layer. When the user switches layers, `colorMapEngine` is swapped to the incoming layer's engine so all existing UI controls (load, clear, resample, palette generation) continue to operate on the active layer's engine without change.
 
 #### Runtime layer: `UMColorMapEngine`
 
@@ -1312,11 +1322,15 @@ In the canvas draw loop, after `computeMotion()` returns a `SpriteMotion`, injec
 ```swift
 // existing: let motion = computeMotion(style: style, path: path, ...)
 
-if let colorMap = controller.colorMapEngine,
-   colorMap.isLoaded,
-   let sampled = colorMap.color(atRow: r, col: c, animationFrame: currentFrame) {
-    let source = controller.engine.document.colorSource
-    let alpha  = source?.preserveStyleAlpha ?? true
+// Per-layer lookup: each layer has its own engine; layers without a source return nil here
+let colorGrid = controller.colorMapEngine(forLayerID: ls.id)?.currentGrid(
+    animationFrame: currentFrame,
+    loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop)
+
+if let colorGrid,
+   let lColorSrc = ls.engine.document.colorSource,
+   let sampled = colorGrid[safe: r]?[safe: c] {
+    let alpha = lColorSrc.preserveStyleAlpha
 
     let mapped = alpha
         ? UMColor(r: sampled.r, g: sampled.g, b: sampled.b,
@@ -1459,6 +1473,7 @@ Everything in this list is implemented and functional in the current build (`mai
 - Live animated canvas (SwiftUI Canvas, `@Observable` engine, 24 fps)
 - Background draw / accumulation mode (`backgroundDraw` flag, `FrameCapture` struct); accumulation correctly captures path motion trails — fixed: a second `guard !Task.isCancelled` inside `captureTask` was killing every completed render before it could store its result; the guard is removed so completed renders always commit to the frame buffer
 - Color map system: `UMColorMapEngine`, static image and video (up to 240 extracted frames) sampling
+- **Per-layer color maps** (built 2026-06-19): each layer owns its own `UMColorMapEngine` in `AppController.layerColorMapEngines: [UUID: UMColorMapEngine]`; `colorMapEngine` property always refers to the active layer's engine (no UI changes); `colorMapEngine(forLayerID:)` accessor used by live canvas, accumulation snapshots, `umRenderComposited`, and `UMVideoExporter` for per-layer lookup; layer lifecycle methods (`addLayer`, `removeLayer`, `duplicateLayer`, `selectLayer`, project load/reset) all manage the per-layer engine dict correctly
 - Color map UI in CANVAS section: apply target, style alpha preserve, video loop mode
 - Open curves, points, ovals, line polygons imported from Loom — all geometry types rendered
 - `buildPolygonPath` handles all five `PolygonType` cases from LoomEngine
@@ -1843,6 +1858,6 @@ SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUE
 | **Layers** | Parallax (per-layer depth factor) | Camera system |
 | **Layers** | Per-layer blend modes | Layer system ✓ |
 | **Layers** | Animated layer opacity / parallax drivers | Loom driver integration |
-| **Layers** | Per-layer color maps | Layer system ✓ |
+| **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

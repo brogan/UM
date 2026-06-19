@@ -70,6 +70,9 @@ final class AppController {
         engine          = layer.engine
         activeStyleID   = layer.activeStyleID
         selectedIndices = []
+        colorMapEngine  = layerColorMapEngines[layer.id] ?? {
+            let e = UMColorMapEngine(); layerColorMapEngines[layer.id] = e; return e
+        }()
     }
 
     func addLayer(name: String? = nil) {
@@ -79,6 +82,7 @@ final class AppController {
         let label  = name ?? "Layer \(layerStates.count + 1)"
         let ls     = UMLayerState(layer: UMLayer(name: label, document: doc))
         UMLogger.shared.log("addLayer '\(label)' \(projectStyles.count) styles, total layers→\(layerStates.count + 1)")
+        layerColorMapEngines[ls.id] = UMColorMapEngine()
         layerStates.append(ls)
         selectLayer(layerStates.count - 1)
         rebuildShapePolygonMap()
@@ -86,13 +90,16 @@ final class AppController {
 
     func removeLayer(at index: Int) {
         guard layerStates.count > 1, index >= 0, index < layerStates.count else { return }
+        let removedID = layerStates[index].id
         layerStates.remove(at: index)
+        layerColorMapEngines.removeValue(forKey: removedID)
         let newIndex = min(activeLayerIndex, layerStates.count - 1)
         activeLayerIndex = newIndex
         activePathID     = nil
         engine          = layerStates[newIndex].engine
         activeStyleID   = layerStates[newIndex].activeStyleID
         selectedIndices = []
+        colorMapEngine  = layerColorMapEngines[layerStates[newIndex].id] ?? UMColorMapEngine()
         rebuildShapePolygonMap()
     }
 
@@ -103,6 +110,14 @@ final class AppController {
                                               isVisible: src.isVisible,
                                               opacity: src.opacity,
                                               document: src.engine.document))
+        // Give the duplicate its own engine; reload the same color source if present.
+        let dupEngine = UMColorMapEngine()
+        if let cs = src.engine.document.colorSource {
+            let rows = src.engine.document.gridConfig.rows
+            let cols = src.engine.document.gridConfig.cols
+            dupEngine.load(url: URL(fileURLWithPath: cs.filePath), rows: rows, cols: cols)
+        }
+        layerColorMapEngines[ls.id] = dupEngine
         layerStates.insert(ls, at: index + 1)
         selectLayer(index + 1)
         rebuildShapePolygonMap()
@@ -163,6 +178,7 @@ final class AppController {
         activeLayerIndex = 0
         projectStyles    = doc.styles
         activeStyleID    = doc.styles.first?.id
+        layerColorMapEngines[ls.id] = colorMapEngine   // register the initial engine
         loadShapePolygons()
         rebuildShapePolygonMap()
         ensureProjectsDirectory()
@@ -402,6 +418,10 @@ final class AppController {
         projectResolutionPresets  = []
         activeStyleID             = doc.styles.first?.id
         activeMotionID            = nil
+        layerColorMapEngines.removeAll()
+        let freshEngine           = UMColorMapEngine()
+        layerColorMapEngines[ls.id] = freshEngine
+        colorMapEngine            = freshEngine
         activeShapeID             = nil
         selectedIndices           = []
         currentFileURL            = nil
@@ -740,12 +760,18 @@ final class AppController {
             }
         }
 
-        colorMapEngine.clear()
-        if let src = layerStates[0].engine.document.colorSource {
-            let rows = layerStates[0].engine.document.gridConfig.rows
-            let cols = layerStates[0].engine.document.gridConfig.cols
-            colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
+        layerColorMapEngines.removeAll()
+        for li in layerStates.indices {
+            let ls  = layerStates[li]
+            let cme = UMColorMapEngine()
+            layerColorMapEngines[ls.id] = cme
+            if let src = ls.engine.document.colorSource {
+                let rows = ls.engine.document.gridConfig.rows
+                let cols = ls.engine.document.gridConfig.cols
+                cme.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
+            }
         }
+        colorMapEngine = layerColorMapEngines[layerStates[idx].id] ?? UMColorMapEngine()
         UMLogger.shared.logState(prefix: "read \(url.lastPathComponent)",
                                   layers: layerStates.count,
                                   styles: projectStyles.count,
@@ -794,12 +820,18 @@ final class AppController {
         selectedIndices  = []
         currentFileURL   = url
         rebuildShapePolygonMap()
-        colorMapEngine.clear()
-        if let src = layerStates[0].engine.document.colorSource {
-            let rows = layerStates[0].engine.document.gridConfig.rows
-            let cols = layerStates[0].engine.document.gridConfig.cols
-            colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
+        layerColorMapEngines.removeAll()
+        for li in layerStates.indices {
+            let ls  = layerStates[li]
+            let cme = UMColorMapEngine()
+            layerColorMapEngines[ls.id] = cme
+            if let src = ls.engine.document.colorSource {
+                let rows = ls.engine.document.gridConfig.rows
+                let cols = ls.engine.document.gridConfig.cols
+                cme.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
+            }
         }
+        colorMapEngine = layerColorMapEngines[layerStates[0].id] ?? UMColorMapEngine()
         UMLogger.shared.logState(prefix: "read(legacy) \(url.lastPathComponent)",
                                   layers: layerStates.count,
                                   styles: projectStyles.count,
@@ -1012,7 +1044,13 @@ final class AppController {
 
     var activePathID: UUID?      = nil
     var showPathOverlay: Bool    = true
+
+    // Per-layer colour map engines keyed by layer UUID.
+    // colorMapEngine always refers to the active layer's engine and is what the UI binds to.
+    var layerColorMapEngines: [UUID: UMColorMapEngine] = [:]
     var colorMapEngine: UMColorMapEngine = UMColorMapEngine()
+
+    func colorMapEngine(forLayerID id: UUID) -> UMColorMapEngine? { layerColorMapEngines[id] }
 
     var activePath: UMMotionPath? {
         guard let id = activePathID else { return nil }
@@ -1311,7 +1349,7 @@ final class AppController {
                     shapePolygonMap:   self.shapePolygonMap,
                     fallbackPolygons:  self.shapePolygons,
                     projectMotionSets: self.projectMotionSets,
-                    colorMapEngine:    self.colorMapEngine,
+                    colorMapEngines:   self.layerColorMapEngines,
                     backgroundDraw:    self.backgroundDraw,
                     stretchSprites:    self.stretchSpritesToCell,
                     frame:             self.engine.currentFrame,
@@ -1346,12 +1384,12 @@ final class AppController {
         panel.directoryURL         = animationsRenderDirectory()
 
         // Capture layer snapshots so export is consistent even if user edits mid-export
-        let layers   = layerStates.map { $0.toUMLayer() }
-        let bg       = backgroundColor
-        let polyMap  = shapePolygonMap
-        let polys    = shapePolygons
-        let cmEngine = colorMapEngine
-        let bgDraw   = backgroundDraw
+        let layers     = layerStates.map { $0.toUMLayer() }
+        let bg         = backgroundColor
+        let polyMap    = shapePolygonMap
+        let polys      = shapePolygons
+        let cmEngines  = layerColorMapEngines
+        let bgDraw     = backgroundDraw
         let stretch  = stretchSpritesToCell
         let fps      = exportFPS
         let frames   = exportFrameCount
@@ -1369,7 +1407,7 @@ final class AppController {
                         shapePolygonMap:   polyMap,
                         fallbackPolygons:  polys,
                         projectMotionSets: self.projectMotionSets,
-                        colorMapEngine:    cmEngine,
+                        colorMapEngines:   cmEngines,
                         backgroundDraw:    bgDraw,
                         stretchSprites:    stretch,
                         frameCount:        frames,
