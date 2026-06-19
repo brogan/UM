@@ -27,6 +27,7 @@ enum UMVideoExporter {
         exportW: Double,
         exportH: Double,
         strokeScale: Double,
+        camera: UMCamera = .identity,
         to url: URL,
         progress: @escaping @MainActor (Double) -> Void
     ) async throws {
@@ -81,6 +82,7 @@ enum UMVideoExporter {
                 exportW:           exportW,
                 exportH:           exportH,
                 strokeScale:       strokeScale,
+                camera:            camera,
                 accumulationBuffer: accum
             )
 
@@ -141,6 +143,7 @@ enum UMVideoExporter {
         exportW: Double,
         exportH: Double,
         strokeScale: Double,
+        camera: UMCamera = .identity,
         accumulationBuffer: CGImage?
     ) -> CGImage? {
         let w = Int(exportW); let h = Int(exportH)
@@ -161,6 +164,7 @@ enum UMVideoExporter {
             ctx.fill(destRect)
         }
 
+        let cameraFrame = camera.evaluate(frame: frame)
         for layer in layers {
             if let img = renderLayerCells(layer: layer,
                                           shapePolygonMap: shapePolygonMap,
@@ -170,7 +174,8 @@ enum UMVideoExporter {
                                           stretchSprites: stretchSprites,
                                           frame: frame,
                                           exportW: exportW, exportH: exportH,
-                                          strokeScale: strokeScale) {
+                                          strokeScale: strokeScale,
+                                          cameraFrame: cameraFrame) {
                 ctx.setAlpha(layer.opacity)
                 ctx.draw(img, in: destRect)
                 ctx.setAlpha(1.0)
@@ -191,7 +196,8 @@ enum UMVideoExporter {
         frame: Int,
         exportW: Double,
         exportH: Double,
-        strokeScale: Double
+        strokeScale: Double,
+        cameraFrame: UMCameraFrame = .identity
     ) -> CGImage? {
         let config = layer.document.gridConfig
         let cellW  = exportW / Double(config.cols)
@@ -200,6 +206,11 @@ enum UMVideoExporter {
         let sy     = cellH / config.cellHeight
         let loopMode  = layer.document.colorSource?.videoLoopMode ?? .loop
         let colorGrid = colorMapEngine?.currentGrid(animationFrame: frame, loopMode: loopMode)
+        let layerOff  = DriverEvaluator.evaluate(layer.layerOffset, frame: frame)
+        let layerXF   = umLayerTransform(cameraFrame: cameraFrame,
+                                          parallaxFactor: layer.parallaxFactor,
+                                          layerOffset: layerOff,
+                                          canvasW: exportW, canvasH: exportH)
 
         let renderer = ImageRenderer(content: FrameCapture(
             existingBuffer:    nil,
@@ -220,7 +231,8 @@ enum UMVideoExporter {
             colorGrid:         colorGrid,
             colorSource:       layer.document.colorSource,
             strokeScale:       strokeScale,
-            drawBackground:    false
+            drawBackground:    false,
+            layerTransform:    layerXF
         ))
         renderer.scale = 1.0
         return renderer.cgImage

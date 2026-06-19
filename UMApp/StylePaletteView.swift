@@ -306,6 +306,16 @@ struct StylePaletteView: View {
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.quaternary)
                 .frame(width: 28, alignment: .trailing)
+
+            // Parallax slider — how strongly this layer responds to camera pan
+            Image(systemName: "camera")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+                .help("Parallax factor: 0 = background-fixed, 1 = full camera tracking")
+            Slider(value: Binding(get: { ls.parallaxFactor }, set: { ls.parallaxFactor = $0 }), in: 0...1)
+                .controlSize(.mini)
+                .frame(width: 40)
+                .help("Parallax factor")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)

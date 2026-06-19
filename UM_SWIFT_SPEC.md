@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -1756,51 +1756,61 @@ Shape rendering, Order/Chaos jitter, and SEQUENCE cycling are now built (§12.4)
 
 ---
 
-### 15.8 Camera and Parallax System
+### 15.8 Camera and Parallax System ✓ Built 2026-06-19
 
-The layer stack (§6.8) provides the foundation. These extensions add depth, movement, and spatial storytelling to multi-layer compositions. Explicitly deferred until the basic layer system has been used and understood.
+**Architecture**
 
-**Camera**
+Six new files ported from Loom into `UMEngine/Sources/UMEngine/Animation/` and `Scene/`:
 
-A virtual camera that can translate, scale, and rotate relative to the canvas origin. All layers render in camera space rather than screen space:
+| File | Contents |
+|---|---|
+| `UMVec2.swift` | Lightweight 2D vector (avoids name clash with Loom's `Vector2D`) |
+| `UMLoopMode.swift` | `loop / once / pingPong` loop modes |
+| `DoubleDriver.swift` | `UMDoubleDriver` — 5 modes (constant, oscillator, jitter, noise, keyframe) |
+| `VectorDriver.swift` | `UMVectorDriver` — same modes, 2D output |
+| `DriverEvaluator.swift` | Stateless evaluator; hash-based jitter/noise; smooth value noise |
+| `UMCamera.swift` | `UMCamera(pan:UMVectorDriver, zoom:UMDoubleDriver, rotation:UMDoubleDriver)` + `UMCameraFrame` evaluated snapshot |
+
+`UMLayer` gains three new fields (all backward-compatible `decodeIfPresent`):
+- `parallaxFactor: Double` — 0 = background-fixed, 1 = full camera tracking (default 1.0)
+- `layerOffset: UMVectorDriver` — independent per-layer positional offset driver
+- `opacityDriver: UMDoubleDriver` — animated opacity (wired at Phase 2; constant mode tracks `opacity` slider)
+
+**Parallax convention**
+
+```
+layerTranslation = (-camPan.x * parallaxFactor + layerOffset.x,
+                    -camPan.y * parallaxFactor + layerOffset.y)
+```
+Camera zoom and rotation are applied equally to all layers (pivot at canvas centre). Only pan is parallax-weighted per layer.
+
+- `parallaxFactor = 0.0` — background fixed to screen; camera pans over it
+- `parallaxFactor = 1.0` — world-space foreground; moves fully with camera
+
+**Per-layer transform helper**
 
 ```swift
-struct UMCamera: Codable {
-    var tx: Double        // horizontal pan (canvas pixels)
-    var ty: Double        // vertical pan
-    var scale: Double     // 1.0 = no zoom
-    var rotation: Double  // degrees
-}
+func umLayerTransform(cameraFrame: UMCameraFrame, parallaxFactor: Double,
+                      layerOffset: UMVec2, canvasW: Double, canvasH: Double) -> CGAffineTransform
 ```
+Used in three paths: live canvas `drawLayer`, `umRenderComposited`, `UMVideoExporter.renderLayerCells`.
 
-The camera transform is applied as a single `CGAffineTransform` to the canvas context before rendering. Animating camera properties (via a motion driver or keyframe path) produces camera moves over time.
+**AppController**
 
-**Parallax**
-
-Each layer gains a `depthOrder: Int` (or a `parallaxFactor: Double` in 0–1) that controls how much of the camera movement it responds to:
-- `parallaxFactor = 1.0` — moves 1:1 with the camera (foreground layer, locked to camera)
-- `parallaxFactor = 0.0` — does not move at all (background fixed to world space)
-- Values between: partial movement, simulating depth
-
-The parallax shift for layer `i` at camera offset `(tx, ty)` is:
+```swift
+var camera: UMCamera = .identity  // project-level
 ```
-layerShift = (tx * (1 - factor), ty * (1 - factor))
-```
+`ProjectConfig` gains `camera: UMCamera?` (v4, nil → `.identity`). Layer records gain `parallaxFactor?`, `layerOffset?`, `opacityDriver?` (all optional for v3 backward compat). Camera is reset to `.identity` on `newDocument()` and `readLegacy()`.
 
-**Per-layer properties to add**
+**UI**
 
-| Property | Type | Default | Notes |
-|---|---|---|---|
-| `depthOrder` | Int | 0 | Higher = further from camera |
-| `parallaxFactor` | Double | 1.0 | How strongly camera movement affects this layer |
-| `layerOffset` | CGVector | .zero | Static positional offset for manual positioning |
-| `blendMode` | CGBlendMode | .normal | Compositing blend mode |
+- CAMERA section in Quick Adjust: Pan X/Y sliders (−500…500), Zoom (0.1–4×), Rotation (−180°–180°), Reset button.
+- Parallax slider per layer row (camera icon + compact 0–1 slider).
 
-**Animated layer properties (future extension)**
-
-Per-layer opacity, parallaxFactor, and layerOffset could all be driven by `AnimationDriver` instances (oscillator, keyframe, noise) once the deeper Loom driver integration (§15.1) is complete. This would allow layers to drift, pulse in opacity, or shift depth dynamically.
-
-**Scope:** medium — roughly 3–4 days. Camera state is simple to add to `AppController`; the parallax transform is a per-layer CGAffineTransform applied in the canvas loop; the UI is a new CAMERA section in Quick Adjust and a depth/parallax slider per layer row. The main complexity is in the export pipeline (camera transform must be applied consistently per-frame).
+**Phase 2 (remaining)**
+- Expose oscillator / keyframe modes for camera drivers in UI
+- Wire `opacityDriver` into live canvas + export when mode ≠ constant
+- Layer blend modes
 
 ---
 
@@ -1886,10 +1896,10 @@ SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUE
 | **Geometry** | In-app geometry editor (LoomEditorKit) | Loom stabilisation |
 | **Overlays** | Phase heat-map overlay | — |
 | **Overlays** | Background image | — |
-| **Layers** | Camera system (pan, zoom, rotation) | Layer system ✓ |
-| **Layers** | Parallax (per-layer depth factor) | Camera system |
-| **Layers** | Per-layer blend modes | Layer system ✓ |
-| **Layers** | Animated layer opacity / parallax drivers | Loom driver integration |
+| **Layers** | Camera system (pan, zoom, rotation) | ✓ Built 2026-06-19 |
+| **Layers** | Parallax (per-layer depth factor) | ✓ Built 2026-06-19 |
+| **Layers** | Per-layer blend modes | — |
+| **Layers** | Animated layer opacity / parallax drivers (oscillator/keyframe UI) | Phase 2 of §15.8 |
 | **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

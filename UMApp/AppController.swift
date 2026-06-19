@@ -18,6 +18,9 @@ final class UMLayerState: Identifiable {
     var name: String
     var isVisible: Bool
     var opacity: Double
+    var parallaxFactor: Double
+    var layerOffset: UMVectorDriver
+    var opacityDriver: UMDoubleDriver
     var engine: UMGridEngine
     var activeStyleID: UUID?
 
@@ -26,13 +29,17 @@ final class UMLayerState: Identifiable {
         self.name          = layer.name
         self.isVisible     = layer.isVisible
         self.opacity       = layer.opacity
+        self.parallaxFactor = layer.parallaxFactor
+        self.layerOffset    = layer.layerOffset
+        self.opacityDriver  = layer.opacityDriver
         self.engine        = UMGridEngine(document: layer.document)
         self.activeStyleID = layer.document.styles.first?.id
     }
 
     func toUMLayer() -> UMLayer {
         UMLayer(id: id, name: name, isVisible: isVisible, opacity: opacity,
-                document: engine.document)
+                parallaxFactor: parallaxFactor, layerOffset: layerOffset,
+                opacityDriver: opacityDriver, document: engine.document)
     }
 }
 
@@ -109,6 +116,9 @@ final class AppController {
         let ls  = UMLayerState(layer: UMLayer(name: src.name + " Copy",
                                               isVisible: src.isVisible,
                                               opacity: src.opacity,
+                                              parallaxFactor: src.parallaxFactor,
+                                              layerOffset: src.layerOffset,
+                                              opacityDriver: src.opacityDriver,
                                               document: src.engine.document))
         // Give the duplicate its own engine; reload the same color source if present.
         let dupEngine = UMColorMapEngine()
@@ -164,6 +174,9 @@ final class AppController {
     var activeColorPaletteID:       UUID? = nil
     var projectResolutionPresets:   [UMResolutionPreset] = []
     var globalResolutionPresets:    [UMResolutionPreset] = []
+
+    // MARK: Camera
+    var camera: UMCamera = .identity
 
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
@@ -425,6 +438,7 @@ final class AppController {
         activeShapeID             = nil
         selectedIndices           = []
         currentFileURL            = nil
+        camera            = .identity
         rebuildShapePolygonMap()
         seedDefaultShape()
     }
@@ -491,6 +505,10 @@ final class AppController {
             var paths: [UMMotionPath]
             var timeline: [UMTimelineState]
             var colorSource: UMColorSource?
+            // Added in v4; optional for backward compat
+            var parallaxFactor: Double?
+            var layerOffset:    UMVectorDriver?
+            var opacityDriver:  UMDoubleDriver?
         }
         var version: Int
         var activeLayerIndex: Int
@@ -500,16 +518,19 @@ final class AppController {
         var projectColorPalettes: [UMColorPalette]
         var projectResolutionPresets: [UMResolutionPreset]
         var layers: [LayerRecord]
+        var camera: UMCamera?  // Added in v4; nil → .identity
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
             case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
+            case camera
         }
 
         init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
              projectShapes: [ShapeRecord], projectMotionSets: [UMMotionSet],
              projectColorPalettes: [UMColorPalette],
-             projectResolutionPresets: [UMResolutionPreset], layers: [LayerRecord]) {
+             projectResolutionPresets: [UMResolutionPreset],
+             layers: [LayerRecord], camera: UMCamera?) {
             self.version                  = version
             self.activeLayerIndex         = activeLayerIndex
             self.projectStyles            = projectStyles
@@ -518,6 +539,7 @@ final class AppController {
             self.projectColorPalettes     = projectColorPalettes
             self.projectResolutionPresets = projectResolutionPresets
             self.layers                   = layers
+            self.camera                   = camera
         }
 
         init(from decoder: Decoder) throws {
@@ -530,6 +552,7 @@ final class AppController {
             projectColorPalettes     = (try? c.decodeIfPresent([UMColorPalette].self,     forKey: .projectColorPalettes))     ?? []
             projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self, forKey: .projectResolutionPresets)) ?? []
             layers                   = try  c.decode([LayerRecord].self,   forKey: .layers)
+            camera                   = try? c.decodeIfPresent(UMCamera.self, forKey: .camera)
         }
     }
 
@@ -652,7 +675,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 3,
+            version: 4,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -672,9 +695,13 @@ final class AppController {
                     cells:         ls.engine.document.cells,
                     paths:         ls.engine.document.paths,
                     timeline:      ls.engine.document.timeline,
-                    colorSource:   ls.engine.document.colorSource
+                    colorSource:   ls.engine.document.colorSource,
+                    parallaxFactor: ls.parallaxFactor,
+                    layerOffset:   ls.layerOffset,
+                    opacityDriver: ls.opacityDriver
                 )
-            }
+            },
+            camera: camera
         )
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -727,10 +754,17 @@ final class AppController {
                 timeline:    record.timeline,
                 colorSource: record.colorSource
             )
-            let ls = UMLayerState(layer: UMLayer(id: record.id, name: record.name,
-                                                 isVisible: record.isVisible,
-                                                 opacity: record.opacity,
-                                                 document: doc))
+            let layer = UMLayer(
+                id:            record.id,
+                name:          record.name,
+                isVisible:     record.isVisible,
+                opacity:       record.opacity,
+                parallaxFactor: record.parallaxFactor ?? 1.0,
+                layerOffset:   record.layerOffset    ?? .zero,
+                opacityDriver: record.opacityDriver  ?? UMDoubleDriver(mode: .constant, base: record.opacity),
+                document:      doc
+            )
+            let ls = UMLayerState(layer: layer)
             ls.activeStyleID = record.activeStyleID ?? styles.first?.id
             return ls
         }
@@ -738,6 +772,7 @@ final class AppController {
         let idx      = max(0, min(config.activeLayerIndex, layerStates.count - 1))
         activeLayerIndex  = idx
         engine            = layerStates[idx].engine
+        camera            = config.camera ?? .identity
         projectStyles             = styles
         projectShapes             = loaded
         projectMotionSets         = config.projectMotionSets
@@ -799,6 +834,7 @@ final class AppController {
         layerStates      = layers.map { UMLayerState(layer: $0) }
         activeLayerIndex = 0
         engine           = layerStates[0].engine
+        camera           = .identity
         projectStyles    = layerStates[0].engine.document.styles
 
         // Migrate shapes
@@ -1414,7 +1450,8 @@ final class AppController {
                     exportW:           exportW,
                     exportH:           exportH,
                     strokeScale:       strokeScale,
-                    accumulationBuffer: self.backgroundDraw ? nil : self.frameBuffer
+                    accumulationBuffer: self.backgroundDraw ? nil : self.frameBuffer,
+                    camera:            self.camera
                 ) else { return }
 
                 guard let dest = CGImageDestinationCreateWithURL(
@@ -1448,9 +1485,10 @@ final class AppController {
         let polys      = shapePolygons
         let cmEngines  = layerColorMapEngines
         let bgDraw     = backgroundDraw
-        let stretch  = stretchSpritesToCell
-        let fps      = exportFPS
-        let frames   = exportFrameCount
+        let stretch    = stretchSpritesToCell
+        let fps        = exportFPS
+        let frames     = exportFrameCount
+        let camSnap    = camera
 
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url, let self else { return }
@@ -1473,6 +1511,7 @@ final class AppController {
                         exportW:           exportW,
                         exportH:           exportH,
                         strokeScale:       strokeScale,
+                        camera:            camSnap,
                         to:                url,
                         progress:          { [weak self] p in self?.exportProgress = p }
                     )

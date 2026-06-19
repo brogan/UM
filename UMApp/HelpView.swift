@@ -319,6 +319,7 @@ private let layersBody = #"""
   <tr><td>Layer name</td><td>The editable name. Double-click to rename inline.</td></tr>
   <tr><td>Opacity slider</td><td>A mini slider (0–100%) that adjusts the layer's compositing opacity continuously.</td></tr>
   <tr><td>Opacity %</td><td>Live readout alongside the slider.</td></tr>
+  <tr><td>Camera icon + parallax slider</td><td>A compact 0–1 slider controlling how much camera movement this layer responds to. See Camera &amp; Parallax below.</td></tr>
 </table>
 
 <h2>Selecting the active layer</h2>
@@ -357,6 +358,29 @@ private let layersBody = #"""
 <h2>Layers and the timeline</h2>
 <p>Timeline recording and state navigation operate on the <em>active layer</em> only. Other layers are unaffected by loading a recorded state.</p>
 <div class="tip"><strong>Typical workflow</strong> — build a background layer (large cells, slow motion, low opacity), add a foreground layer (smaller cells, faster motion), and adjust the balance with the opacity sliders. Each layer can have its own color map source for complex image-driven color effects.</div>
+
+<h2>Camera and parallax</h2>
+<p>The <strong>CAMERA</strong> section in Quick Adjust lets you position a virtual camera over the entire composition. All layers render through the camera:</p>
+<table>
+  <tr><th>Control</th><th>Range</th><th>Description</th></tr>
+  <tr><td>Pan X / Y</td><td>−500 … 500 px</td><td>Shift the camera horizontally and vertically in canvas pixels.</td></tr>
+  <tr><td>Zoom</td><td>0.1 – 4.0×</td><td>Scale the canvas from its centre. 1.0 = no zoom.</td></tr>
+  <tr><td>Rotation</td><td>−180° … 180°</td><td>Rotate the canvas around its centre.</td></tr>
+  <tr><td>Reset</td><td>—</td><td>Return all camera values to neutral (pan 0, zoom 1, rotation 0).</td></tr>
+</table>
+
+<p>Each layer row has a <strong>parallax slider</strong> (the camera icon) that controls how much of the camera pan this layer absorbs:</p>
+<table>
+  <tr><th>Value</th><th>Effect</th></tr>
+  <tr><td>0.0</td><td>Background-fixed — the layer stays anchored to the screen. Camera panning has no effect on it. Use for distant backgrounds, skies, or HUD overlays.</td></tr>
+  <tr><td>1.0 (default)</td><td>World-space — the layer moves fully with the camera. Use for foreground objects that should appear to be "in the world".</td></tr>
+  <tr><td>0.1 – 0.9</td><td>Intermediate parallax — the layer moves at a fraction of the camera speed. Lower values read as further away; higher values as closer.</td></tr>
+</table>
+
+<div class="note"><strong>Parallax only applies to Pan X / Y.</strong> Camera zoom and rotation affect all layers equally regardless of their parallax factor.</div>
+<div class="tip"><strong>Layered depth example</strong> — three layers: sky (factor 0.0), mid-ground (factor 0.3), foreground (factor 1.0). Pan the camera left — the sky stays still, the mid-ground drifts slowly, and the foreground moves fastest, producing natural depth.</div>
+
+<p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
 """#
 
 private let paintingBody = #"""

@@ -443,6 +443,7 @@ struct GridCanvasPlaceholder: View {
                     let shapePolyMap  = controller.shapePolygonMap
                     let fallbackPolys = controller.shapePolygons
                     let stretch       = controller.stretchSpritesToCell
+                    let cameraFrame   = controller.camera.evaluate(frame: currentFrame)
 
                     for ls in controller.layerStates where ls.isVisible {
                         let isActiveLayer = ls.engine === controller.engine
@@ -463,8 +464,14 @@ struct GridCanvasPlaceholder: View {
                         let lOpacity   = ls.opacity
 
                         let lMotionMap = Dictionary(uniqueKeysWithValues: controller.projectMotionSets.map { ($0.id, $0) })
+                        let lLayerOff  = DriverEvaluator.evaluate(ls.layerOffset, frame: currentFrame)
+                        let lLayerXF   = umLayerTransform(cameraFrame: cameraFrame,
+                                                           parallaxFactor: ls.parallaxFactor,
+                                                           layerOffset: lLayerOff,
+                                                           canvasW: gridW, canvasH: gridH)
                         ctx.drawLayer { layerCtx in
                             layerCtx.opacity = lOpacity
+                            if !lLayerXF.isIdentity { layerCtx.concatenate(lLayerXF) }
                             for cell in ls.engine.document.cells where cell.isDrawn {
                                 let r         = cell.gridIndex / lConfig.cols
                                 let c         = cell.gridIndex % lConfig.cols
@@ -1039,6 +1046,7 @@ struct FrameCapture: View {
     let colorSource: UMColorSource?
     var strokeScale: Double = 1.0
     var drawBackground: Bool = true
+    var layerTransform: CGAffineTransform = .identity
 
     var body: some View {
         Canvas { ctx, size in
@@ -1051,6 +1059,9 @@ struct FrameCapture: View {
                     ctx.fill(Path(CGRect(origin: .zero, size: size)),
                              with: .color(Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)))
                 }
+            }
+            if !layerTransform.isIdentity {
+                ctx.concatenate(layerTransform)
             }
 
             let config    = gridConfig
@@ -1169,6 +1180,26 @@ func umRenderFrame(
     return renderer.cgImage
 }
 
+/// Per-layer camera+parallax transform. parallaxFactor 0=background-fixed, 1=world-space.
+func umLayerTransform(
+    cameraFrame: UMCameraFrame,
+    parallaxFactor: Double,
+    layerOffset: UMVec2,
+    canvasW: Double, canvasH: Double
+) -> CGAffineTransform {
+    let cx   = CGFloat(canvasW / 2)
+    let cy   = CGFloat(canvasH / 2)
+    let dx   = CGFloat(-cameraFrame.pan.x * parallaxFactor + layerOffset.x)
+    let dy   = CGFloat(-cameraFrame.pan.y * parallaxFactor + layerOffset.y)
+    let zoom = CGFloat(max(0.01, cameraFrame.zoom))
+    let rot  = CGFloat(cameraFrame.rotation * .pi / 180)
+    return CGAffineTransform.identity
+        .translatedBy(x: cx, y: cy)
+        .scaledBy(x: zoom, y: zoom)
+        .rotated(by: rot)
+        .translatedBy(x: -cx + dx, y: -cy + dy)
+}
+
 /// Composite all visible layers into a single CGImage for PNG/video export.
 /// Each layer is rendered cells-only (transparent background) via ImageRenderer,
 /// then blended into a CoreGraphics context at the layer's opacity.
@@ -1186,7 +1217,8 @@ func umRenderComposited(
     exportW: Double,
     exportH: Double,
     strokeScale: Double,
-    accumulationBuffer: CGImage?
+    accumulationBuffer: CGImage?,
+    camera: UMCamera = .identity
 ) -> CGImage? {
     let w = Int(exportW); let h = Int(exportH)
     guard w > 0, h > 0 else { return nil }
@@ -1207,6 +1239,7 @@ func umRenderComposited(
         ctx.fill(destRect)
     }
 
+    let cameraFrame = camera.evaluate(frame: frame)
     for ls in layerStates where ls.isVisible {
         let lConfig = ls.engine.document.gridConfig
         let lCellW  = exportW / Double(lConfig.cols)
@@ -1215,6 +1248,11 @@ func umRenderComposited(
         let lSY     = lCellH / lConfig.cellHeight
         let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
         let colorGrid = colorMapEngines[ls.id]?.currentGrid(animationFrame: frame, loopMode: loopMode)
+        let layerOff  = DriverEvaluator.evaluate(ls.layerOffset, frame: frame)
+        let layerXF   = umLayerTransform(cameraFrame: cameraFrame,
+                                          parallaxFactor: ls.parallaxFactor,
+                                          layerOffset: layerOff,
+                                          canvasW: exportW, canvasH: exportH)
 
         // Render layer cells on transparent background (drawBackground: false)
         let renderer = ImageRenderer(content: FrameCapture(
@@ -1236,7 +1274,8 @@ func umRenderComposited(
             colorGrid:         colorGrid,
             colorSource:       ls.engine.document.colorSource,
             strokeScale:       strokeScale,
-            drawBackground:    false
+            drawBackground:    false,
+            layerTransform:    layerXF
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {

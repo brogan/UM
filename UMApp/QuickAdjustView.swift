@@ -50,6 +50,7 @@ struct QuickAdjustView: View {
     @State private var pathCollapsed       = false
     @State private var advancedCollapsed   = true
     @State private var exportCollapsed     = false
+    @State private var cameraCollapsed     = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
 
@@ -62,6 +63,7 @@ struct QuickAdjustView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     projectSection
                     canvasSection
+                    cameraSection
                     exportSection
                     placeTimeSection
                     renderSection
@@ -345,6 +347,65 @@ struct QuickAdjustView: View {
             get: { controller.recordingIntervalSeconds },
             set: { controller.recordingIntervalSeconds = $0 }
         )
+    }
+
+    // MARK: - Camera section
+
+    private var cameraSection: some View {
+        @Bindable var ctrl = controller
+        return InspectorSection("CAMERA", isCollapsed: $cameraCollapsed) {
+            InspectorField("Pan X") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.pan.base.x },
+                    set: { ctrl.camera.pan.base.x = $0 }
+                ), in: -500...500)
+                .frame(maxWidth: 110)
+                Text(String(format: "%.0f", ctrl.camera.pan.base.x))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            InspectorField("Pan Y") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.pan.base.y },
+                    set: { ctrl.camera.pan.base.y = $0 }
+                ), in: -500...500)
+                .frame(maxWidth: 110)
+                Text(String(format: "%.0f", ctrl.camera.pan.base.y))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            InspectorField("Zoom") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.zoom.base },
+                    set: { ctrl.camera.zoom.base = $0 }
+                ), in: 0.1...4.0)
+                .frame(maxWidth: 110)
+                Text(String(format: "%.2f×", ctrl.camera.zoom.base))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            InspectorField("Rotation") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.rotation.base },
+                    set: { ctrl.camera.rotation.base = $0 }
+                ), in: -180...180)
+                .frame(maxWidth: 110)
+                Text(String(format: "%.0f°", ctrl.camera.rotation.base))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 36, alignment: .trailing)
+            }
+            InspectorField("") {
+                Button("Reset") {
+                    ctrl.camera = .identity
+                }
+                .font(.system(size: 11))
+                .disabled(ctrl.camera == .identity)
+            }
+        }
     }
 
     private var exportSection: some View {
