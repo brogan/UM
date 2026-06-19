@@ -140,6 +140,7 @@ final class AppController {
     var currentFileURL: URL? = nil
     var globalLibrary: UMLibrary = .empty
     var globalShapes:  [UMShape] = []
+    var projectShapes: [UMShape] = []
 
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
@@ -180,14 +181,12 @@ final class AppController {
 
     private func rebuildShapePolygonMap() {
         var map: [UUID: [Polygon2D]] = [:]
-        for ls in layerStates {
-            for shape in ls.engine.document.shapes {
-                guard let data  = shape.geometryJSON.data(using: .utf8),
-                      let geo   = try? EditableGeometryJSONLoader.decode(from: data),
-                      let polys = try? geo.runtimePolygons()
-                else { continue }
-                map[shape.id] = polys
-            }
+        for shape in projectShapes {
+            guard let data  = shape.geometryJSON.data(using: .utf8),
+                  let geo   = try? EditableGeometryJSONLoader.decode(from: data),
+                  let polys = try? geo.runtimePolygons()
+            else { continue }
+            map[shape.id] = polys
         }
         shapePolygonMap = map
     }
@@ -387,6 +386,7 @@ final class AppController {
         engine           = ls.engine
         activeLayerIndex = 0
         projectStyles    = doc.styles
+        projectShapes    = []
         activeStyleID    = doc.styles.first?.id
         selectedIndices  = []
         currentFileURL   = nil
@@ -420,7 +420,7 @@ final class AppController {
         panel.directoryURL = projectsDirectory
         panel.allowedFileTypes = ["umproj"]
         panel.canChooseFiles = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true  // directory packages
         panel.allowsMultipleSelection = false
         panel.begin { [weak self] response in
             guard response == .OK, let url = panel.url else { return }
@@ -428,17 +428,93 @@ final class AppController {
         }
     }
 
+    // MARK: - Project config (directory format v2)
+
+    private struct ProjectConfig: Codable {
+        struct ShapeRecord: Codable {
+            var id: UUID
+            var name: String
+            var sourceFilename: String
+        }
+        struct LayerRecord: Codable {
+            var id: UUID
+            var name: String
+            var isVisible: Bool
+            var opacity: Double
+            var activeStyleID: UUID?
+            var gridConfig: UMGridConfig
+            var cells: [UMGridCell]
+            var paths: [UMMotionPath]
+            var timeline: [UMTimelineState]
+            var colorSource: UMColorSource?
+        }
+        var version: Int
+        var activeLayerIndex: Int
+        var projectStyles: [CellStyle]
+        var projectShapes: [ShapeRecord]
+        var layers: [LayerRecord]
+    }
+
     private func write(to url: URL) {
+        let fm = FileManager.default
+        // If a legacy single-file exists at this path, remove it first.
+        var isDir: ObjCBool = false
+        if fm.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue {
+            try? fm.removeItem(at: url)
+        }
+        do {
+            try fm.createDirectory(at: url, withIntermediateDirectories: true)
+        } catch {
+            UMLogger.shared.log("ERROR write(to:) mkdir \(error)")
+            return
+        }
+
+        // Write individual shape geometry files
+        let shapesDir = url.appendingPathComponent("shapes")
+        try? fm.createDirectory(at: shapesDir, withIntermediateDirectories: true)
+        for shape in projectShapes {
+            let dest = shapesDir.appendingPathComponent(shape.sourceFilename)
+            try? shape.geometryJSON.write(to: dest, atomically: true, encoding: .utf8)
+        }
+
+        // Create empty render directories (mirrors Loom project layout)
+        try? fm.createDirectory(at: url.appendingPathComponent("renders/animations"),
+                                withIntermediateDirectories: true)
+        try? fm.createDirectory(at: url.appendingPathComponent("renders/stills"),
+                                withIntermediateDirectories: true)
+
+        // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
+        let config = ProjectConfig(
+            version: 2,
+            activeLayerIndex: activeLayerIndex,
+            projectStyles: projectStyles,
+            projectShapes: projectShapes.map {
+                ProjectConfig.ShapeRecord(id: $0.id, name: $0.name, sourceFilename: $0.sourceFilename)
+            },
+            layers: layerStates.map { ls in
+                ProjectConfig.LayerRecord(
+                    id:            ls.id,
+                    name:          ls.name,
+                    isVisible:     ls.isVisible,
+                    opacity:       ls.opacity,
+                    activeStyleID: ls.activeStyleID,
+                    gridConfig:    ls.engine.document.gridConfig,
+                    cells:         ls.engine.document.cells,
+                    paths:         ls.engine.document.paths,
+                    timeline:      ls.engine.document.timeline,
+                    colorSource:   ls.engine.document.colorSource
+                )
+            }
+        )
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let layers = layerStates.map { $0.toUMLayer() }
-        guard let data = try? enc.encode(layers) else {
+        guard let data = try? enc.encode(config) else {
             UMLogger.shared.log("ERROR write(to:) encode failed")
             return
         }
         do {
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url.appendingPathComponent("config.json"), options: .atomic)
             UMLogger.shared.log("saved \(url.lastPathComponent) \(layerStates.count)L")
         } catch {
             UMLogger.shared.log("ERROR write(to:) \(error)")
@@ -446,19 +522,56 @@ final class AppController {
     }
 
     private func read(from url: URL) {
-        guard let data   = try? Data(contentsOf: url),
-              let layers = try? JSONDecoder().decode([UMLayer].self, from: data),
-              !layers.isEmpty
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) else { return }
+        if isDir.boolValue {
+            readPackage(at: url)
+        } else {
+            readLegacy(at: url)
+        }
+    }
+
+    private func readPackage(at url: URL) {
+        guard let data   = try? Data(contentsOf: url.appendingPathComponent("config.json")),
+              let config = try? JSONDecoder().decode(ProjectConfig.self, from: data),
+              !config.layers.isEmpty
         else {
-            UMLogger.shared.log("ERROR read(from:) decode failed \(url.lastPathComponent)")
+            UMLogger.shared.log("ERROR readPackage decode failed \(url.lastPathComponent)")
             return
         }
-        layerStates      = layers.map { UMLayerState(layer: $0) }
-        activeLayerIndex = 0
-        engine           = layerStates[0].engine
-        // Layer 0's styles are canonical; sync to all layers (handles old files where styles diverged).
-        projectStyles    = layerStates[0].engine.document.styles
-        activeStyleID    = layerStates[0].activeStyleID ?? projectStyles.first?.id
+
+        let shapesDir = url.appendingPathComponent("shapes")
+        let loaded: [UMShape] = config.projectShapes.compactMap { ref in
+            let fileURL = shapesDir.appendingPathComponent(ref.sourceFilename)
+            guard let json = try? String(contentsOf: fileURL, encoding: .utf8) else { return nil }
+            return UMShape(id: ref.id, name: ref.name, sourceFilename: ref.sourceFilename, geometryJSON: json)
+        }
+
+        let styles = config.projectStyles.isEmpty ? [CellStyle(name: "Default")] : config.projectStyles
+        layerStates = config.layers.map { record in
+            let doc = UMGridDocument(
+                gridConfig:  record.gridConfig,
+                cells:       record.cells,
+                styles:      styles,
+                paths:       record.paths,
+                shapes:      [],
+                timeline:    record.timeline,
+                colorSource: record.colorSource
+            )
+            let ls = UMLayerState(layer: UMLayer(id: record.id, name: record.name,
+                                                 isVisible: record.isVisible,
+                                                 opacity: record.opacity,
+                                                 document: doc))
+            ls.activeStyleID = record.activeStyleID ?? styles.first?.id
+            return ls
+        }
+
+        let idx      = max(0, min(config.activeLayerIndex, layerStates.count - 1))
+        activeLayerIndex = idx
+        engine           = layerStates[idx].engine
+        projectStyles    = styles
+        projectShapes    = loaded
+        activeStyleID    = layerStates[idx].activeStyleID ?? styles.first?.id
         selectedIndices  = []
         currentFileURL   = url
         rebuildShapePolygonMap()
@@ -469,6 +582,39 @@ final class AppController {
             colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
         }
         UMLogger.shared.logState(prefix: "read \(url.lastPathComponent)",
+                                  layers: layerStates.count,
+                                  styles: projectStyles.count,
+                                  cells:  engine.document.cells.filter { $0.isDrawn }.count)
+    }
+
+    // Reads the legacy single-file format ([UMLayer] JSON array).
+    // Migrates shapes from per-layer documents into projectShapes.
+    private func readLegacy(at url: URL) {
+        guard let data   = try? Data(contentsOf: url),
+              let layers = try? JSONDecoder().decode([UMLayer].self, from: data),
+              !layers.isEmpty
+        else {
+            UMLogger.shared.log("ERROR readLegacy decode failed \(url.lastPathComponent)")
+            return
+        }
+        layerStates      = layers.map { UMLayerState(layer: $0) }
+        activeLayerIndex = 0
+        engine           = layerStates[0].engine
+        projectStyles    = layerStates[0].engine.document.styles
+        // Migrate: collect shapes from all layers → single project-level list
+        var seen = Set<UUID>()
+        projectShapes = layerStates.flatMap { $0.engine.document.shapes }.filter { seen.insert($0.id).inserted }
+        activeStyleID    = layerStates[0].activeStyleID ?? projectStyles.first?.id
+        selectedIndices  = []
+        currentFileURL   = url
+        rebuildShapePolygonMap()
+        colorMapEngine.clear()
+        if let src = layerStates[0].engine.document.colorSource {
+            let rows = layerStates[0].engine.document.gridConfig.rows
+            let cols = layerStates[0].engine.document.gridConfig.cols
+            colorMapEngine.load(url: URL(fileURLWithPath: src.filePath), rows: rows, cols: cols)
+        }
+        UMLogger.shared.logState(prefix: "read(legacy) \(url.lastPathComponent)",
                                   layers: layerStates.count,
                                   styles: projectStyles.count,
                                   cells:  engine.document.cells.filter { $0.isDrawn }.count)
@@ -653,14 +799,26 @@ final class AppController {
 
     func importShape(from url: URL) {
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else { return }
-        let name  = url.deletingPathExtension().lastPathComponent
-        let shape = UMShape(name: name, sourceFilename: url.lastPathComponent, geometryJSON: raw)
-        engine.document.shapes.append(shape)
+        let name = url.deletingPathExtension().lastPathComponent
+        var filename = url.lastPathComponent
+        if let projectURL = currentFileURL {
+            let shapesDir = projectURL.appendingPathComponent("shapes")
+            try? FileManager.default.createDirectory(at: shapesDir, withIntermediateDirectories: true)
+            let dest = uniqueURL(in: shapesDir, for: filename)
+            try? FileManager.default.copyItem(at: url, to: dest)
+            filename = dest.lastPathComponent
+        }
+        projectShapes.append(UMShape(name: name, sourceFilename: filename, geometryJSON: raw))
         rebuildShapePolygonMap()
     }
 
     func deleteShape(_ id: UUID) {
-        engine.document.shapes.removeAll { $0.id == id }
+        if let projectURL = currentFileURL,
+           let shape = projectShapes.first(where: { $0.id == id }) {
+            let fileURL = projectURL.appendingPathComponent("shapes/\(shape.sourceFilename)")
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        projectShapes.removeAll { $0.id == id }
         var updated = projectStyles
         for i in updated.indices { updated[i].shapeIDs.removeAll { $0 == id } }
         projectStyles = updated
@@ -679,7 +837,7 @@ final class AppController {
     }
 
     func promoteShapeToLibrary(_ id: UUID) {
-        guard let shape = engine.document.shapes.first(where: { $0.id == id }) else { return }
+        guard let shape = projectShapes.first(where: { $0.id == id }) else { return }
         let dir = Self.globalShapesDirectoryURL
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("\(id.uuidString).json")
@@ -697,8 +855,16 @@ final class AppController {
 
     func importShapeFromLibrary(_ id: UUID) {
         guard let shape = globalShapes.first(where: { $0.id == id }) else { return }
-        guard !engine.document.shapes.contains(where: { $0.id == id }) else { return }
-        engine.document.shapes.append(shape)
+        guard !projectShapes.contains(where: { $0.id == id }) else { return }
+        var imported = shape
+        if let projectURL = currentFileURL {
+            let shapesDir = projectURL.appendingPathComponent("shapes")
+            try? FileManager.default.createDirectory(at: shapesDir, withIntermediateDirectories: true)
+            let dest = uniqueURL(in: shapesDir, for: shape.sourceFilename)
+            try? shape.geometryJSON.write(to: dest, atomically: true, encoding: .utf8)
+            imported.sourceFilename = dest.lastPathComponent
+        }
+        projectShapes.append(imported)
         rebuildShapePolygonMap()
     }
 
@@ -706,6 +872,18 @@ final class AppController {
         let url = Self.globalShapesDirectoryURL.appendingPathComponent("\(id.uuidString).json")
         try? FileManager.default.removeItem(at: url)
         globalShapes.removeAll { $0.id == id }
+    }
+
+    private func uniqueURL(in directory: URL, for filename: String) -> URL {
+        let base = (filename as NSString).deletingPathExtension
+        let ext  = (filename as NSString).pathExtension
+        var dest = directory.appendingPathComponent(filename)
+        var n = 1
+        while FileManager.default.fileExists(atPath: dest.path) {
+            dest = directory.appendingPathComponent(ext.isEmpty ? "\(base)_\(n)" : "\(base)_\(n).\(ext)")
+            n += 1
+        }
+        return dest
     }
 
     // MARK: Assign style to selection

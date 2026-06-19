@@ -98,7 +98,7 @@ struct StylePaletteView: View {
 
                 sectionHeader("SHAPES")
 
-                ForEach(controller.engine.document.shapes) { shape in
+                ForEach(controller.projectShapes) { shape in
                     projectShapeRow(shape)
                 }
 
@@ -464,10 +464,10 @@ struct StylePaletteView: View {
                 .foregroundStyle(assigned ? Color.accentColor : Color.secondary)
             if renamingShapeID == shape.id {
                 TextField("Shape name", text: Binding(
-                    get: { controller.engine.document.shapes.first { $0.id == shape.id }?.name ?? shape.name },
+                    get: { controller.projectShapes.first { $0.id == shape.id }?.name ?? shape.name },
                     set: { newName in
-                        if let i = controller.engine.document.shapes.firstIndex(where: { $0.id == shape.id }) {
-                            controller.engine.document.shapes[i].name = newName
+                        if let i = controller.projectShapes.firstIndex(where: { $0.id == shape.id }) {
+                            controller.projectShapes[i].name = newName
                         }
                     }
                 ))
@@ -515,7 +515,7 @@ struct StylePaletteView: View {
     }
 
     private func libraryShapeRow(_ shape: UMShape) -> some View {
-        let inProject = controller.engine.document.shapes.contains { $0.id == shape.id }
+        let inProject = controller.projectShapes.contains { $0.id == shape.id }
         return HStack(spacing: 6) {
             Image(systemName: "pentagon")
                 .font(.system(size: 9))
