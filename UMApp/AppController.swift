@@ -185,6 +185,8 @@ final class AppController {
     var endFrame: Int              = 240
     var selectedTimelineKF: UMTimelineKFSelection? = nil
     var selectedCameraKF:   UMCameraKFSelection?   = nil
+    var timelineMarkers:    [UMTimelineMarker]     = []
+    var kfClipboard:        UMKFClipboard?         = nil
 
     var maxScrubFrames: Int { endFrame > 0 ? endFrame : 240 }
 
@@ -533,19 +535,21 @@ final class AppController {
         var projectColorPalettes: [UMColorPalette]
         var projectResolutionPresets: [UMResolutionPreset]
         var layers: [LayerRecord]
-        var camera: UMCamera?  // Added in v4; nil → .identity
+        var camera: UMCamera?             // Added in v4; nil → .identity
+        var timelineMarkers: [UMTimelineMarker]?  // Added in v5; nil → []
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
             case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
-            case camera
+            case camera, timelineMarkers
         }
 
         init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
              projectShapes: [ShapeRecord], projectMotionSets: [UMMotionSet],
              projectColorPalettes: [UMColorPalette],
              projectResolutionPresets: [UMResolutionPreset],
-             layers: [LayerRecord], camera: UMCamera?) {
+             layers: [LayerRecord], camera: UMCamera?,
+             timelineMarkers: [UMTimelineMarker]?) {
             self.version                  = version
             self.activeLayerIndex         = activeLayerIndex
             self.projectStyles            = projectStyles
@@ -555,6 +559,7 @@ final class AppController {
             self.projectResolutionPresets = projectResolutionPresets
             self.layers                   = layers
             self.camera                   = camera
+            self.timelineMarkers          = timelineMarkers
         }
 
         init(from decoder: Decoder) throws {
@@ -563,11 +568,12 @@ final class AppController {
             activeLayerIndex         = try  c.decode(Int.self,             forKey: .activeLayerIndex)
             projectStyles            = try  c.decode([CellStyle].self,     forKey: .projectStyles)
             projectShapes            = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
-            projectMotionSets        = (try? c.decodeIfPresent([UMMotionSet].self,        forKey: .projectMotionSets))        ?? []
-            projectColorPalettes     = (try? c.decodeIfPresent([UMColorPalette].self,     forKey: .projectColorPalettes))     ?? []
-            projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self, forKey: .projectResolutionPresets)) ?? []
+            projectMotionSets        = (try? c.decodeIfPresent([UMMotionSet].self,            forKey: .projectMotionSets))        ?? []
+            projectColorPalettes     = (try? c.decodeIfPresent([UMColorPalette].self,         forKey: .projectColorPalettes))     ?? []
+            projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self,     forKey: .projectResolutionPresets)) ?? []
             layers                   = try  c.decode([LayerRecord].self,   forKey: .layers)
-            camera                   = try? c.decodeIfPresent(UMCamera.self, forKey: .camera)
+            camera                   = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
+            timelineMarkers          = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
         }
     }
 
@@ -690,7 +696,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 4,
+            version: 5,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -716,7 +722,8 @@ final class AppController {
                     opacityDriver: ls.opacityDriver
                 )
             },
-            camera: camera
+            camera: camera,
+            timelineMarkers: timelineMarkers.isEmpty ? nil : timelineMarkers
         )
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -788,6 +795,7 @@ final class AppController {
         activeLayerIndex  = idx
         engine            = layerStates[idx].engine
         camera            = config.camera ?? .identity
+        timelineMarkers   = config.timelineMarkers ?? []
         projectStyles             = styles
         projectShapes             = loaded
         projectMotionSets         = config.projectMotionSets

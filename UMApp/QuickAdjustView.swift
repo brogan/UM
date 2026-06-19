@@ -51,6 +51,7 @@ struct QuickAdjustView: View {
     @State private var advancedCollapsed   = true
     @State private var exportCollapsed     = false
     @State private var cameraCollapsed     = false
+    @State private var kfInspectorCollapsed = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
 
@@ -61,6 +62,7 @@ struct QuickAdjustView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    kfInspectorSection
                     projectSection
                     canvasSection
                     cameraSection
@@ -405,6 +407,203 @@ struct QuickAdjustView: View {
                 .font(.system(size: 11))
                 .disabled(ctrl.camera == .identity)
             }
+        }
+    }
+
+    // MARK: - Keyframe inspector
+
+    @ViewBuilder
+    private var kfInspectorSection: some View {
+        @Bindable var ctrl = controller
+        if ctrl.selectedTimelineKF != nil || ctrl.selectedCameraKF != nil {
+            InspectorSection("KEYFRAME", isCollapsed: $kfInspectorCollapsed) {
+                if let sel = ctrl.selectedTimelineKF {
+                    kfLayerFields(sel: sel)
+                } else if let sel = ctrl.selectedCameraKF {
+                    kfCameraFields(sel: sel)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func kfLayerFields(sel: UMTimelineKFSelection) -> some View {
+        @Bindable var ctrl = controller
+        let ls = ctrl.layerStates[safe: sel.layerIndex]
+        InspectorField("Lane") { Text(sel.lane.label).font(.system(size: 11)).foregroundStyle(.secondary) }
+        InspectorField("Frame") {
+            TextField("", value: Binding(
+                get: { sel.lane == .opacity
+                    ? (ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.frame ?? 0)
+                    : (ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.frame ?? 0) },
+                set: { newF in moveLayerKF(sel: sel, toFrame: max(0, newF)) }
+            ), format: .number)
+            .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 54)
+        }
+        switch sel.lane {
+        case .opacity:
+            InspectorField("Value") {
+                Slider(value: Binding(
+                    get: { ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.value ?? 0 },
+                    set: { v in ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.value = v }
+                ), in: 0...1).frame(maxWidth: 100)
+                Text("\(Int(((ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.value ?? 0) * 100).rounded()))%")
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).frame(width: 32, alignment: .trailing)
+            }
+        case .offset:
+            InspectorField("Offset X") {
+                TextField("", value: Binding(
+                    get: { ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.value.x ?? 0 },
+                    set: { v in ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.value.x = v }
+                ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
+            InspectorField("Offset Y") {
+                TextField("", value: Binding(
+                    get: { ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.value.y ?? 0 },
+                    set: { v in ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.value.y = v }
+                ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
+        }
+        easingField(
+            get: { sel.lane == .opacity
+                ? (ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut)
+                : (ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut) },
+            set: { e in
+                if sel.lane == .opacity { ls?.opacityDriver.keyframes[safe: sel.keyframeIdx]?.easing = e }
+                else { ls?.layerOffset.keyframes[safe: sel.keyframeIdx]?.easing = e }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func kfCameraFields(sel: UMCameraKFSelection) -> some View {
+        @Bindable var ctrl = controller
+        InspectorField("Lane") { Text(sel.lane.label).font(.system(size: 11)).foregroundStyle(.secondary) }
+        InspectorField("Frame") {
+            TextField("", value: Binding(
+                get: { camerKFFrame(sel: sel) },
+                set: { newF in moveCameraKF(sel: sel, toFrame: max(0, newF)) }
+            ), format: .number)
+            .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 54)
+        }
+        switch sel.lane {
+        case .pan:
+            InspectorField("Pan X") {
+                TextField("", value: Binding(
+                    get: { ctrl.camera.pan.keyframes[safe: sel.keyframeIdx]?.value.x ?? 0 },
+                    set: { v in ctrl.camera.pan.keyframes[safe: sel.keyframeIdx]?.value.x = v }
+                ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
+            InspectorField("Pan Y") {
+                TextField("", value: Binding(
+                    get: { ctrl.camera.pan.keyframes[safe: sel.keyframeIdx]?.value.y ?? 0 },
+                    set: { v in ctrl.camera.pan.keyframes[safe: sel.keyframeIdx]?.value.y = v }
+                ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+            }
+        case .zoom:
+            InspectorField("Zoom") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.zoom.keyframes[safe: sel.keyframeIdx]?.value ?? 1 },
+                    set: { v in ctrl.camera.zoom.keyframes[safe: sel.keyframeIdx]?.value = v }
+                ), in: 0.1...4.0).frame(maxWidth: 100)
+                Text(String(format: "%.2f×", ctrl.camera.zoom.keyframes[safe: sel.keyframeIdx]?.value ?? 1))
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            }
+        case .rotation:
+            InspectorField("Rotation") {
+                Slider(value: Binding(
+                    get: { ctrl.camera.rotation.keyframes[safe: sel.keyframeIdx]?.value ?? 0 },
+                    set: { v in ctrl.camera.rotation.keyframes[safe: sel.keyframeIdx]?.value = v }
+                ), in: -180...180).frame(maxWidth: 100)
+                Text(String(format: "%.0f°", ctrl.camera.rotation.keyframes[safe: sel.keyframeIdx]?.value ?? 0))
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary).frame(width: 38, alignment: .trailing)
+            }
+        }
+        easingField(
+            get: { cameraKFEasing(sel: sel) },
+            set: { e in setCameraKFEasing(sel: sel, easing: e) }
+        )
+    }
+
+    private func easingField(get: @escaping () -> PathEasing, set: @escaping (PathEasing) -> Void) -> some View {
+        InspectorField("Easing") {
+            Picker("", selection: Binding(get: get, set: set)) {
+                ForEach(PathEasing.allCases, id: \.self) { Text($0.displayName).tag($0) }
+            }
+            .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+        }
+    }
+
+    private func moveLayerKF(sel: UMTimelineKFSelection, toFrame newFrame: Int) {
+        guard let ls = controller.layerStates[safe: sel.layerIndex] else { return }
+        switch sel.lane {
+        case .opacity:
+            guard sel.keyframeIdx < ls.opacityDriver.keyframes.count else { return }
+            ls.opacityDriver.keyframes[sel.keyframeIdx].frame = newFrame
+            ls.opacityDriver.keyframes.sort { $0.frame < $1.frame }
+            if let idx = ls.opacityDriver.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: sel.layerIndex, lane: sel.lane, keyframeIdx: idx)
+            }
+        case .offset:
+            guard sel.keyframeIdx < ls.layerOffset.keyframes.count else { return }
+            ls.layerOffset.keyframes[sel.keyframeIdx].frame = newFrame
+            ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
+            if let idx = ls.layerOffset.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: sel.layerIndex, lane: sel.lane, keyframeIdx: idx)
+            }
+        }
+    }
+
+    private func camerKFFrame(sel: UMCameraKFSelection) -> Int {
+        switch sel.lane {
+        case .pan:      return controller.camera.pan.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        case .zoom:     return controller.camera.zoom.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        case .rotation: return controller.camera.rotation.keyframes[safe: sel.keyframeIdx]?.frame ?? 0
+        }
+    }
+
+    private func moveCameraKF(sel: UMCameraKFSelection, toFrame newFrame: Int) {
+        switch sel.lane {
+        case .pan:
+            guard sel.keyframeIdx < controller.camera.pan.keyframes.count else { return }
+            controller.camera.pan.keyframes[sel.keyframeIdx].frame = newFrame
+            controller.camera.pan.keyframes.sort { $0.frame < $1.frame }
+            if let idx = controller.camera.pan.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedCameraKF = UMCameraKFSelection(lane: sel.lane, keyframeIdx: idx)
+            }
+        case .zoom:
+            guard sel.keyframeIdx < controller.camera.zoom.keyframes.count else { return }
+            controller.camera.zoom.keyframes[sel.keyframeIdx].frame = newFrame
+            controller.camera.zoom.keyframes.sort { $0.frame < $1.frame }
+            if let idx = controller.camera.zoom.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedCameraKF = UMCameraKFSelection(lane: sel.lane, keyframeIdx: idx)
+            }
+        case .rotation:
+            guard sel.keyframeIdx < controller.camera.rotation.keyframes.count else { return }
+            controller.camera.rotation.keyframes[sel.keyframeIdx].frame = newFrame
+            controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
+            if let idx = controller.camera.rotation.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+                controller.selectedCameraKF = UMCameraKFSelection(lane: sel.lane, keyframeIdx: idx)
+            }
+        }
+    }
+
+    private func cameraKFEasing(sel: UMCameraKFSelection) -> PathEasing {
+        switch sel.lane {
+        case .pan:      return controller.camera.pan.keyframes[safe: sel.keyframeIdx]?.easing      ?? .easeInOut
+        case .zoom:     return controller.camera.zoom.keyframes[safe: sel.keyframeIdx]?.easing     ?? .easeInOut
+        case .rotation: return controller.camera.rotation.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut
+        }
+    }
+
+    private func setCameraKFEasing(sel: UMCameraKFSelection, easing: PathEasing) {
+        switch sel.lane {
+        case .pan:
+            controller.camera.pan.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        case .zoom:
+            controller.camera.zoom.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        case .rotation:
+            controller.camera.rotation.keyframes[safe: sel.keyframeIdx]?.easing = easing
         }
     }
 

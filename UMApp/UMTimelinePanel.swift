@@ -23,7 +23,7 @@ private enum TLSelection: Hashable {
     case camera(lane: UMCameraLane, keyframeIdx: Int)
 }
 
-private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, rubberBand }
+private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, rubberBand, markerStrip }
 
 private struct LayerKFHit: Equatable {
     var layerIndex: Int; var lane: UMTimelineLane; var keyframeIdx: Int
@@ -59,6 +59,8 @@ struct UMTimelinePanel: View {
     @State private var rubberEnd:        CGPoint? = nil
     @State private var selectedItems:    Set<TLSelection> = []
     @State private var undoStack:        [TLSnapshot] = []
+    @State private var selectedMarkerID: UUID?    = nil
+    @State private var markerRenameText: String   = ""
     @State private var scrollMonitor:    Any?     = nil
     @State private var mouseOver:        Bool     = false
 
@@ -119,6 +121,12 @@ struct UMTimelinePanel: View {
                 .opacity(0).frame(width: 0, height: 0)
             Button("") { selectAllKeyframes() }
                 .keyboardShortcut("a", modifiers: .command)
+                .opacity(0).frame(width: 0, height: 0)
+            Button("") { copySelectedKeyframes() }
+                .keyboardShortcut("c", modifiers: .command)
+                .opacity(0).frame(width: 0, height: 0)
+            Button("") { pasteKeyframes() }
+                .keyboardShortcut("v", modifiers: .command)
                 .opacity(0).frame(width: 0, height: 0)
         }
     }
@@ -192,13 +200,46 @@ struct UMTimelinePanel: View {
                     Image(systemName: "plus.magnifyingglass").font(.system(size: 12))
                 }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22)
                 Spacer()
+                // Add marker at current frame
+                Button {
+                    let f = controller.engine.currentFrame
+                    let m = UMTimelineMarker(frame: f, name: "")
+                    controller.timelineMarkers.append(m)
+                    controller.timelineMarkers.sort { $0.frame < $1.frame }
+                    selectedMarkerID = m.id
+                    markerRenameText = ""
+                } label: {
+                    Image(systemName: "bookmark.fill").font(.system(size: 10)).foregroundStyle(.orange.opacity(0.8))
+                }.buttonStyle(.plain).help("Add marker at current frame")
                 if !selectedItems.isEmpty {
                     Button { deleteSelectedKeyframes() } label: {
                         Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(.red.opacity(0.7))
                     }.buttonStyle(.plain).help("Delete selected keyframes")
                 }
             }
-            .frame(height: totalRulerH).padding(.horizontal, 6)
+            .frame(height: markerH).padding(.horizontal, 6)
+
+            // Marker rename row (shown below bookmark button row when marker selected)
+            if let mid = selectedMarkerID,
+               let idx = controller.timelineMarkers.firstIndex(where: { $0.id == mid }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "bookmark.fill").font(.system(size: 9)).foregroundStyle(.orange)
+                    TextField("Marker name", text: Binding(
+                        get: { controller.timelineMarkers[safe: idx]?.name ?? "" },
+                        set: { controller.timelineMarkers[safe: idx]?.name = $0 }
+                    ))
+                    .textFieldStyle(.plain).font(.system(size: 10))
+                    .onSubmit { selectedMarkerID = nil }
+                    Button { controller.timelineMarkers.remove(at: idx); selectedMarkerID = nil } label: {
+                        Image(systemName: "xmark").font(.system(size: 9)).foregroundStyle(.red.opacity(0.7))
+                    }.buttonStyle(.plain)
+                }
+                .frame(height: rulerH).padding(.horizontal, 6)
+                .background(Color.orange.opacity(0.07))
+            } else {
+                // Ruler spacer (draws nothing, canvas ruler draws the ticks)
+                Color.clear.frame(height: rulerH)
+            }
 
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 headerRow(row)
@@ -352,7 +393,35 @@ struct UMTimelinePanel: View {
         ctx.stroke(Path {
             $0.move(to: CGPoint(x: 0, y: markerH)); $0.addLine(to: CGPoint(x: size.width, y: markerH))
         }, with: .color(Color.secondary.opacity(0.12)), lineWidth: 0.5)
-        // TODO: named markers drawn here in Phase C
+
+        let px = CGFloat(zoom)
+        for marker in controller.timelineMarkers {
+            let x = CGFloat(marker.frame) * px - CGFloat(hOffset)
+            guard x > -20 && x < size.width + 20 else { continue }
+            let isSelected = marker.id == selectedMarkerID
+            let accent: Color = isSelected ? .accentColor : .orange
+            // Triangle head
+            ctx.fill(Path {
+                $0.move(to: CGPoint(x: x, y: markerH - 1))
+                $0.addLine(to: CGPoint(x: x - 5, y: 2))
+                $0.addLine(to: CGPoint(x: x + 5, y: 2))
+                $0.closeSubpath()
+            }, with: .color(accent.opacity(isSelected ? 1.0 : 0.75)))
+            // Vertical tick
+            ctx.stroke(Path {
+                $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: markerH))
+            }, with: .color(accent.opacity(0.6)), lineWidth: 1)
+            // Label (right of tick if it fits)
+            if !marker.name.isEmpty {
+                let labelX = x + 4
+                if labelX < size.width - 4 {
+                    ctx.draw(Text(marker.name)
+                        .font(.system(size: 8))
+                        .foregroundStyle(accent.opacity(0.9)),
+                        at: CGPoint(x: labelX, y: 1), anchor: .topLeading)
+                }
+            }
+        }
     }
 
     private func drawRuler(_ ctx: inout GraphicsContext, size: CGSize) {
@@ -513,7 +582,9 @@ struct UMTimelinePanel: View {
         if !isDragInit {
             isDragInit = true
             prevDragTX = 0
-            if v.startLocation.y < totalRulerH {
+            if v.startLocation.y < markerH {
+                dragKind = .markerStrip
+            } else if v.startLocation.y < totalRulerH {
                 dragKind  = .seek
                 wasPlaying = controller.isPlaying
                 if controller.isPlaying { controller.togglePlayback() }
@@ -550,7 +621,7 @@ struct UMTimelinePanel: View {
             prevDragTX = v.translation.width
         case .rubberBand:
             rubberEnd = v.location
-        case .none: break
+        case .markerStrip, .none: break
         }
     }
 
@@ -582,6 +653,11 @@ struct UMTimelinePanel: View {
                 selectKFsInRect(rect, rows: rows, additive: shiftDown)
             }
             rubberStart = nil; rubberEnd = nil
+        case .markerStrip:
+            if isTap {
+                let frame = max(0, Int(Double(v.startLocation.x + CGFloat(hOffset)) / zoom + 0.5))
+                handleMarkerTap(frame: frame)
+            }
         case .none: break
         }
         dragKind = .none
@@ -604,6 +680,135 @@ struct UMTimelinePanel: View {
 
     private func seekToKF(_ frame: Int?) {
         if let f = frame { controller.seekToFrame(f) }
+    }
+
+    private func handleMarkerTap(frame: Int) {
+        let tol = max(1, Int(Double(hitTol) / zoom))
+        if let marker = controller.timelineMarkers.first(where: { abs($0.frame - frame) <= tol }) {
+            // Select existing marker and seek
+            selectedMarkerID = marker.id
+            markerRenameText = marker.name
+            controller.seekToFrame(marker.frame)
+        } else {
+            // Deselect
+            selectedMarkerID = nil
+        }
+    }
+
+    // MARK: Copy / paste
+
+    private func copySelectedKeyframes() {
+        guard !selectedItems.isEmpty else { return }
+        var items: [UMKFClipboard.Item] = []
+        // Find minimum frame as anchor
+        var minFrame = Int.max
+        for item in selectedItems {
+            let f: Int
+            switch item {
+            case .layer(let i, let lane, let ki):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                f = lane.keyframeFrames(from: ls)[safe: ki] ?? 0
+            case .camera(let lane, let ki):
+                f = lane.keyframeFrames(from: controller.camera)[safe: ki] ?? 0
+            }
+            minFrame = min(minFrame, f)
+        }
+        guard minFrame < Int.max else { return }
+
+        for item in selectedItems {
+            switch item {
+            case .layer(let i, let lane, let ki):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                let frames = lane.keyframeFrames(from: ls)
+                guard let frame = frames[safe: ki] else { continue }
+                let offset = frame - minFrame
+                switch lane {
+                case .opacity:
+                    guard let kf = ls.opacityDriver.keyframes[safe: ki] else { continue }
+                    items.append(.layerOpacity(layerIndex: i, frameOffset: offset, value: kf.value, easing: kf.easing))
+                case .offset:
+                    guard let kf = ls.layerOffset.keyframes[safe: ki] else { continue }
+                    items.append(.layerOffset(layerIndex: i, frameOffset: offset, value: kf.value, easing: kf.easing))
+                }
+            case .camera(let lane, let ki):
+                let frames = lane.keyframeFrames(from: controller.camera)
+                guard let frame = frames[safe: ki] else { continue }
+                let offset = frame - minFrame
+                switch lane {
+                case .pan:
+                    guard let kf = controller.camera.pan.keyframes[safe: ki] else { continue }
+                    items.append(.cameraPan(frameOffset: offset, value: kf.value, easing: kf.easing))
+                case .zoom:
+                    guard let kf = controller.camera.zoom.keyframes[safe: ki] else { continue }
+                    items.append(.cameraZoom(frameOffset: offset, value: kf.value, easing: kf.easing))
+                case .rotation:
+                    guard let kf = controller.camera.rotation.keyframes[safe: ki] else { continue }
+                    items.append(.cameraRotation(frameOffset: offset, value: kf.value, easing: kf.easing))
+                }
+            }
+        }
+        if !items.isEmpty {
+            controller.kfClipboard = UMKFClipboard(items: items, anchorFrame: minFrame)
+        }
+    }
+
+    private func pasteKeyframes() {
+        guard let cb = controller.kfClipboard, !cb.items.isEmpty else { return }
+        recordUndo()
+        let base = controller.engine.currentFrame
+        clearSelection()
+        for item in cb.items {
+            switch item {
+            case .layerOpacity(let i, let offset, let value, let easing):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                let f = base + offset
+                ls.opacityDriver.mode = .keyframe
+                ls.opacityDriver.keyframes.removeAll { $0.frame == f }
+                ls.opacityDriver.keyframes.append(UMDoubleKeyframe(frame: f, value: value, easing: easing))
+                ls.opacityDriver.keyframes.sort { $0.frame < $1.frame }
+                if let ki = ls.opacityDriver.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.layer(layerIndex: i, lane: .opacity, keyframeIdx: ki))
+                }
+            case .layerOffset(let i, let offset, let value, let easing):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                let f = base + offset
+                ls.layerOffset.mode = .keyframe
+                ls.layerOffset.keyframes.removeAll { $0.frame == f }
+                ls.layerOffset.keyframes.append(UMVectorKeyframe(frame: f, value: value, easing: easing))
+                ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
+                if let ki = ls.layerOffset.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.layer(layerIndex: i, lane: .offset, keyframeIdx: ki))
+                }
+            case .cameraPan(let offset, let value, let easing):
+                let f = base + offset
+                controller.camera.pan.mode = .keyframe
+                controller.camera.pan.keyframes.removeAll { $0.frame == f }
+                controller.camera.pan.keyframes.append(UMVectorKeyframe(frame: f, value: value, easing: easing))
+                controller.camera.pan.keyframes.sort { $0.frame < $1.frame }
+                if let ki = controller.camera.pan.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.camera(lane: .pan, keyframeIdx: ki))
+                }
+            case .cameraZoom(let offset, let value, let easing):
+                let f = base + offset
+                controller.camera.zoom.mode = .keyframe
+                controller.camera.zoom.keyframes.removeAll { $0.frame == f }
+                controller.camera.zoom.keyframes.append(UMDoubleKeyframe(frame: f, value: value, easing: easing))
+                controller.camera.zoom.keyframes.sort { $0.frame < $1.frame }
+                if let ki = controller.camera.zoom.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.camera(lane: .zoom, keyframeIdx: ki))
+                }
+            case .cameraRotation(let offset, let value, let easing):
+                let f = base + offset
+                controller.camera.rotation.mode = .keyframe
+                controller.camera.rotation.keyframes.removeAll { $0.frame == f }
+                controller.camera.rotation.keyframes.append(UMDoubleKeyframe(frame: f, value: value, easing: easing))
+                controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
+                if let ki = controller.camera.rotation.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.camera(lane: .rotation, keyframeIdx: ki))
+                }
+            }
+        }
+        syncSelectionToController()
     }
 
     // MARK: Keyframe mutations

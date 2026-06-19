@@ -64,6 +64,41 @@ enum UMCameraLane: Int, CaseIterable, Hashable {
     }
 }
 
+// MARK: - Safe subscript (shared across timeline files)
+
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        get { indices.contains(index) ? self[index] : nil }
+        set {
+            guard let v = newValue, indices.contains(index) else { return }
+            self[index] = v
+        }
+    }
+}
+
+// MARK: - Named markers
+
+struct UMTimelineMarker: Codable, Identifiable {
+    var id:    UUID
+    var frame: Int
+    var name:  String
+    init(frame: Int, name: String) { self.id = UUID(); self.frame = frame; self.name = name }
+}
+
+// MARK: - KF clipboard (in-memory only)
+
+struct UMKFClipboard {
+    enum Item {
+        case layerOpacity(layerIndex: Int, frameOffset: Int, value: Double,  easing: PathEasing)
+        case layerOffset( layerIndex: Int, frameOffset: Int, value: UMVec2,  easing: PathEasing)
+        case cameraPan(   frameOffset: Int, value: UMVec2,  easing: PathEasing)
+        case cameraZoom(  frameOffset: Int, value: Double,  easing: PathEasing)
+        case cameraRotation(frameOffset: Int, value: Double, easing: PathEasing)
+    }
+    var items:       [Item]
+    var anchorFrame: Int
+}
+
 // MARK: - Selection types
 
 struct UMTimelineKFSelection: Equatable {
