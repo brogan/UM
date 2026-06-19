@@ -1119,6 +1119,54 @@ final class AppController {
 
     // MARK: Color map
 
+    // MARK: Color Map Lock / Unlock
+
+    /// True if any drawn cell on the active layer has a baked color lock.
+    var hasColorMapLock: Bool {
+        engine.document.cells.contains { $0.isDrawn && ($0.lockedFillColor != nil || $0.lockedStrokeColor != nil) }
+    }
+
+    /// Bake the current color map into each drawn cell so the color travels
+    /// with the cell through transforms. Scoped to selection when non-empty.
+    func lockColorMap() {
+        guard colorMapEngine.isLoaded,
+              let src  = engine.document.colorSource,
+              let grid = colorMapEngine.currentGrid(animationFrame: 0, loopMode: .loop) else { return }
+        let cols    = engine.document.gridConfig.cols
+        let indices = selectedIndices.isEmpty ? nil : selectedIndices
+        for i in engine.document.cells.indices {
+            var cell = engine.document.cells[i]
+            guard cell.isDrawn else { continue }
+            guard indices == nil || indices!.contains(cell.gridIndex) else { continue }
+            let r = cell.gridIndex / cols
+            let c = cell.gridIndex % cols
+            guard r < grid.count, c < grid[r].count else { continue }
+            let sampled = grid[r][c]
+            let style   = projectStyles.first(where: { $0.id == cell.styleID })
+            let a       = src.preserveStyleAlpha ? (style?.fillColor.a ?? 1.0) : sampled.a
+            let mapped  = UMColor(r: sampled.r, g: sampled.g, b: sampled.b, a: a)
+            switch src.applyTo {
+            case .fill:          cell.lockedFillColor   = mapped; cell.lockedStrokeColor = nil
+            case .stroke:        cell.lockedStrokeColor = mapped; cell.lockedFillColor   = nil
+            case .fillAndStroke: cell.lockedFillColor   = mapped; cell.lockedStrokeColor = mapped
+            }
+            engine.document.cells[i] = cell
+        }
+        UMLogger.shared.log("lockColorMap \(indices == nil ? "all" : "\(indices!.count) selected") cells")
+    }
+
+    /// Remove baked color locks from drawn cells. Scoped to selection when non-empty.
+    func unlockColorMap() {
+        let indices = selectedIndices.isEmpty ? nil : selectedIndices
+        for i in engine.document.cells.indices {
+            guard engine.document.cells[i].isDrawn else { continue }
+            guard indices == nil || indices!.contains(engine.document.cells[i].gridIndex) else { continue }
+            engine.document.cells[i].lockedFillColor   = nil
+            engine.document.cells[i].lockedStrokeColor = nil
+        }
+        UMLogger.shared.log("unlockColorMap \(indices == nil ? "all" : "\(indices!.count) selected") cells")
+    }
+
     func loadColorSource(url: URL) {
         var resolvedURL = url
         var relPath: String? = nil

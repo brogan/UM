@@ -476,8 +476,11 @@ struct GridCanvasPlaceholder: View {
                                                               phaseOffset: cell.phaseOffset,
                                                               cellIndex: cell.gridIndex,
                                                               cellW: lCellW, cellH: lCellH)
-                                if let src = lColorSrc, let grid = lColorGrid,
-                                   r < grid.count, c < grid[r].count {
+                                if cell.lockedFillColor != nil || cell.lockedStrokeColor != nil {
+                                    if let fc = cell.lockedFillColor   { motion.fillOverride   = fc }
+                                    if let sc = cell.lockedStrokeColor { motion.strokeOverride = sc }
+                                } else if let src = lColorSrc, let grid = lColorGrid,
+                                          r < grid.count, c < grid[r].count {
                                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                                 }
                                 let mx = Double(c) * lCellW + lCellW / 2 + cell.positionOffset.dx * lScaleX + motion.dx
@@ -1067,9 +1070,12 @@ struct FrameCapture: View {
                                               phaseOffset: cell.phaseOffset,
                                               cellIndex: cell.gridIndex,
                                               cellW: cellW, cellH: cellH)
-                if let src = colorSource,
-                   let grid = colorGrid,
-                   r < grid.count, c < grid[r].count {
+                if cell.lockedFillColor != nil || cell.lockedStrokeColor != nil {
+                    if let fc = cell.lockedFillColor   { motion.fillOverride   = fc }
+                    if let sc = cell.lockedStrokeColor { motion.strokeOverride = sc }
+                } else if let src = colorSource,
+                          let grid = colorGrid,
+                          r < grid.count, c < grid[r].count {
                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                 }
                 let mx = Double(c) * cellW + cellW / 2 + cell.positionOffset.dx * scaleX + motion.dx

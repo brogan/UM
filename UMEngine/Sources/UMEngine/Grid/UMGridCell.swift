@@ -36,6 +36,12 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
     /// Optional reference to a UMMotionPath in document.paths.
     public var pathID:   UUID?
 
+    /// Baked color from a color map "lock" operation. When set, the cell
+    /// uses this color instead of live color map sampling so the color
+    /// travels with the cell through transforms.
+    public var lockedFillColor:   UMColor?
+    public var lockedStrokeColor: UMColor?
+
     public init(
         gridIndex:      Int,
         styleID:        UUID     = UUID(),
@@ -70,22 +76,25 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         case positionOffset, phaseOffset
         case scaleX, scaleY, rotation
         case motionID, shapeID, pathID
+        case lockedFillColor, lockedStrokeColor
     }
 
     public init(from decoder: Decoder) throws {
-        let c           = try decoder.container(keyedBy: CodingKeys.self)
-        id              = try c.decode(UUID.self,     forKey: .id)
-        gridIndex       = try c.decode(Int.self,      forKey: .gridIndex)
-        isDrawn         = try c.decode(Bool.self,     forKey: .isDrawn)
-        styleID         = try c.decode(UUID.self,     forKey: .styleID)
-        positionOffset  = try c.decode(UMOffset.self, forKey: .positionOffset)
-        phaseOffset     = try c.decode(Int.self,      forKey: .phaseOffset)
-        scaleX          = try c.decode(Double.self,   forKey: .scaleX)
-        scaleY          = try c.decode(Double.self,   forKey: .scaleY)
-        rotation        = try c.decode(Double.self,   forKey: .rotation)
-        motionID        = try c.decodeIfPresent(UUID.self, forKey: .motionID)
-        shapeID         = try c.decodeIfPresent(UUID.self, forKey: .shapeID)
-        pathID          = try c.decodeIfPresent(UUID.self, forKey: .pathID)
+        let c               = try decoder.container(keyedBy: CodingKeys.self)
+        id                  = try c.decode(UUID.self,     forKey: .id)
+        gridIndex           = try c.decode(Int.self,      forKey: .gridIndex)
+        isDrawn             = try c.decode(Bool.self,     forKey: .isDrawn)
+        styleID             = try c.decode(UUID.self,     forKey: .styleID)
+        positionOffset      = try c.decode(UMOffset.self, forKey: .positionOffset)
+        phaseOffset         = try c.decode(Int.self,      forKey: .phaseOffset)
+        scaleX              = try c.decode(Double.self,   forKey: .scaleX)
+        scaleY              = try c.decode(Double.self,   forKey: .scaleY)
+        rotation            = try c.decode(Double.self,   forKey: .rotation)
+        motionID            = try c.decodeIfPresent(UUID.self,    forKey: .motionID)
+        shapeID             = try c.decodeIfPresent(UUID.self,    forKey: .shapeID)
+        pathID              = try c.decodeIfPresent(UUID.self,    forKey: .pathID)
+        lockedFillColor     = try c.decodeIfPresent(UMColor.self, forKey: .lockedFillColor)
+        lockedStrokeColor   = try c.decodeIfPresent(UMColor.self, forKey: .lockedStrokeColor)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -99,8 +108,10 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         try c.encode(scaleX,         forKey: .scaleX)
         try c.encode(scaleY,         forKey: .scaleY)
         try c.encode(rotation,       forKey: .rotation)
-        try c.encodeIfPresent(motionID, forKey: .motionID)
-        try c.encodeIfPresent(shapeID,  forKey: .shapeID)
-        try c.encodeIfPresent(pathID,   forKey: .pathID)
+        try c.encodeIfPresent(motionID,          forKey: .motionID)
+        try c.encodeIfPresent(shapeID,           forKey: .shapeID)
+        try c.encodeIfPresent(pathID,            forKey: .pathID)
+        try c.encodeIfPresent(lockedFillColor,   forKey: .lockedFillColor)
+        try c.encodeIfPresent(lockedStrokeColor, forKey: .lockedStrokeColor)
     }
 }

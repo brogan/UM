@@ -261,6 +261,41 @@ struct QuickAdjustView: View {
                         .padding(.horizontal, 12)
                         .padding(.bottom, 2)
                 }
+
+            }
+
+            if controller.colorMapEngine.isLoaded || controller.hasColorMapLock {
+                InspectorField("Lock") {
+                    Button(action: { controller.lockColorMap() }) {
+                        Label("Lock", systemImage: "lock.fill")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(Color.accentColor)
+                    .disabled(!controller.colorMapEngine.isLoaded)
+                    .help(controller.selectedIndices.isEmpty
+                          ? "Bake color map colors into all drawn cells"
+                          : "Bake color map colors into selected cells")
+
+                    Button(action: { controller.unlockColorMap() }) {
+                        Label("Unlock", systemImage: "lock.open")
+                            .font(.system(size: 11))
+                    }
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(controller.hasColorMapLock ? Color.accentColor : Color.secondary)
+                    .disabled(!controller.hasColorMapLock)
+                    .help(controller.selectedIndices.isEmpty
+                          ? "Remove locked colors from all drawn cells"
+                          : "Remove locked colors from selected cells")
+                }
+
+                if controller.hasColorMapLock {
+                    Text("⚑ \(controller.selectedIndices.isEmpty ? "Layer" : "Selection") has locked colors")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 4)
+                }
             }
         }
     }

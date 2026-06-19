@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -1385,6 +1385,37 @@ MyProject.umproj/
 
 `UMColorSource.relativeFilePath` stores the filename only (e.g. `"backdrop.jpg"`). The `colorSources/` prefix is implied. On pick (if the project is saved) or on first save (if picked beforehand), UM copies the file into `colorSources/` and sets `relativeFilePath`. Projects are self-contained — the source file travels with the `.umproj` directory.
 
+#### Color map lock (built 2026-06-19)
+
+Cells can be "locked" to the color they currently receive from the color map. Locked colors travel with the cell through any transform (flip, rotate, nudge, stamp, resample), making it possible to infuse an image's spatial color into a grid and then freely rearrange the sprites into patterns that play upon those colors without them snapping to new grid positions.
+
+**Data model** — two optional fields added to `UMGridCell` (with `decodeIfPresent` for full backward compatibility):
+
+```swift
+public var lockedFillColor:   UMColor?   // nil = use live color map / style
+public var lockedStrokeColor: UMColor?   // nil = use live color map / style
+```
+
+**Render priority**: at render time, locked colors are checked before live color map sampling:
+
+```swift
+if cell.lockedFillColor != nil || cell.lockedStrokeColor != nil {
+    if let fc = cell.lockedFillColor   { motion.fillOverride   = fc }
+    if let sc = cell.lockedStrokeColor { motion.strokeOverride = sc }
+} else if let src = colorSource, let grid = colorGrid, r < grid.count, c < grid[r].count {
+    applyColorMap(grid[r][c], source: src, style: style, to: &motion)
+}
+```
+
+This applies in all three render paths: live canvas, `FrameCapture` (accumulation), and `UMVideoExporter`.
+
+**`AppController` operations**:
+- `lockColorMap()` — samples `colorMapEngine.currentGrid(animationFrame: 0)` and writes each drawn cell's color into `lockedFillColor`/`lockedStrokeColor` using the current `applyTo` and `preserveStyleAlpha` settings. Scoped to `selectedIndices` when non-empty; otherwise operates on all drawn cells.
+- `unlockColorMap()` — clears `lockedFillColor` and `lockedStrokeColor` on drawn cells. Also selection-aware.
+- `hasColorMapLock: Bool` — true if any drawn cell on the active layer has a locked color; used to enable the Unlock button and show the status indicator.
+
+**UI** — Lock/Unlock row in the COLOR MAP section of Quick Adjust, visible whenever a color map is loaded or locked colors exist. Lock button is disabled when no map is loaded; Unlock button is disabled when no cells are locked. A status line ("⚑ Layer has locked colors") appears below when locks are present, changing to "Selection" when cells are selected. Locking with a selection active scopes the operation to the selected cells only.
+
 #### Per-style color map opt-out (future extension)
 
 Add `var ignoreColorMap: Bool = false` to `CellStyle` (with `decodeIfPresent` for backward compatibility, defaulting to false). When true, cells using this style skip the color map injection and use their explicit style fill/stroke colors. This allows mixing image-colored cells with explicitly-styled foreground cells in the same composition.
@@ -1474,6 +1505,7 @@ Everything in this list is implemented and functional in the current build (`mai
 - Background draw / accumulation mode (`backgroundDraw` flag, `FrameCapture` struct); accumulation correctly captures path motion trails — fixed: a second `guard !Task.isCancelled` inside `captureTask` was killing every completed render before it could store its result; the guard is removed so completed renders always commit to the frame buffer
 - Color map system: `UMColorMapEngine`, static image and video (up to 240 extracted frames) sampling
 - **Per-layer color maps** (built 2026-06-19): each layer owns its own `UMColorMapEngine` in `AppController.layerColorMapEngines: [UUID: UMColorMapEngine]`; `colorMapEngine` property always refers to the active layer's engine (no UI changes); `colorMapEngine(forLayerID:)` accessor used by live canvas, accumulation snapshots, `umRenderComposited`, and `UMVideoExporter` for per-layer lookup; layer lifecycle methods (`addLayer`, `removeLayer`, `duplicateLayer`, `selectLayer`, project load/reset) all manage the per-layer engine dict correctly
+- **Color map lock** (built 2026-06-19): `lockedFillColor: UMColor?` and `lockedStrokeColor: UMColor?` on `UMGridCell` (Codable, `decodeIfPresent`); locked colors take priority over live sampling in all three render paths; `lockColorMap()` / `unlockColorMap()` in `AppController` (selection-aware); Lock/Unlock row in Quick Adjust COLOR MAP section with `hasColorMapLock` status indicator
 - Color map UI in CANVAS section: apply target, style alpha preserve, video loop mode
 - Open curves, points, ovals, line polygons imported from Loom — all geometry types rendered
 - `buildPolygonPath` handles all five `PolygonType` cases from LoomEngine
