@@ -635,6 +635,26 @@ private let qaProjectBody = #"""
 <p>When the grid is resampled (resolution change), the colour source is automatically re-sampled at the new grid dimensions — no reload needed.</p>
 <div class="tip"><strong>Projects are self-contained</strong> — when you choose a color source, UM copies the file into a <code>colorSources/</code> folder inside the .umproj package. The project can be moved, renamed, or shared and the color source travels with it automatically.</div>
 
+<h2>Color map lock</h2>
+<p>By default, a cell's color map color depends on its position in the grid — move or transform a cell and it picks up whatever color lives at its new grid coordinates. <strong>Lock</strong> breaks that dependency: each drawn cell bakes its current color map sample into the cell itself, so the color travels with it through any transform (flip, rotate, nudge, stamp, resample).</p>
+<p>This enables a workflow that is otherwise impossible:</p>
+<ol class="steps">
+  <li>Load a color source and watch your grid take on the image's colors spatially.</li>
+  <li>Click <strong>Lock</strong>. UM reads the current color from each drawn cell's grid position and stores it directly on the cell.</li>
+  <li>Clear the color source or ignore it — the locked colors are now independent data on the cells.</li>
+  <li>Freely rotate, flip, nudge, stamp, or otherwise transform the grid. Each cell keeps the color it had at lock time.</li>
+  <li>Click <strong>Unlock</strong> at any point to return all cells to live color map sampling.</li>
+</ol>
+
+<h3>Lock settings</h3>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td><strong>Lock</strong></td><td>Bakes the current color map into all drawn cells (or selected cells only, if a selection exists). Respects the current <em>Apply to</em> and <em>Style α</em> settings. Disabled when no color source is loaded.</td></tr>
+  <tr><td><strong>Unlock</strong></td><td>Removes locked colors from drawn cells (or selected cells). Cells revert to live color map sampling — or to style colors if no map is loaded. Available even after the color source has been cleared.</td></tr>
+</table>
+<div class="tip"><strong>Selection-aware</strong> — when cells are selected (rubber-band or Shift-click), Lock and Unlock operate only on the selection. Use this to lock one region of the grid while leaving another region free to track the live color map.</div>
+<p>A status line <em>"⚑ Layer has locked colors"</em> appears below the Lock row whenever any drawn cell on the active layer has a baked color. This is a reminder that those cells are no longer tracking the live color map.</p>
+
 <h2>Color map palette extraction</h2>
 <p>When a Color Map source is loaded, UM can sample it to build a named <strong>colour palette</strong> — a set of swatches you can use to hand-pick fill and stroke colours for your styles. See <a href="um-help://help/palette">Style Palette &amp; Library → PALETTES</a> for how to generate and manage palettes, and <a href="um-help://help/qa-style">Style (RENDER)</a> for how to apply palette colours to a style's fill or stroke.</p>
 """#
