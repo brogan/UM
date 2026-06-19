@@ -1772,6 +1772,36 @@ The ORDER/CHAOS, MOTION, and SEQUENCE sections were removed from QuickAdjustView
 
 ---
 
+### 15.10 Color Map Palette Extraction
+
+**Goal:** Let the user sample an image to extract a palette of representative colors, then use those colors to create or update `CellStyle` entries in the project. This bridges the Color Map (per-frame per-cell live recolor) and the Style Palette (named design colors), giving the user a way to derive a coherent style set from any reference image or from the same image used as a live color map.
+
+**Proposed workflow**
+
+1. In the Color Map section of Quick Adjust (or a dedicated panel), a **"Extract Palette…"** button opens an image picker (same file types as the color source — JPEG, PNG, TIFF, HEIC, MP4 frame).
+2. The image is sampled using a palette extraction algorithm (e.g. k-means clustering on Lab color space, or median-cut). The user selects the number of colors (4, 6, 8, 12…).
+3. The extracted swatches are presented in a sheet — the user can:
+   - Accept/reject individual swatches
+   - Click a swatch to edit its color before committing
+   - Choose whether to **create new styles** (one per accepted swatch) or **update existing styles** (remapping the project's style fill colors to the nearest palette color)
+4. Confirmed swatches are added as new `CellStyle` entries to `projectStyles` with auto-generated names (e.g. "Warm Ochre", "Deep Teal") or simple sequential names ("Palette 1"…). The user can rename them in the Style Palette afterwards.
+
+**Data model impact**
+
+No persistent changes needed — the extraction result is ephemeral (a `[UMColor]` array). Only the resulting new `CellStyle` entries are persisted. The extraction can run on a background thread and post results back on the main actor.
+
+**Connection to existing Color Map**
+
+If a Color Map source is already loaded, "Extract Palette" should default to sampling from it — the user has already chosen a reference image, so extracting a palette from it is a natural next step. If no color map is loaded, the button opens a fresh file picker.
+
+**Scope:** medium — roughly 2–3 days:
+- Palette extraction (k-means or median-cut on `CGImage`): 1 day
+- Extraction sheet UI (swatches, count picker, accept/reject, edit): 0.75 days
+- Style creation / update logic + naming heuristic: 0.5 days
+- Integration with existing Color Map file picker: 0.25 days
+
+---
+
 ### Summary Table
 
 | Area | Item | Depends on |
@@ -1797,3 +1827,4 @@ The ORDER/CHAOS, MOTION, and SEQUENCE sections were removed from QuickAdjustView
 | **Layers** | Animated layer opacity / parallax drivers | Loom driver integration |
 | **Layers** | Per-layer color maps | Layer system ✓ |
 | **Compat** | Legacy UM XML import | — |
+| **Color** | Color map palette extraction → styles | Color Map ✓ |

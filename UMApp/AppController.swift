@@ -1127,7 +1127,7 @@ final class AppController {
 
     private func rendersBaseURL() -> URL {
         if let proj = currentFileURL {
-            return proj.deletingLastPathComponent().appendingPathComponent("renders")
+            return proj.appendingPathComponent("renders")
         }
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return docs.appendingPathComponent("UM Projects/renders")

@@ -634,6 +634,10 @@ private let qaProjectBody = #"""
 <p>UM draws the source image into a tiny <em>rows × cols</em> pixel buffer using GPU-accelerated bilinear downscaling — one pixel per grid cell. The resulting pixel value is the average colour of all source pixels in that cell's region. A 4K source image sampled into a 6×6 grid takes microseconds.</p>
 <p>When the grid is resampled (resolution change), the colour source is automatically re-sampled at the new grid dimensions — no reload needed.</p>
 <div class="tip"><strong>Projects are self-contained</strong> — when you choose a color source, UM copies the file into a <code>colorSources/</code> folder inside the .umproj package. The project can be moved, renamed, or shared and the color source travels with it automatically.</div>
+
+<h2>Color map palette extraction</h2>
+<p>Not yet built — but planned. An <strong>Extract Palette…</strong> button will let you sample an image (or the currently loaded color source) to extract a set of representative colors using k-means clustering. The resulting swatches can be reviewed, edited, and confirmed, creating new style entries in your Style Palette directly from the image. This bridges the live Color Map and the Style Palette — derive a coherent set of named styles from any reference image.</p>
+<p>See <a href="um-help://help/pending">Not Yet Built</a> for scope and status.</p>
 """#
 
 private let qaStyleBody = #"""
@@ -915,7 +919,7 @@ private let exportBody = #"""
   <li>Navigate to the frame you want — pause playback and scrub the frame counter, or leave at frame 0 for the start.</li>
   <li>Set <strong>Multiplier</strong> and <strong>Scale drawing</strong> in the EXPORT section if needed.</li>
   <li>Click <strong>PNG</strong> in the Transport Bar.</li>
-  <li>A save panel opens. The default location is a <code>renders/stills/</code> directory alongside your saved project file. The suggested filename is <code>&lt;projectname&gt;_YYYYMMDD_HHmmss.png</code>.</li>
+  <li>A save panel opens. The default location is <code>renders/stills/</code> inside your project package. The suggested filename is <code>&lt;projectname&gt;_YYYYMMDD_HHmmss.png</code>.</li>
   <li>Choose a location and click Save. The image is written immediately.</li>
 </ol>
 <p>The export renders at <code>canvasWidth × multiplier</code> × <code>canvasHeight × multiplier</code>. In accumulation mode (Background draw off), the current accumulation buffer is composited as the background before rendering the current frame. All visible layers are composited at their configured opacities.</p>
@@ -924,7 +928,7 @@ private let exportBody = #"""
 <ol class="steps">
   <li>Set <strong>Multiplier</strong>, <strong>Scale drawing</strong>, <strong>FPS</strong>, and <strong>Frames</strong> in the EXPORT section.</li>
   <li>Click <strong>Video</strong> in the Transport Bar.</li>
-  <li>A save panel opens. Default location: <code>renders/animations/</code> alongside the project file.</li>
+  <li>A save panel opens. Default location: <code>renders/animations/</code> inside your project package.</li>
   <li>Choose a location and click Save. The panel closes and export begins in the background.</li>
   <li>A progress bar replaces the Video button showing <em>N%</em>. The UI remains responsive during export.</li>
   <li>When complete, the Video button returns.</li>
@@ -932,14 +936,14 @@ private let exportBody = #"""
 <p>Format: H.264 in a .mov container. All layers composite per-frame at their configured opacities. In accumulation mode, each exported frame correctly shows the accumulated build-up, exactly as it appears on screen during live playback.</p>
 
 <h2>Render directories</h2>
-<p>Render directories are created automatically on first export alongside the saved project file:</p>
+<p>Render directories live <strong>inside</strong> the project package and are created automatically when the project is saved:</p>
 <pre>
-MyProject.umproj
-renders/
-  stills/       ← PNG exports
-  animations/   ← Video exports
+MyProject.umproj/
+    renders/
+        stills/       ← PNG exports
+        animations/   ← Video exports
 </pre>
-<p>If the project has not been saved yet, the save panel defaults to <code>~/Documents/UM Projects/renders/</code>.</p>
+<p>The save panel defaults to the correct subdirectory — you can accept the default or navigate elsewhere. If the project has not been saved yet, the save panel defaults to <code>~/Documents/UM Projects/renders/</code> instead.</p>
 
 <div class="warn"><strong>SVG export</strong> — the SVG button in the Transport Bar is present but not yet implemented.</div>
 """#
@@ -1112,5 +1116,6 @@ private let pendingBody = #"""
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
+  <tr><td>Color</td><td>Color map palette extraction</td><td>An Extract Palette… button that samples a reference image (or the loaded color source) using k-means clustering and presents swatches for review. Confirmed swatches create new CellStyle entries in the project. Bridges the live Color Map and the Style Palette.</td></tr>
 </table>
 """#
