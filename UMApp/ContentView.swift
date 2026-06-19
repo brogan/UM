@@ -269,6 +269,7 @@ private struct AccumulationSnapshot: @unchecked Sendable {
     let backgroundColor: UMColor
     let shapePolygonMap: [UUID: [Polygon2D]]
     let fallbackPolygons: [Polygon2D]
+    let projectMotionSets: [UMMotionSet]
     let stretchSprites: Bool
     let frame: Int
     let pw: Int
@@ -323,26 +324,27 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     ctx.translateBy(x: 0, y: CGFloat(ph))
     ctx.scaleBy(x: 1, y: -1)
 
-    let dsf   = Double(snap.displayScale)
-    let cellW = layer.cellW, cellH = layer.cellH
-    let half  = min(cellW, cellH)
-    let styleMap = Dictionary(uniqueKeysWithValues: layer.styles.map { ($0.id, $0) })
-    let pathMap  = Dictionary(uniqueKeysWithValues: layer.paths.map  { ($0.id, $0) })
+    let dsf       = Double(snap.displayScale)
+    let cellW     = layer.cellW, cellH = layer.cellH
+    let half      = min(cellW, cellH)
+    let styleMap  = Dictionary(uniqueKeysWithValues: layer.styles.map  { ($0.id, $0) })
+    let pathMap   = Dictionary(uniqueKeysWithValues: layer.paths.map   { ($0.id, $0) })
+    let motionMap = Dictionary(uniqueKeysWithValues: snap.projectMotionSets.map { ($0.id, $0) })
 
     for cell in layer.cells where cell.isDrawn {
-        let r      = cell.gridIndex / layer.config.cols
-        let c      = cell.gridIndex % layer.config.cols
-        let style  = styleMap[cell.styleID]
-        let path   = cell.pathID.flatMap { pathMap[$0] }
-        var motion = computeMotion(style: style, path: path,
-                                   frame: snap.frame, phaseOffset: cell.phaseOffset,
-                                   cellIndex: cell.gridIndex, cellW: cellW, cellH: cellH)
+        let r         = cell.gridIndex / layer.config.cols
+        let c         = cell.gridIndex % layer.config.cols
+        let style     = styleMap[cell.styleID]
+        let motionSet = cell.motionID.flatMap { motionMap[$0] }
+        let path      = cell.pathID.flatMap { pathMap[$0] }
+        var motion    = computeMotion(motionSet: motionSet, style: style, path: path,
+                                      frame: snap.frame, phaseOffset: cell.phaseOffset,
+                                      cellIndex: cell.gridIndex, cellW: cellW, cellH: cellH)
         if let src = layer.colorSource, let grid = layer.colorGrid,
            r < grid.count, c < grid[r].count {
             applyColorMap(grid[r][c], source: src, style: style, to: &motion)
         }
 
-        // Same formula as Canvas, scaled to pixels for CGContext
         let mx = (Double(c) * cellW + cellW/2 + cell.positionOffset.dx * layer.scaleX + motion.dx) * dsf
         let my = (Double(r) * cellH + cellH/2 + cell.positionOffset.dy * layer.scaleY + motion.dy) * dsf
 
@@ -351,9 +353,9 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
         let strokeW = (style?.strokeWidth ?? 1.5) * dsf
         let mode    = style?.renderMode ?? .filledStroked
 
-        let polygons = resolvePolygons(style: style, cellIndex: cell.gridIndex,
-                                       frame: snap.frame, phaseOffset: cell.phaseOffset,
-                                       shapeMap: snap.shapePolygonMap, fallback: snap.fallbackPolygons)
+        let polygons = resolvePolygons(shapeID: cell.shapeID,
+                                       shapeMap: snap.shapePolygonMap,
+                                       fallback: snap.fallbackPolygons)
 
         if polygons.isEmpty {
             let rw = (cellW - 4) / 2 * motion.scaleX * dsf
@@ -478,18 +480,20 @@ struct GridCanvasPlaceholder: View {
                         let lColorSrc  = ls.engine.document.colorSource
                         let lOpacity   = ls.opacity
 
+                        let lMotionMap = Dictionary(uniqueKeysWithValues: controller.projectMotionSets.map { ($0.id, $0) })
                         ctx.drawLayer { layerCtx in
                             layerCtx.opacity = lOpacity
                             for cell in ls.engine.document.cells where cell.isDrawn {
-                                let r      = cell.gridIndex / lConfig.cols
-                                let c      = cell.gridIndex % lConfig.cols
-                                let style  = lStyleMap[cell.styleID]
-                                let path   = cell.pathID.flatMap { lPathMap[$0] }
-                                var motion = computeMotion(style: style, path: path,
-                                                           frame: currentFrame,
-                                                           phaseOffset: cell.phaseOffset,
-                                                           cellIndex: cell.gridIndex,
-                                                           cellW: lCellW, cellH: lCellH)
+                                let r         = cell.gridIndex / lConfig.cols
+                                let c         = cell.gridIndex % lConfig.cols
+                                let style     = lStyleMap[cell.styleID]
+                                let motionSet = cell.motionID.flatMap { lMotionMap[$0] }
+                                let path      = cell.pathID.flatMap { lPathMap[$0] }
+                                var motion    = computeMotion(motionSet: motionSet, style: style, path: path,
+                                                              frame: currentFrame,
+                                                              phaseOffset: cell.phaseOffset,
+                                                              cellIndex: cell.gridIndex,
+                                                              cellW: lCellW, cellH: lCellH)
                                 if let src = lColorSrc, let grid = lColorGrid,
                                    r < grid.count, c < grid[r].count {
                                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
@@ -498,10 +502,7 @@ struct GridCanvasPlaceholder: View {
                                 let my = Double(r) * lCellH + lCellH / 2 + cell.positionOffset.dy * lScaleY + motion.dy
                                 let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
 
-                                let polygons = resolvePolygons(style: style,
-                                                               cellIndex: cell.gridIndex,
-                                                               frame: currentFrame,
-                                                               phaseOffset: cell.phaseOffset,
+                                let polygons = resolvePolygons(shapeID: cell.shapeID,
                                                                shapeMap: shapePolyMap,
                                                                fallback: fallbackPolys)
 
@@ -708,11 +709,12 @@ struct GridCanvasPlaceholder: View {
                                 scaleY: lCellH / lConfig.cellHeight
                             )
                         },
-                        previousBuffer:  controller.frameBuffer,
-                        backgroundColor: controller.backgroundColor,
-                        shapePolygonMap: controller.shapePolygonMap,
-                        fallbackPolygons: controller.shapePolygons,
-                        stretchSprites:  controller.stretchSpritesToCell,
+                        previousBuffer:    controller.frameBuffer,
+                        backgroundColor:   controller.backgroundColor,
+                        shapePolygonMap:   controller.shapePolygonMap,
+                        fallbackPolygons:  controller.shapePolygons,
+                        projectMotionSets: controller.projectMotionSets,
+                        stretchSprites:    controller.stretchSpritesToCell,
                         frame:           currentFrame,
                         pw: pw, ph: ph,
                         displayScale: displayScale
@@ -745,8 +747,10 @@ struct GridCanvasPlaceholder: View {
         switch controller.activeTool {
         case .draw:
             let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
-            controller.engine.setCellDrawn(index, drawn: true, styleID: sid)
-            controller.engine.document.cells[index].pathID = controller.activePathID
+            controller.engine.setCellDrawn(index, drawn: true, styleID: sid,
+                                           motionID: controller.activeMotionID,
+                                           shapeID:  controller.activeShapeID,
+                                           pathID:   controller.activePathID)
         case .erase:
             controller.engine.setCellDrawn(index, drawn: false, styleID: UUID())
         case .sample:
@@ -755,7 +759,10 @@ struct GridCanvasPlaceholder: View {
             }
         case .fill:
             let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
-            controller.engine.floodFill(from: index, styleID: sid, pathID: controller.activePathID)
+            controller.engine.floodFill(from: index, styleID: sid,
+                                        motionID: controller.activeMotionID,
+                                        shapeID:  controller.activeShapeID,
+                                        pathID:   controller.activePathID)
         case .select, .nudge:
             break  // handled separately
         }
@@ -927,17 +934,17 @@ private func applyColorMap(_ sampled: UMColor, source: UMColorSource,
 }
 
 /// Compute the animated transform for a single cell at a given frame.
-/// Combines the style's parametric preset with an optional keyframe path (additive),
+/// Combines the motionSet's parametric preset with an optional keyframe path (additive),
 /// then layers Order/Chaos jitter on top.
-private func computeMotion(style: CellStyle?, path: UMMotionPath?,
+private func computeMotion(motionSet: UMMotionSet?, style: CellStyle?, path: UMMotionPath?,
                             frame: Int, phaseOffset: Int,
                             cellIndex: Int,
                             cellW: Double, cellH: Double) -> SpriteMotion {
     var m = SpriteMotion()
 
     // --- Parametric preset ---
-    if let style, style.motionPreset != .static, style.motionPreset != .custom {
-        m = computeParametric(style: style, frame: frame, phaseOffset: phaseOffset, cellW: cellW, cellH: cellH)
+    if let ms = motionSet, ms.motionPreset != .static, ms.motionPreset != .custom {
+        m = computeParametric(motionSet: ms, style: style, frame: frame, phaseOffset: phaseOffset, cellW: cellW, cellH: cellH)
     }
 
     // --- Keyframe path (additive on top of parametric) ---
@@ -951,61 +958,42 @@ private func computeMotion(style: CellStyle?, path: UMMotionPath?,
         m.scaleY   *= p.scaleY
     }
 
-    // --- Order/Chaos jitter (additive, deterministic per-cell oscillators) ---
-    if let style, style.orderChaos > 0 {
-        let oc   = style.orderChaos
-        // Unique phase seed per cell — golden-ratio multiplier decorrelates neighbours
+    // --- Order/Chaos jitter ---
+    if let ms = motionSet, ms.orderChaos > 0 {
+        let oc   = ms.orderChaos
         let seed = Double(cellIndex) * 1.6180339887
-        // Time in seconds, phase-shifted by this cell's offset so cells aren't synchronised
         let t    = Double(frame + phaseOffset) / 60.0
-        // Incommensurate frequencies → never repeating combination
         m.dx       += cellW * 0.30 * oc * sin(t * 2.3 * .pi * 2 + seed * 7.0)
         m.dy       += cellH * 0.30 * oc * sin(t * 1.7 * .pi * 2 + seed * 11.0)
         m.rotation += 90.0        * oc * sin(t * 1.1 * .pi * 2 + seed * 5.0)
         let sj      =               oc * 0.4 * sin(t * 0.9 * .pi * 2 + seed * 3.0)
         m.scaleX   *= max(0.05, 1.0 + sj)
-        m.scaleY   *= max(0.05, 1.0 + sj * 0.8)  // slightly asymmetric — avoids uniform blob
+        m.scaleY   *= max(0.05, 1.0 + sj * 0.8)
     }
 
     return m
 }
 
-/// Resolve the polygon list for a cell given its style's shapeIDs, SEQUENCE mode, and the current frame.
-/// Falls back to `fallback` when the style has no shapes assigned.
-private func resolvePolygons(style: CellStyle?, cellIndex: Int, frame: Int, phaseOffset: Int,
-                              shapeMap: [UUID: [Polygon2D]], fallback: [Polygon2D]) -> [Polygon2D] {
-    guard let style, !style.shapeIDs.isEmpty else { return fallback }
-
-    switch style.sequenceMode {
-    case .sequential:
-        let effectiveFrame = frame + phaseOffset
-        let bucket = (effectiveFrame / max(1, style.framesPerStep)) % style.shapeIDs.count
-        return shapeMap[style.shapeIDs[bucket]] ?? fallback
-
-    case .all:
-        // Render all assigned shapes simultaneously — concatenate their polygon lists
-        let all = style.shapeIDs.flatMap { shapeMap[$0] ?? [] }
-        return all.isEmpty ? fallback : all
-
-    case .random:
-        // Deterministic per-cell, changes each framesPerStep bucket
-        let bucket = (frame + phaseOffset) / max(1, style.framesPerStep)
-        let idx    = abs((cellIndex &* 1_000_003) &+ (bucket &* 999_983)) % style.shapeIDs.count
-        return shapeMap[style.shapeIDs[idx]] ?? fallback
-    }
+/// Resolve the polygon list for a cell from its direct shapeID reference.
+private func resolvePolygons(shapeID: UUID?,
+                              shapeMap: [UUID: [Polygon2D]],
+                              fallback: [Polygon2D]) -> [Polygon2D] {
+    guard let id = shapeID, let polys = shapeMap[id] else { return fallback }
+    return polys
 }
 
-private func computeParametric(style: CellStyle, frame: Int, phaseOffset: Int,
+private func computeParametric(motionSet: UMMotionSet, style: CellStyle?,
+                                frame: Int, phaseOffset: Int,
                                 cellW: Double, cellH: Double) -> SpriteMotion {
-    guard style.motionPreset != .static, style.motionPreset != .custom
+    guard motionSet.motionPreset != .static, motionSet.motionPreset != .custom
     else { return SpriteMotion() }
 
-    let cycles = Double(frame + phaseOffset) / 60.0 * style.motionSpeed + style.motionPhase
+    let cycles = Double(frame + phaseOffset) / 60.0 * motionSet.motionSpeed + motionSet.motionPhase
     let θ      = cycles * 2.0 * .pi
-    let amount = style.motionAmount
+    let amount = motionSet.motionAmount
     var m      = SpriteMotion()
 
-    switch style.motionPreset {
+    switch motionSet.motionPreset {
     case .static, .custom:
         break
 
@@ -1036,8 +1024,8 @@ private func computeParametric(style: CellStyle, frame: Int, phaseOffset: Int,
     case .colorCycle:
         // Hue rotation through full spectrum at speed=1, amount=1
         let shift = (cycles * 360.0 * amount).truncatingRemainder(dividingBy: 360.0)
-        m.fillOverride   = style.fillColor.rotatingHue(by: shift)
-        m.strokeOverride = style.strokeColor.rotatingHue(by: shift)
+        m.fillOverride   = style?.fillColor.rotatingHue(by: shift)
+        m.strokeOverride = style?.strokeColor.rotatingHue(by: shift)
     }
     return m
 }
@@ -1051,6 +1039,7 @@ struct FrameCapture: View {
     let cells: [UMGridCell]
     let styles: [CellStyle]
     let motionPaths: [UMMotionPath]
+    let projectMotionSets: [UMMotionSet]
     let shapePolygonMap: [UUID: [Polygon2D]]
     let fallbackPolygons: [Polygon2D]
     let stretchSprites: Bool
@@ -1080,21 +1069,23 @@ struct FrameCapture: View {
                 }
             }
 
-            let config   = gridConfig
-            let half     = min(cellW, cellH)
-            let styleMap = Dictionary(uniqueKeysWithValues: styles.map { ($0.id, $0) })
-            let pathMap  = Dictionary(uniqueKeysWithValues: motionPaths.map { ($0.id, $0) })
+            let config    = gridConfig
+            let half      = min(cellW, cellH)
+            let styleMap  = Dictionary(uniqueKeysWithValues: styles.map         { ($0.id, $0) })
+            let pathMap   = Dictionary(uniqueKeysWithValues: motionPaths.map    { ($0.id, $0) })
+            let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
 
             for cell in cells where cell.isDrawn {
-                let r      = cell.gridIndex / config.cols
-                let c      = cell.gridIndex % config.cols
-                let style  = styleMap[cell.styleID]
-                let path   = cell.pathID.flatMap { pathMap[$0] }
-                var motion = computeMotion(style: style, path: path,
-                                           frame: currentFrame,
-                                           phaseOffset: cell.phaseOffset,
-                                           cellIndex: cell.gridIndex,
-                                           cellW: cellW, cellH: cellH)
+                let r         = cell.gridIndex / config.cols
+                let c         = cell.gridIndex % config.cols
+                let style     = styleMap[cell.styleID]
+                let motionSet = cell.motionID.flatMap { motionMap[$0] }
+                let path      = cell.pathID.flatMap { pathMap[$0] }
+                var motion    = computeMotion(motionSet: motionSet, style: style, path: path,
+                                              frame: currentFrame,
+                                              phaseOffset: cell.phaseOffset,
+                                              cellIndex: cell.gridIndex,
+                                              cellW: cellW, cellH: cellH)
                 if let src = colorSource,
                    let grid = colorGrid,
                    r < grid.count, c < grid[r].count {
@@ -1107,10 +1098,7 @@ struct FrameCapture: View {
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                 let mode    = style?.renderMode  ?? .filledStroked
 
-                let polygons = resolvePolygons(style: style,
-                                               cellIndex: cell.gridIndex,
-                                               frame: currentFrame,
-                                               phaseOffset: cell.phaseOffset,
+                let polygons = resolvePolygons(shapeID: cell.shapeID,
                                                shapeMap: shapePolygonMap,
                                                fallback: fallbackPolygons)
 
@@ -1153,6 +1141,7 @@ func umRenderFrame(
     backgroundColor: UMColor,
     shapePolygonMap: [UUID: [Polygon2D]],
     fallbackPolygons: [Polygon2D],
+    projectMotionSets: [UMMotionSet],
     colorMapEngine: UMColorMapEngine,
     backgroundDraw: Bool,
     stretchSprites: Bool,
@@ -1170,23 +1159,24 @@ func umRenderFrame(
     let loopMode  = doc.colorSource?.videoLoopMode ?? .loop
     let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
     let renderer = ImageRenderer(content: FrameCapture(
-        existingBuffer:   backgroundDraw ? nil : accumulationBuffer,
-        backgroundColor:  backgroundColor,
-        gridConfig:       config,
-        cells:            doc.cells,
-        styles:           doc.styles,
-        motionPaths:      doc.paths,
-        shapePolygonMap:  shapePolygonMap,
-        fallbackPolygons: fallbackPolygons,
-        stretchSprites:   stretchSprites,
-        currentFrame:     frame,
+        existingBuffer:    backgroundDraw ? nil : accumulationBuffer,
+        backgroundColor:   backgroundColor,
+        gridConfig:        config,
+        cells:             doc.cells,
+        styles:            doc.styles,
+        motionPaths:       doc.paths,
+        projectMotionSets: projectMotionSets,
+        shapePolygonMap:   shapePolygonMap,
+        fallbackPolygons:  fallbackPolygons,
+        stretchSprites:    stretchSprites,
+        currentFrame:      frame,
         gridW: exportW, gridH: exportH,
         cellW: cellW, cellH: cellH,
         scaleX: sx, scaleY: sy,
-        displayScale:     1.0,
-        colorGrid:        colorGrid,
-        colorSource:      doc.colorSource,
-        strokeScale:      strokeScale
+        displayScale:      1.0,
+        colorGrid:         colorGrid,
+        colorSource:       doc.colorSource,
+        strokeScale:       strokeScale
     ))
     renderer.scale = 1.0
     return renderer.cgImage
@@ -1201,6 +1191,7 @@ func umRenderComposited(
     backgroundColor: UMColor,
     shapePolygonMap: [UUID: [Polygon2D]],
     fallbackPolygons: [Polygon2D],
+    projectMotionSets: [UMMotionSet],
     colorMapEngine: UMColorMapEngine,
     backgroundDraw: Bool,
     stretchSprites: Bool,
@@ -1240,24 +1231,25 @@ func umRenderComposited(
 
         // Render layer cells on transparent background (drawBackground: false)
         let renderer = ImageRenderer(content: FrameCapture(
-            existingBuffer:   nil,
-            backgroundColor:  backgroundColor,
-            gridConfig:       lConfig,
-            cells:            ls.engine.document.cells,
-            styles:           ls.engine.document.styles,
-            motionPaths:      ls.engine.document.paths,
-            shapePolygonMap:  shapePolygonMap,
-            fallbackPolygons: fallbackPolygons,
-            stretchSprites:   stretchSprites,
-            currentFrame:     frame,
+            existingBuffer:    nil,
+            backgroundColor:   backgroundColor,
+            gridConfig:        lConfig,
+            cells:             ls.engine.document.cells,
+            styles:            ls.engine.document.styles,
+            motionPaths:       ls.engine.document.paths,
+            projectMotionSets: projectMotionSets,
+            shapePolygonMap:   shapePolygonMap,
+            fallbackPolygons:  fallbackPolygons,
+            stretchSprites:    stretchSprites,
+            currentFrame:      frame,
             gridW: exportW, gridH: exportH,
             cellW: lCellW, cellH: lCellH,
             scaleX: lSX, scaleY: lSY,
-            displayScale:     1.0,
-            colorGrid:        colorGrid,
-            colorSource:      ls.engine.document.colorSource,
-            strokeScale:      strokeScale,
-            drawBackground:   false
+            displayScale:      1.0,
+            colorGrid:         colorGrid,
+            colorSource:       ls.engine.document.colorSource,
+            strokeScale:       strokeScale,
+            drawBackground:    false
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {

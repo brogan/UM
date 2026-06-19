@@ -455,13 +455,11 @@ struct StylePaletteView: View {
     }
 
     private func projectShapeRow(_ shape: UMShape) -> some View {
-        let activeStyle = controller.projectStyles.first { $0.id == controller.activeStyleID }
-        let assigned = activeStyle?.shapeIDs.contains(shape.id) ?? false
-        let seqIndex = activeStyle?.shapeIDs.firstIndex(of: shape.id)
+        let active = controller.activeShapeID == shape.id
         return HStack(spacing: 6) {
             Image(systemName: "pentagon")
                 .font(.system(size: 9))
-                .foregroundStyle(assigned ? Color.accentColor : Color.secondary)
+                .foregroundStyle(active ? Color.accentColor : Color.secondary)
             if renamingShapeID == shape.id {
                 TextField("Shape name", text: Binding(
                     get: { controller.projectShapes.first { $0.id == shape.id }?.name ?? shape.name },
@@ -481,12 +479,6 @@ struct StylePaletteView: View {
                     .onTapGesture(count: 2) { renamingShapeID = shape.id }
             }
             Spacer()
-            if let idx = seqIndex {
-                Text("\(idx + 1)")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(Color.accentColor.opacity(0.8))
-                    .frame(width: 14)
-            }
             Button {
                 controller.promoteShapeToLibrary(shape.id)
             } label: {
@@ -499,12 +491,11 @@ struct StylePaletteView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(assigned ? Color.accentColor.opacity(0.1) : Color.clear)
+        .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
             renamingShapeID = nil
-            guard let styleID = controller.activeStyleID else { return }
-            controller.toggleShape(shape.id, inStyle: styleID)
+            controller.activeShapeID = (controller.activeShapeID == shape.id) ? nil : shape.id
         }
         .contextMenu {
             Button("Rename") { renamingShapeID = shape.id }

@@ -45,18 +45,29 @@ public final class UMGridEngine {
 
     // MARK: - Cell editing
 
-    public func setCellDrawn(_ index: Int, drawn: Bool, styleID: UUID) {
+    public func setCellDrawn(_ index: Int, drawn: Bool,
+                              styleID:  UUID,
+                              motionID: UUID? = nil,
+                              shapeID:  UUID? = nil,
+                              pathID:   UUID? = nil) {
         guard index >= 0, index < document.cells.count else { return }
         document.cells[index].isDrawn = drawn
         if drawn {
             document.cells[index].styleID        = styleID
+            document.cells[index].motionID       = motionID
+            document.cells[index].shapeID        = shapeID
+            document.cells[index].pathID         = pathID
             document.cells[index].phaseOffset    = computePhaseOffset(for: index)
             document.cells[index].positionOffset = randomOffset()
             paintOrderCounter += 1
         }
     }
 
-    public func floodFill(from index: Int, styleID: UUID, pathID: UUID? = nil) {
+    public func floodFill(from index: Int,
+                           styleID:  UUID,
+                           motionID: UUID? = nil,
+                           shapeID:  UUID? = nil,
+                           pathID:   UUID? = nil) {
         guard index >= 0, index < document.cells.count else { return }
         guard !document.cells[index].isDrawn else { return }
         var visited = Set<Int>()
@@ -68,8 +79,8 @@ public final class UMGridEngine {
             guard !visited.contains(i), i >= 0, i < document.cells.count else { continue }
             visited.insert(i)
             guard !document.cells[i].isDrawn else { continue }
-            setCellDrawn(i, drawn: true, styleID: styleID)
-            document.cells[i].pathID = pathID
+            setCellDrawn(i, drawn: true, styleID: styleID,
+                         motionID: motionID, shapeID: shapeID, pathID: pathID)
             // 4-connected neighbours
             let r = i / cols, c = i % cols
             if r > 0       { queue.append(i - cols) }

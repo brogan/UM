@@ -41,13 +41,10 @@ struct QuickAdjustView: View {
 
     @State private var projectCollapsed     = false
     @State private var canvasCollapsed      = false
-    @State private var orderChaosCollapsed = false
     @State private var placeTimeCollapsed  = false
     @State private var scaleLocked         = true
     @State private var renderCollapsed     = false
-    @State private var motionCollapsed     = false
     @State private var pathCollapsed       = false
-    @State private var sequenceCollapsed   = false
     @State private var advancedCollapsed   = true
     @State private var exportCollapsed     = false
     @State private var selectedKeyframeID: UUID? = nil
@@ -63,12 +60,9 @@ struct QuickAdjustView: View {
                     projectSection
                     canvasSection
                     exportSection
-                    orderChaosSection
                     placeTimeSection
                     renderSection
-                    motionSection
                     pathSection
-                    sequenceSection
                     advancedSection
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -363,31 +357,6 @@ struct QuickAdjustView: View {
         }
     }
 
-    private var orderChaosSection: some View {
-        InspectorSection("ORDER / CHAOS", isCollapsed: $orderChaosCollapsed) {
-            InspectorField("Amount") {
-                ResettableSlider(
-                    value: styleBinding(\.orderChaos, fallback: 0),
-                    range: 0...1,
-                    defaultValue: 0
-                )
-                .disabled(activeStyleIndex == nil)
-                valueLabel(controller.activeStyle?.orderChaos ?? 0, digits: 2)
-            }
-            HStack(spacing: 0) {
-                Text("Order")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.quaternary)
-                Spacer()
-                Text("Chaos")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.quaternary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 2)
-        }
-    }
-
     private var placeTimeSection: some View {
         InspectorSection("PLACE & TIME", isCollapsed: $placeTimeCollapsed) {
             let hasSelection = !controller.selectedIndices.isEmpty
@@ -534,51 +503,6 @@ struct QuickAdjustView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: 130)
                 .disabled(disabled)
-            }
-        }
-    }
-
-    private var motionSection: some View {
-        InspectorSection("MOTION", isCollapsed: $motionCollapsed) {
-            let disabled = activeStyleIndex == nil
-
-            InspectorField("Preset") {
-                Picker("", selection: styleBinding(\.motionPreset, fallback: .static)) {
-                    ForEach(MotionPreset.allCases, id: \.self) { p in
-                        Text(p.displayName).tag(p)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(maxWidth: 130)
-                .disabled(disabled)
-            }
-            InspectorField("Speed") {
-                ResettableSlider(
-                    value: styleBinding(\.motionSpeed, fallback: 1),
-                    range: 0...2,
-                    defaultValue: 1
-                )
-                .disabled(disabled)
-                valueLabel(controller.activeStyle?.motionSpeed ?? 1, digits: 2)
-            }
-            InspectorField("Amount") {
-                ResettableSlider(
-                    value: styleBinding(\.motionAmount, fallback: 0.5),
-                    range: 0...1,
-                    defaultValue: 0.5
-                )
-                .disabled(disabled)
-                valueLabel(controller.activeStyle?.motionAmount ?? 0.5, digits: 2)
-            }
-            InspectorField("Phase") {
-                ResettableSlider(
-                    value: styleBinding(\.motionPhase, fallback: 0),
-                    range: 0...1,
-                    defaultValue: 0
-                )
-                .disabled(disabled)
-                valueLabel(controller.activeStyle?.motionPhase ?? 0, digits: 2)
             }
         }
     }
@@ -853,33 +777,6 @@ struct QuickAdjustView: View {
 
     // MARK: - Sequence section
 
-    private var sequenceSection: some View {
-        InspectorSection("SEQUENCE", isCollapsed: $sequenceCollapsed) {
-            let disabled = activeStyleIndex == nil
-
-            InspectorField("Mode") {
-                Picker("", selection: styleBinding(\.sequenceMode, fallback: .sequential)) {
-                    ForEach(SequenceMode.allCases, id: \.self) { m in
-                        Text(m.rawValue.capitalized).tag(m)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .frame(maxWidth: 130)
-                .disabled(disabled)
-            }
-            InspectorField("Frames/Step") {
-                Stepper(
-                    "\(controller.activeStyle?.framesPerStep ?? 4) fr",
-                    value: framesPerStepBinding,
-                    in: 1...240
-                )
-                .font(.system(size: 12))
-                .disabled(disabled)
-            }
-        }
-    }
-
     private var advancedSection: some View {
         InspectorSection("ADVANCED", isCollapsed: $advancedCollapsed) {
             Text("Renderer set, subdivision params\n— available in Phase 4")
@@ -1073,13 +970,4 @@ struct QuickAdjustView: View {
         )
     }
 
-    private var framesPerStepBinding: Binding<Int> {
-        Binding(
-            get: { controller.activeStyle?.framesPerStep ?? 4 },
-            set: { val in
-                guard let i = activeStyleIndex else { return }
-                controller.projectStyles[i].framesPerStep = val
-            }
-        )
-    }
 }

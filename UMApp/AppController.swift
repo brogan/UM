@@ -134,13 +134,16 @@ final class AppController {
     var gridLineWidth: Double        = 0.5
     var backgroundColor: UMColor     = UMColor(r: 1, g: 1, b: 1, a: 1)
     var isPlaying: Bool              = false
-    var selectedIndices: Set<Int>    = []
-    var activeStyleID: UUID?         = nil
+    var selectedIndices:    Set<Int> = []
+    var activeStyleID:      UUID?    = nil
+    var activeMotionID:     UUID?    = nil
+    var activeShapeID:      UUID?    = nil
 
-    var currentFileURL: URL? = nil
-    var globalLibrary: UMLibrary = .empty
-    var globalShapes:  [UMShape] = []
-    var projectShapes: [UMShape] = []
+    var currentFileURL:    URL?      = nil
+    var globalLibrary:     UMLibrary = .empty
+    var globalShapes:      [UMShape] = []
+    var projectShapes:     [UMShape] = []
+    var projectMotionSets: [UMMotionSet] = []
 
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
@@ -382,14 +385,17 @@ final class AppController {
         UMLogger.shared.log("newDocument")
         let doc = UMGridDocument.makeTestGrid()
         let ls  = UMLayerState(layer: UMLayer(name: "Layer 1", document: doc))
-        layerStates      = [ls]
-        engine           = ls.engine
-        activeLayerIndex = 0
-        projectStyles    = doc.styles
-        projectShapes    = []
-        activeStyleID    = doc.styles.first?.id
-        selectedIndices  = []
-        currentFileURL   = nil
+        layerStates       = [ls]
+        engine            = ls.engine
+        activeLayerIndex  = 0
+        projectStyles     = doc.styles
+        projectShapes     = []
+        projectMotionSets = []
+        activeStyleID     = doc.styles.first?.id
+        activeMotionID    = nil
+        activeShapeID     = nil
+        selectedIndices   = []
+        currentFileURL    = nil
         rebuildShapePolygonMap()
     }
 
@@ -428,7 +434,7 @@ final class AppController {
         }
     }
 
-    // MARK: - Project config (directory format v2)
+    // MARK: - Project config (directory format v3)
 
     private struct ProjectConfig: Codable {
         struct ShapeRecord: Codable {
@@ -452,7 +458,81 @@ final class AppController {
         var activeLayerIndex: Int
         var projectStyles: [CellStyle]
         var projectShapes: [ShapeRecord]
+        var projectMotionSets: [UMMotionSet]
         var layers: [LayerRecord]
+    }
+
+    // Decodes the motion-relevant fields that lived in CellStyle up to v2,
+    // so migration can extract them into UMMotionSet objects.
+    private struct LegacyCellStyle: Decodable {
+        var id: UUID
+        var name: String
+        var motionPreset: MotionPreset
+        var motionSpeed: Double
+        var motionAmount: Double
+        var motionPhase: Double
+        var orderChaos: Double
+        var framesPerStep: Int
+        var shapeIDs: [UUID]
+
+        private enum CodingKeys: String, CodingKey {
+            case id, name, motionPreset, motionSpeed, motionAmount, motionPhase
+            case orderChaos, framesPerStep, shapeIDs, shapeID
+        }
+        init(from decoder: Decoder) throws {
+            let c         = try decoder.container(keyedBy: CodingKeys.self)
+            id            = try c.decode(UUID.self,   forKey: .id)
+            name          = try c.decode(String.self, forKey: .name)
+            motionPreset  = (try? c.decodeIfPresent(MotionPreset.self, forKey: .motionPreset))  ?? .static
+            motionSpeed   = (try? c.decodeIfPresent(Double.self,       forKey: .motionSpeed))   ?? 1.0
+            motionAmount  = (try? c.decodeIfPresent(Double.self,       forKey: .motionAmount))  ?? 0.5
+            motionPhase   = (try? c.decodeIfPresent(Double.self,       forKey: .motionPhase))   ?? 0.0
+            orderChaos    = (try? c.decodeIfPresent(Double.self,       forKey: .orderChaos))    ?? 0.0
+            framesPerStep = (try? c.decodeIfPresent(Int.self,          forKey: .framesPerStep)) ?? 4
+            if let ids = try? c.decodeIfPresent([UUID].self, forKey: .shapeIDs) {
+                shapeIDs = ids
+            } else if let single = try? c.decodeIfPresent(UUID.self, forKey: .shapeID) {
+                shapeIDs = [single]
+            } else {
+                shapeIDs = []
+            }
+        }
+    }
+
+    /// Derives projectMotionSets from legacy styles and patches cell motionID/shapeID.
+    private static func migrateLegacyMotion(
+        legacyStyles: [LegacyCellStyle],
+        layerStates: inout [UMLayerState]
+    ) -> [UMMotionSet] {
+        // One UMMotionSet per old CellStyle that had non-static motion or shapes
+        var motionSets: [UMMotionSet] = []
+        var styleToMotionID: [UUID: UUID] = [:]
+        var styleToShapeID:  [UUID: UUID] = [:]
+
+        for ls in legacyStyles {
+            let ms = UMMotionSet(
+                name:         "\(ls.name) Motion",
+                motionPreset: ls.motionPreset,
+                motionSpeed:  ls.motionSpeed,
+                motionAmount: ls.motionAmount,
+                motionPhase:  ls.motionPhase,
+                orderChaos:   ls.orderChaos,
+                framesPerStep: ls.framesPerStep
+            )
+            motionSets.append(ms)
+            styleToMotionID[ls.id] = ms.id
+            styleToShapeID[ls.id]  = ls.shapeIDs.first
+        }
+
+        // Patch each cell in all layers
+        for i in layerStates.indices {
+            for j in layerStates[i].engine.document.cells.indices {
+                let sid = layerStates[i].engine.document.cells[j].styleID
+                layerStates[i].engine.document.cells[j].motionID = styleToMotionID[sid]
+                layerStates[i].engine.document.cells[j].shapeID  = styleToShapeID[sid]
+            }
+        }
+        return motionSets
     }
 
     private func write(to url: URL) {
@@ -486,12 +566,13 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 2,
+            version: 3,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
                 ProjectConfig.ShapeRecord(id: $0.id, name: $0.name, sourceFilename: $0.sourceFilename)
             },
+            projectMotionSets: projectMotionSets,
             layers: layerStates.map { ls in
                 ProjectConfig.LayerRecord(
                     id:            ls.id,
@@ -567,13 +648,16 @@ final class AppController {
         }
 
         let idx      = max(0, min(config.activeLayerIndex, layerStates.count - 1))
-        activeLayerIndex = idx
-        engine           = layerStates[idx].engine
-        projectStyles    = styles
-        projectShapes    = loaded
-        activeStyleID    = layerStates[idx].activeStyleID ?? styles.first?.id
-        selectedIndices  = []
-        currentFileURL   = url
+        activeLayerIndex  = idx
+        engine            = layerStates[idx].engine
+        projectStyles     = styles
+        projectShapes     = loaded
+        projectMotionSets = config.projectMotionSets
+        activeStyleID     = layerStates[idx].activeStyleID ?? styles.first?.id
+        activeMotionID    = projectMotionSets.first?.id
+        activeShapeID     = nil
+        selectedIndices   = []
+        currentFileURL    = url
         rebuildShapePolygonMap()
         colorMapEngine.clear()
         if let src = layerStates[0].engine.document.colorSource {
@@ -588,23 +672,44 @@ final class AppController {
     }
 
     // Reads the legacy single-file format ([UMLayer] JSON array).
-    // Migrates shapes from per-layer documents into projectShapes.
+    // Migrates shapes and motion fields into project-level collections.
     private func readLegacy(at url: URL) {
-        guard let data   = try? Data(contentsOf: url),
-              let layers = try? JSONDecoder().decode([UMLayer].self, from: data),
-              !layers.isEmpty
-        else {
+        guard let data = try? Data(contentsOf: url) else {
+            UMLogger.shared.log("ERROR readLegacy read failed \(url.lastPathComponent)")
+            return
+        }
+        // Try the v2 directory format's layer list first (never actually used single-file v2,
+        // but handle it just in case), then fall back to old [UMLayer] array.
+        let layers: [UMLayer]
+        if let decoded = try? JSONDecoder().decode([UMLayer].self, from: data), !decoded.isEmpty {
+            layers = decoded
+        } else {
             UMLogger.shared.log("ERROR readLegacy decode failed \(url.lastPathComponent)")
             return
         }
+
         layerStates      = layers.map { UMLayerState(layer: $0) }
         activeLayerIndex = 0
         engine           = layerStates[0].engine
         projectStyles    = layerStates[0].engine.document.styles
-        // Migrate: collect shapes from all layers → single project-level list
+
+        // Migrate shapes
         var seen = Set<UUID>()
         projectShapes = layerStates.flatMap { $0.engine.document.shapes }.filter { seen.insert($0.id).inserted }
+
+        // Migrate motion: decode old CellStyle fields → UMMotionSet per style
+        let legacyStyles = (try? JSONDecoder().decode([UMLayer].self, from: data))?
+            .first?.document.styles.compactMap { style -> LegacyCellStyle? in
+                guard let styleData = try? JSONEncoder().encode(style),
+                      let legacy    = try? JSONDecoder().decode(LegacyCellStyle.self, from: styleData)
+                else { return nil }
+                return legacy
+            } ?? []
+        projectMotionSets = Self.migrateLegacyMotion(legacyStyles: legacyStyles, layerStates: &layerStates)
+
         activeStyleID    = layerStates[0].activeStyleID ?? projectStyles.first?.id
+        activeMotionID   = projectMotionSets.first?.id
+        activeShapeID    = nil
         selectedIndices  = []
         currentFileURL   = url
         rebuildShapePolygonMap()
@@ -690,6 +795,51 @@ final class AppController {
 
     func removeStyleFromLibrary(_ libraryStyleID: UUID) {
         globalLibrary.styles.removeAll { $0.id == libraryStyleID }
+        saveGlobalLibrary()
+    }
+
+    // MARK: Motion set management
+
+    var activeMotionSet: UMMotionSet? {
+        guard let id = activeMotionID else { return nil }
+        return projectMotionSets.first { $0.id == id }
+    }
+
+    func addMotionSet(name: String? = nil) {
+        let ms = UMMotionSet(name: name ?? "Motion \(projectMotionSets.count + 1)")
+        projectMotionSets.append(ms)
+        activeMotionID = ms.id
+    }
+
+    func deleteMotionSet(_ id: UUID) {
+        projectMotionSets.removeAll { $0.id == id }
+        for ls in layerStates {
+            for i in ls.engine.document.cells.indices where ls.engine.document.cells[i].motionID == id {
+                ls.engine.document.cells[i].motionID = nil
+            }
+        }
+        if activeMotionID == id { activeMotionID = projectMotionSets.first?.id }
+    }
+
+    func promoteMotionSetToLibrary(_ id: UUID) {
+        guard let ms = projectMotionSets.first(where: { $0.id == id }) else { return }
+        if let idx = globalLibrary.motionSets.firstIndex(where: { $0.id == id }) {
+            globalLibrary.motionSets[idx] = ms
+        } else {
+            globalLibrary.motionSets.append(ms)
+        }
+        saveGlobalLibrary()
+    }
+
+    func importMotionSetFromLibrary(_ id: UUID) {
+        guard let ms = globalLibrary.motionSets.first(where: { $0.id == id }) else { return }
+        guard !projectMotionSets.contains(where: { $0.id == id }) else { return }
+        projectMotionSets.append(ms)
+        activeMotionID = ms.id
+    }
+
+    func removeMotionSetFromLibrary(_ id: UUID) {
+        globalLibrary.motionSets.removeAll { $0.id == id }
         saveGlobalLibrary()
     }
 
@@ -819,21 +969,16 @@ final class AppController {
             try? FileManager.default.removeItem(at: fileURL)
         }
         projectShapes.removeAll { $0.id == id }
-        var updated = projectStyles
-        for i in updated.indices { updated[i].shapeIDs.removeAll { $0 == id } }
-        projectStyles = updated
-        rebuildShapePolygonMap()
-    }
-
-    func toggleShape(_ shapeID: UUID, inStyle styleID: UUID) {
-        var updated = projectStyles
-        guard let i = updated.firstIndex(where: { $0.id == styleID }) else { return }
-        if let j = updated[i].shapeIDs.firstIndex(of: shapeID) {
-            updated[i].shapeIDs.remove(at: j)
-        } else {
-            updated[i].shapeIDs.append(shapeID)
+        // Clear active selection if the deleted shape was active
+        if activeShapeID == id { activeShapeID = nil }
+        // Clear from any cells that referenced this shape
+        for li in layerStates.indices {
+            for ci in layerStates[li].engine.document.cells.indices
+                where layerStates[li].engine.document.cells[ci].shapeID == id {
+                layerStates[li].engine.document.cells[ci].shapeID = nil
+            }
         }
-        projectStyles = updated
+        rebuildShapePolygonMap()
     }
 
     func promoteShapeToLibrary(_ id: UUID) {
@@ -985,17 +1130,18 @@ final class AppController {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let cgImage = umRenderComposited(
-                    layerStates:      self.layerStates,
-                    backgroundColor:  self.backgroundColor,
-                    shapePolygonMap:  self.shapePolygonMap,
-                    fallbackPolygons: self.shapePolygons,
-                    colorMapEngine:   self.colorMapEngine,
-                    backgroundDraw:   self.backgroundDraw,
-                    stretchSprites:   self.stretchSpritesToCell,
-                    frame:            self.engine.currentFrame,
-                    exportW:          exportW,
-                    exportH:          exportH,
-                    strokeScale:      strokeScale,
+                    layerStates:       self.layerStates,
+                    backgroundColor:   self.backgroundColor,
+                    shapePolygonMap:   self.shapePolygonMap,
+                    fallbackPolygons:  self.shapePolygons,
+                    projectMotionSets: self.projectMotionSets,
+                    colorMapEngine:    self.colorMapEngine,
+                    backgroundDraw:    self.backgroundDraw,
+                    stretchSprites:    self.stretchSpritesToCell,
+                    frame:             self.engine.currentFrame,
+                    exportW:           exportW,
+                    exportH:           exportH,
+                    strokeScale:       strokeScale,
                     accumulationBuffer: self.backgroundDraw ? nil : self.frameBuffer
                 ) else { return }
 
@@ -1042,20 +1188,21 @@ final class AppController {
                 guard let self else { return }
                 do {
                     try await UMVideoExporter.export(
-                        layers:           layers,
-                        backgroundColor:  bg,
-                        shapePolygonMap:  polyMap,
-                        fallbackPolygons: polys,
-                        colorMapEngine:   cmEngine,
-                        backgroundDraw:   bgDraw,
-                        stretchSprites:   stretch,
-                        frameCount:       frames,
-                        fps:              fps,
-                        exportW:          exportW,
-                        exportH:          exportH,
-                        strokeScale:      strokeScale,
-                        to:               url,
-                        progress:         { [weak self] p in self?.exportProgress = p }
+                        layers:            layers,
+                        backgroundColor:   bg,
+                        shapePolygonMap:   polyMap,
+                        fallbackPolygons:  polys,
+                        projectMotionSets: self.projectMotionSets,
+                        colorMapEngine:    cmEngine,
+                        backgroundDraw:    bgDraw,
+                        stretchSprites:    stretch,
+                        frameCount:        frames,
+                        fps:               fps,
+                        exportW:           exportW,
+                        exportH:           exportH,
+                        strokeScale:       strokeScale,
+                        to:                url,
+                        progress:          { [weak self] p in self?.exportProgress = p }
                     )
                 } catch { }
                 self.isExporting = false

@@ -29,20 +29,25 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
     public var scaleY:         Double
     public var rotation:       Double
 
+    /// Optional reference to a UMMotionSet in the project motion palette.
+    public var motionID: UUID?
+    /// Optional reference to a UMShape in the project shape palette.
+    public var shapeID:  UUID?
     /// Optional reference to a UMMotionPath in document.paths.
-    /// nil = no keyframe path; the cell uses only its style's parametric preset.
-    public var pathID:         UUID?
+    public var pathID:   UUID?
 
     public init(
-        gridIndex: Int,
-        styleID: UUID = UUID(),
-        isDrawn: Bool = false,
+        gridIndex:      Int,
+        styleID:        UUID     = UUID(),
+        isDrawn:        Bool     = false,
         positionOffset: UMOffset = .zero,
-        phaseOffset: Int = 0,
-        scaleX: Double = 1.0,
-        scaleY: Double = 1.0,
-        rotation: Double = 0.0,
-        pathID: UUID? = nil
+        phaseOffset:    Int      = 0,
+        scaleX:         Double   = 1.0,
+        scaleY:         Double   = 1.0,
+        rotation:       Double   = 0.0,
+        motionID:       UUID?    = nil,
+        shapeID:        UUID?    = nil,
+        pathID:         UUID?    = nil
     ) {
         self.id             = UUID()
         self.gridIndex      = gridIndex
@@ -53,29 +58,33 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         self.scaleX         = scaleX
         self.scaleY         = scaleY
         self.rotation       = rotation
+        self.motionID       = motionID
+        self.shapeID        = shapeID
         self.pathID         = pathID
     }
 
-    // MARK: - Codable (manual for backward-compat with files that lack pathID)
+    // MARK: - Codable
 
     private enum CodingKeys: String, CodingKey {
         case id, gridIndex, isDrawn, styleID
         case positionOffset, phaseOffset
         case scaleX, scaleY, rotation
-        case pathID
+        case motionID, shapeID, pathID
     }
 
     public init(from decoder: Decoder) throws {
         let c           = try decoder.container(keyedBy: CodingKeys.self)
-        id              = try c.decode(UUID.self,    forKey: .id)
-        gridIndex       = try c.decode(Int.self,     forKey: .gridIndex)
-        isDrawn         = try c.decode(Bool.self,    forKey: .isDrawn)
-        styleID         = try c.decode(UUID.self,    forKey: .styleID)
+        id              = try c.decode(UUID.self,     forKey: .id)
+        gridIndex       = try c.decode(Int.self,      forKey: .gridIndex)
+        isDrawn         = try c.decode(Bool.self,     forKey: .isDrawn)
+        styleID         = try c.decode(UUID.self,     forKey: .styleID)
         positionOffset  = try c.decode(UMOffset.self, forKey: .positionOffset)
-        phaseOffset     = try c.decode(Int.self,     forKey: .phaseOffset)
-        scaleX          = try c.decode(Double.self,  forKey: .scaleX)
-        scaleY          = try c.decode(Double.self,  forKey: .scaleY)
-        rotation        = try c.decode(Double.self,  forKey: .rotation)
+        phaseOffset     = try c.decode(Int.self,      forKey: .phaseOffset)
+        scaleX          = try c.decode(Double.self,   forKey: .scaleX)
+        scaleY          = try c.decode(Double.self,   forKey: .scaleY)
+        rotation        = try c.decode(Double.self,   forKey: .rotation)
+        motionID        = try c.decodeIfPresent(UUID.self, forKey: .motionID)
+        shapeID         = try c.decodeIfPresent(UUID.self, forKey: .shapeID)
         pathID          = try c.decodeIfPresent(UUID.self, forKey: .pathID)
     }
 
@@ -90,6 +99,8 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         try c.encode(scaleX,         forKey: .scaleX)
         try c.encode(scaleY,         forKey: .scaleY)
         try c.encode(rotation,       forKey: .rotation)
-        try c.encodeIfPresent(pathID, forKey: .pathID)
+        try c.encodeIfPresent(motionID, forKey: .motionID)
+        try c.encodeIfPresent(shapeID,  forKey: .shapeID)
+        try c.encodeIfPresent(pathID,   forKey: .pathID)
     }
 }

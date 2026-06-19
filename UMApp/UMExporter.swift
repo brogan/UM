@@ -18,6 +18,7 @@ enum UMVideoExporter {
         backgroundColor: UMColor,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
+        projectMotionSets: [UMMotionSet],
         colorMapEngine: UMColorMapEngine,
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -68,17 +69,18 @@ enum UMVideoExporter {
         for frameIndex in 0..<max(1, frameCount) {
 
             let cgImage = renderComposited(
-                layers:           visibleLayers,
-                backgroundColor:  backgroundColor,
-                shapePolygonMap:  shapePolygonMap,
-                fallbackPolygons: fallbackPolygons,
-                colorMapEngine:   colorMapEngine,
-                backgroundDraw:   backgroundDraw,
-                stretchSprites:   stretchSprites,
-                frame:            frameIndex,
-                exportW:          exportW,
-                exportH:          exportH,
-                strokeScale:      strokeScale,
+                layers:            visibleLayers,
+                backgroundColor:   backgroundColor,
+                shapePolygonMap:   shapePolygonMap,
+                fallbackPolygons:  fallbackPolygons,
+                projectMotionSets: projectMotionSets,
+                colorMapEngine:    colorMapEngine,
+                backgroundDraw:    backgroundDraw,
+                stretchSprites:    stretchSprites,
+                frame:             frameIndex,
+                exportW:           exportW,
+                exportH:           exportH,
+                strokeScale:       strokeScale,
                 accumulationBuffer: accum
             )
 
@@ -131,6 +133,7 @@ enum UMVideoExporter {
         backgroundColor: UMColor,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
+        projectMotionSets: [UMMotionSet],
         colorMapEngine: UMColorMapEngine,
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -162,6 +165,7 @@ enum UMVideoExporter {
             if let img = renderLayerCells(layer: layer,
                                           shapePolygonMap: shapePolygonMap,
                                           fallbackPolygons: fallbackPolygons,
+                                          projectMotionSets: projectMotionSets,
                                           colorMapEngine: colorMapEngine,
                                           stretchSprites: stretchSprites,
                                           frame: frame,
@@ -181,6 +185,7 @@ enum UMVideoExporter {
         layer: UMLayer,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
+        projectMotionSets: [UMMotionSet],
         colorMapEngine: UMColorMapEngine,
         stretchSprites: Bool,
         frame: Int,
@@ -197,24 +202,25 @@ enum UMVideoExporter {
         let colorGrid = colorMapEngine.currentGrid(animationFrame: frame, loopMode: loopMode)
 
         let renderer = ImageRenderer(content: FrameCapture(
-            existingBuffer:   nil,
-            backgroundColor:  UMColor(r: 0, g: 0, b: 0, a: 0),
-            gridConfig:       config,
-            cells:            layer.document.cells,
-            styles:           layer.document.styles,
-            motionPaths:      layer.document.paths,
-            shapePolygonMap:  shapePolygonMap,
-            fallbackPolygons: fallbackPolygons,
-            stretchSprites:   stretchSprites,
-            currentFrame:     frame,
+            existingBuffer:    nil,
+            backgroundColor:   UMColor(r: 0, g: 0, b: 0, a: 0),
+            gridConfig:        config,
+            cells:             layer.document.cells,
+            styles:            layer.document.styles,
+            motionPaths:       layer.document.paths,
+            projectMotionSets: projectMotionSets,
+            shapePolygonMap:   shapePolygonMap,
+            fallbackPolygons:  fallbackPolygons,
+            stretchSprites:    stretchSprites,
+            currentFrame:      frame,
             gridW: exportW, gridH: exportH,
             cellW: cellW, cellH: cellH,
             scaleX: sx, scaleY: sy,
-            displayScale:     1.0,
-            colorGrid:        colorGrid,
-            colorSource:      layer.document.colorSource,
-            strokeScale:      strokeScale,
-            drawBackground:   false
+            displayScale:      1.0,
+            colorGrid:         colorGrid,
+            colorSource:       layer.document.colorSource,
+            strokeScale:       strokeScale,
+            drawBackground:    false
         ))
         renderer.scale = 1.0
         return renderer.cgImage
