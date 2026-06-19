@@ -246,6 +246,145 @@ struct ToolStripView: View {
     }
 }
 
+// MARK: - Accumulation buffer — background CG rendering
+
+private struct LayerAccumulationData: @unchecked Sendable {
+    let cells: [UMGridCell]
+    let styles: [CellStyle]
+    let paths: [UMMotionPath]
+    let config: UMGridConfig
+    let opacity: Double
+    let colorSource: UMColorSource?
+    let colorGrid: [[UMColor]]?
+    // Per-layer geometry (derived from gridW/gridH and each layer's col/row count)
+    let cellW: Double
+    let cellH: Double
+    let scaleX: Double
+    let scaleY: Double
+}
+
+private struct AccumulationSnapshot: @unchecked Sendable {
+    let layers: [LayerAccumulationData]
+    let previousBuffer: CGImage?
+    let backgroundColor: UMColor
+    let shapePolygonMap: [UUID: [Polygon2D]]
+    let fallbackPolygons: [Polygon2D]
+    let stretchSprites: Bool
+    let frame: Int
+    let pw: Int
+    let ph: Int
+    let displayScale: CGFloat
+}
+
+// Composites all visible layers into a new CGImage on a background thread.
+// Uses direct CG drawing — no SwiftUI ImageRenderer, no main-thread blocking.
+private nonisolated func renderAccumulationCG(_ snap: AccumulationSnapshot) -> CGImage? {
+    let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                   | CGBitmapInfo.byteOrder32Little.rawValue
+    guard let mainCtx = CGContext(data: nil, width: snap.pw, height: snap.ph,
+                                   bitsPerComponent: 8, bytesPerRow: 0,
+                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   bitmapInfo: bitmapInfo) else { return nil }
+    let frame = CGRect(x: 0, y: 0, width: snap.pw, height: snap.ph)
+
+    // Base layer: previous accumulated frame, or solid background
+    if let buf = snap.previousBuffer {
+        mainCtx.draw(buf, in: frame)
+    } else {
+        let bg = snap.backgroundColor
+        mainCtx.setFillColor(CGColor(red: bg.r, green: bg.g, blue: bg.b, alpha: bg.a))
+        mainCtx.fill(frame)
+    }
+
+    for layer in snap.layers {
+        guard !Task.isCancelled else { return nil }
+        guard let layerImage = renderLayerCG(layer, snap: snap) else { continue }
+        mainCtx.setAlpha(layer.opacity)
+        mainCtx.draw(layerImage, in: frame)
+        mainCtx.setAlpha(1.0)
+    }
+    return mainCtx.makeImage()
+}
+
+// Renders one layer's cells to a CGImage in pixel space.
+// Applies a y-flip transform so cell coordinates match the SwiftUI Canvas convention
+// (y-down, origin top-left). This produces the same visual result as ImageRenderer+FrameCapture.
+private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
+                                        snap: AccumulationSnapshot) -> CGImage? {
+    let pw = snap.pw, ph = snap.ph
+    let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                   | CGBitmapInfo.byteOrder32Little.rawValue
+    guard let ctx = CGContext(data: nil, width: pw, height: ph,
+                               bitsPerComponent: 8, bytesPerRow: 0,
+                               space: CGColorSpaceCreateDeviceRGB(),
+                               bitmapInfo: bitmapInfo) else { return nil }
+
+    // Mirror y-axis so drawing coordinates match Canvas (y increases downward)
+    ctx.translateBy(x: 0, y: CGFloat(ph))
+    ctx.scaleBy(x: 1, y: -1)
+
+    let dsf   = Double(snap.displayScale)
+    let cellW = layer.cellW, cellH = layer.cellH
+    let half  = min(cellW, cellH)
+    let styleMap = Dictionary(uniqueKeysWithValues: layer.styles.map { ($0.id, $0) })
+    let pathMap  = Dictionary(uniqueKeysWithValues: layer.paths.map  { ($0.id, $0) })
+
+    for cell in layer.cells where cell.isDrawn {
+        let r      = cell.gridIndex / layer.config.cols
+        let c      = cell.gridIndex % layer.config.cols
+        let style  = styleMap[cell.styleID]
+        let path   = cell.pathID.flatMap { pathMap[$0] }
+        var motion = computeMotion(style: style, path: path,
+                                   frame: snap.frame, phaseOffset: cell.phaseOffset,
+                                   cellIndex: cell.gridIndex, cellW: cellW, cellH: cellH)
+        if let src = layer.colorSource, let grid = layer.colorGrid,
+           r < grid.count, c < grid[r].count {
+            applyColorMap(grid[r][c], source: src, style: style, to: &motion)
+        }
+
+        // Same formula as Canvas, scaled to pixels for CGContext
+        let mx = (Double(c) * cellW + cellW/2 + cell.positionOffset.dx * layer.scaleX + motion.dx) * dsf
+        let my = (Double(r) * cellH + cellH/2 + cell.positionOffset.dy * layer.scaleY + motion.dy) * dsf
+
+        let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
+        let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
+        let strokeW = (style?.strokeWidth ?? 1.5) * dsf
+        let mode    = style?.renderMode ?? .filledStroked
+
+        let polygons = resolvePolygons(style: style, cellIndex: cell.gridIndex,
+                                       frame: snap.frame, phaseOffset: cell.phaseOffset,
+                                       shapeMap: snap.shapePolygonMap, fallback: snap.fallbackPolygons)
+
+        if polygons.isEmpty {
+            let rw = (cellW - 4) / 2 * motion.scaleX * dsf
+            let rh = (cellH - 4) / 2 * motion.scaleY * dsf
+            let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
+            let cgp  = CGPath(roundedRect: rect, cornerWidth: 3 * dsf, cornerHeight: 3 * dsf, transform: nil)
+            ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a))
+            ctx.addPath(cgp); ctx.fillPath()
+        } else {
+            let zoomX = (snap.stretchSprites ? cellW : half) * motion.scaleX * dsf
+            let zoomY = (snap.stretchSprites ? cellH : half) * motion.scaleY * dsf
+            for polygon in polygons.filter(\.visible) {
+                let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                           zoomX: zoomX, zoomY: zoomY,
+                                           scaleX: cell.scaleX, scaleY: cell.scaleY,
+                                           rotation: cell.rotation + motion.rotation)
+                if mode == .filled || mode == .filledStroked {
+                    ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a))
+                    ctx.addPath(cgp); ctx.fillPath()
+                }
+                if mode == .stroked || mode == .filledStroked {
+                    ctx.setStrokeColor(CGColor(red: strokeC.r, green: strokeC.g, blue: strokeC.b, alpha: strokeC.a))
+                    ctx.setLineWidth(CGFloat(strokeW))
+                    ctx.addPath(cgp); ctx.strokePath()
+                }
+            }
+        }
+    }
+    return ctx.makeImage()
+}
+
 // MARK: - Grid canvas
 
 struct GridCanvasPlaceholder: View {
@@ -253,6 +392,7 @@ struct GridCanvasPlaceholder: View {
     @Environment(\.displayScale) private var displayScale
     @State private var lastDragIndex: Int?         = nil
     @State private var lastNudgeLocation: CGPoint? = nil
+    @State private var captureTask: Task<Void, Never>? = nil
     // Rubber-band selection state
     @State private var rubberBandStart:   CGPoint? = nil
     @State private var rubberBandCurrent: CGPoint? = nil
@@ -540,81 +680,55 @@ struct GridCanvasPlaceholder: View {
                 .frame(width: gridW, height: gridH)
                 .clipped()
                 .onChange(of: controller.engine.currentFrame) {
-                    captureFrameBuffer(gridW: gridW, gridH: gridH,
-                                       cellW: cellW, cellH: cellH,
-                                       scaleX: scaleX, scaleY: scaleY)
+                    guard !controller.backgroundDraw else { return }
+                    let pw = Int((gridW * displayScale).rounded())
+                    let ph = Int((gridH * displayScale).rounded())
+                    guard pw > 0, ph > 0 else { return }
+                    // Snapshot all value-type data synchronously on main thread (fast),
+                    // then render the accumulation buffer on a background thread so the
+                    // main actor stays free for user interactions (pickers, dropdowns).
+                    let currentFrame = controller.engine.currentFrame
+                    let snapshot = AccumulationSnapshot(
+                        layers: controller.layerStates.filter(\.isVisible).map { ls in
+                            let lConfig = ls.engine.document.gridConfig
+                            let lCellW  = gridW / Double(lConfig.cols)
+                            let lCellH  = gridH / Double(lConfig.rows)
+                            return LayerAccumulationData(
+                                cells:       ls.engine.document.cells,
+                                styles:      ls.engine.document.styles,
+                                paths:       ls.engine.document.paths,
+                                config:      lConfig,
+                                opacity:     ls.opacity,
+                                colorSource: ls.engine.document.colorSource,
+                                colorGrid:   controller.colorMapEngine.currentGrid(
+                                    animationFrame: currentFrame,
+                                    loopMode: ls.engine.document.colorSource?.videoLoopMode ?? .loop),
+                                cellW: lCellW, cellH: lCellH,
+                                scaleX: lCellW / lConfig.cellWidth,
+                                scaleY: lCellH / lConfig.cellHeight
+                            )
+                        },
+                        previousBuffer:  controller.frameBuffer,
+                        backgroundColor: controller.backgroundColor,
+                        shapePolygonMap: controller.shapePolygonMap,
+                        fallbackPolygons: controller.shapePolygons,
+                        stretchSprites:  controller.stretchSpritesToCell,
+                        frame:           currentFrame,
+                        pw: pw, ph: ph,
+                        displayScale: displayScale
+                    )
+                    captureTask?.cancel()
+                    captureTask = Task.detached(priority: .utility) { [controller] in
+                        guard !Task.isCancelled else { return }
+                        let image = renderAccumulationCG(snapshot)
+                        guard !Task.isCancelled else { return }
+                        await MainActor.run { controller.updateFrameBuffer(image) }
+                    }
                 }
             }
         }
     }
 
-    private func captureFrameBuffer(gridW: Double, gridH: Double,
-                                    cellW: Double, cellH: Double,
-                                    scaleX: Double, scaleY: Double) {
-        guard !controller.backgroundDraw else { return }
-
-        let pw = Int((gridW * displayScale).rounded())
-        let ph = Int((gridH * displayScale).rounded())
-        guard pw > 0, ph > 0 else { return }
-        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
-                       | CGBitmapInfo.byteOrder32Little.rawValue
-        guard let bitmapCtx = CGContext(data: nil, width: pw, height: ph,
-                                        bitsPerComponent: 8, bytesPerRow: 0,
-                                        space: CGColorSpaceCreateDeviceRGB(),
-                                        bitmapInfo: bitmapInfo) else { return }
-        let frame = CGRect(x: 0, y: 0, width: pw, height: ph)
-
-        // Base: previous accumulated frame or background fill
-        if let buf = controller.frameBuffer {
-            bitmapCtx.draw(buf, in: frame)
-        } else {
-            let bg = controller.backgroundColor
-            bitmapCtx.setFillColor(CGColor(red: bg.r, green: bg.g, blue: bg.b, alpha: bg.a))
-            bitmapCtx.fill(frame)
-        }
-
-        let currentFrame = controller.engine.currentFrame
-
-        // Composite each visible layer on top
-        for ls in controller.layerStates where ls.isVisible {
-            let lConfig = ls.engine.document.gridConfig
-            let lCellW  = gridW / Double(lConfig.cols)
-            let lCellH  = gridH / Double(lConfig.rows)
-            let lSX     = lCellW / lConfig.cellWidth
-            let lSY     = lCellH / lConfig.cellHeight
-            let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
-            let colorGrid = controller.colorMapEngine.currentGrid(
-                animationFrame: currentFrame, loopMode: loopMode)
-            let renderer = ImageRenderer(content: FrameCapture(
-                existingBuffer:   nil,
-                backgroundColor:  controller.backgroundColor,
-                gridConfig:       lConfig,
-                cells:            ls.engine.document.cells,
-                styles:           ls.engine.document.styles,
-                motionPaths:      ls.engine.document.paths,
-                shapePolygonMap:  controller.shapePolygonMap,
-                fallbackPolygons: controller.shapePolygons,
-                stretchSprites:   controller.stretchSpritesToCell,
-                currentFrame:     currentFrame,
-                gridW: gridW, gridH: gridH,
-                cellW: lCellW, cellH: lCellH,
-                scaleX: lSX, scaleY: lSY,
-                displayScale:     displayScale,
-                colorGrid:        colorGrid,
-                colorSource:      ls.engine.document.colorSource,
-                strokeScale:      1.0,
-                drawBackground:   false
-            ))
-            renderer.scale = displayScale
-            if let layerImage = renderer.cgImage {
-                bitmapCtx.setAlpha(ls.opacity)
-                bitmapCtx.draw(layerImage, in: frame)
-                bitmapCtx.setAlpha(1.0)
-            }
-        }
-
-        controller.updateFrameBuffer(bitmapCtx.makeImage())
-    }
 
     private func handleDrag(at pt: CGPoint,
                             cellW: Double, cellH: Double,
