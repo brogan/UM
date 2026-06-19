@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -1879,6 +1879,236 @@ SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUE
 
 ---
 
+### 15.11 Keyframe Timeline
+
+UM needs two complementary animation modes that together cover everything the Java original handled:
+
+- **Parametric / oscillator** — continuous functions (oscillator, jitter, noise) that run without keyframes. No timeline required; existing `DriverEvaluator` handles these today.
+- **Keyframe** — explicit values at explicit frames, interpolated with easing curves. Requires a timeline editor.
+
+This section specs the keyframe timeline. It is modelled directly on Loom's `TimelinePanel`, `TimelineSelection`, and `RunControlBar`, which were always in scope (§3.6). The main simplification is that UM's entities are **layers**, not per-sprite hierarchies — so the lane set is smaller and there is no renderer sub-tree.
+
+---
+
+#### 15.11.1 Model Changes Required
+
+**Consolidate camera pan into `UMVectorDriver`**
+
+Currently `UMCamera` holds `panX: UMDoubleDriver` and `panY: UMDoubleDriver`. This means pan keyframes require two separate lanes and editing one axis without the other is awkward. The clean model (matching Loom's `CameraConfig`) uses a single `UMVectorDriver` for pan:
+
+```swift
+// UMCamera — replace panX/panY with:
+var pan: UMVectorDriver   // x = horizontal, y = vertical, in canvas pixels
+```
+
+Migration: on decode, if `panX`/`panY` are present and `pan` is absent, synthesise `pan = UMVectorDriver(mode: .constant, base: UMVec2(panX.base, panY.base))`. Bump `ProjectConfig` to v5.
+
+`UMCamera.evaluate(frame:)` returns `UMCameraFrame` — update to evaluate `pan` as a vector rather than two scalars. The `umLayerTransform` call sites change from `cameraFrame.panX`/`.panY` to `cameraFrame.pan.x`/`.pan.y` — a mechanical substitution.
+
+**`UMLayer` driver fields** (already present, no change needed)
+
+```swift
+var opacityDriver: UMDoubleDriver   // mode .constant tracks the opacity slider; .keyframe/.oscillator animates
+var layerOffset:   UMVectorDriver   // x/y offset in canvas pixels, evaluated per-frame
+```
+
+**`UMTimelineLane` enum (new, in UMApp)**
+
+```swift
+enum UMTimelineLane: Int, CaseIterable, Hashable {
+    case opacity = 0   // UMDoubleDriver — DoubleKeyframe
+    case offset  = 1   // UMVectorDriver — VectorKeyframe (x, y)
+
+    var label: String { /* "Opacity", "Offset" */ }
+    var color: Color  { /* .pink, .blue */ }
+
+    func keyframeFrames(from layer: UMLayer) -> [Int] { ... }
+}
+```
+
+**`UMCameraLane` enum (new, in UMApp)**
+
+```swift
+enum UMCameraLane: Int, CaseIterable, Hashable {
+    case pan      = 0   // UMVectorDriver — VectorKeyframe (x, y)
+    case zoom     = 1   // UMDoubleDriver — DoubleKeyframe
+    case rotation = 2   // UMDoubleDriver — DoubleKeyframe
+
+    var label: String { /* "Pan", "Zoom", "Rotation" */ }
+    var color: Color  { /* .teal, .green, .cyan */ }
+
+    func keyframeFrames(from camera: UMCamera) -> [Int] { ... }
+}
+```
+
+**`UMTimelineKFSelection` and `UMCameraKFSelection`** (new, in UMApp — analogous to Loom's `TimelineKFSelection` / `CameraKFSelection`):
+
+```swift
+struct UMTimelineKFSelection: Equatable {
+    var layerIndex:  Int
+    var lane:        UMTimelineLane
+    var keyframeIdx: Int
+}
+
+struct UMCameraKFSelection: Equatable, Hashable {
+    var lane:        UMCameraLane
+    var keyframeIdx: Int
+}
+```
+
+These are published on `AppController` (`selectedTimelineKF`, `selectedCameraKF`) so the Quick Adjust keyframe inspector can read them.
+
+---
+
+#### 15.11.2 Panel Layout
+
+`UMTimelinePanel` is a SwiftUI `View` docked below the canvas in `ContentView`. Structural layout is a direct adaptation of Loom's `TimelinePanel`:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ━━━━━━━━━━━━━━━━  (resize handle — drag to resize, tap to collapse)         │
+├──────────────────┬───────────────────────────────────────────────────────────┤
+│ HEADER COLUMN    │  CANVAS                                                   │
+│ (160 px wide)    │                                                            │
+│                  │  [marker strip — 18 px]                                   │
+│  − + ⊕ markers  │  [ruler — 28 px, tick marks + frame numbers]              │
+│                  ├───────────────────────────────────────────────────────────┤
+│  ▶ Camera        │  camera summary row                                       │
+│    · Pan    ☑ 👁 │  · Pan lane                                               │
+│    · Zoom   ☑ 👁 │  · Zoom lane                                              │
+│    · Rotation☑ 👁│  · Rotation lane                                         │
+├──────────────────┼───────────────────────────────────────────────────────────┤
+│  ▶ Layer 1       │  layer 1 summary row  (all KFs as accent diamonds)        │
+│    · Opacity ☑ 👁│  · Opacity lane                                           │
+│    · Offset  ☑ 👁│  · Offset lane                                            │
+│  ▶ Layer 2       │  layer 2 summary row                                      │
+│    ...           │  ...                                                       │
+└──────────────────┴───────────────────────────────────────────────────────────┘
+```
+
+**Header column** (160 px, `@State private var headerWidth: CGFloat = 160`):
+- Top strip: zoom −/+ buttons, named-marker jump menu, timing-scale field (when ≥ 2 KFs selected), trash button (when selection non-empty).
+- Camera block: chevron expand/collapse, camera icon, "Camera" label, hide-unused eye button (same logic as Loom).
+- Per camera lane: `driverHeaderRow` — coloured dot, label, green/empty KF-present dot, enable checkbox, eye-hide button.
+- Layer blocks: one per `UMLayerState` in `controller.layerStates`, in stack order. Chevron expand/collapse, visibility dot, layer name.
+- Per layer lane: same `driverHeaderRow` pattern.
+
+**Canvas**:
+- Drawn with SwiftUI `Canvas` (same pattern as Loom — no UIKit, no NSView).
+- Layers: marker strip → ruler → camera block → layer rows.
+- `zoom: Double` (px per frame, default 4.0), `hOffset: Double` (horizontal scroll offset in px).
+- Option+scroll wheel zooms (same `NSEvent.addLocalMonitorForEvents` as Loom).
+- Option+drag (or drag on a lane row header) pans horizontally.
+
+**Rows** (22 px each, `rowHeight: CGFloat = 22`):
+- Summary row: draws diamonds for all keyframes on that entity in accent colour (cameras: teal; layers: accent).
+- Lane rows (shown when expanded): per-lane diamonds in `lane.color`.
+- Playhead: red vertical line + downward triangle cap at `currentFrame`.
+
+**Ruler** (28 px): frame number ticks, adaptive major/minor tick intervals based on zoom — same `tickIntervals()` logic as Loom.
+
+**Marker strip** (18 px): named timeline markers (blue downward triangles). Double-click to create; right-click to delete. Markers stored in `AppController.camera` (or a new `timelineMarkers: [UMTimelineMarker]` field on the project).
+
+**Start/end region**: orange/red handle triangles on the ruler, draggable; yellow fill between them. Maps to `controller.startFrame` / `controller.endFrame` (already used by transport).
+
+---
+
+#### 15.11.3 Interactions
+
+All interactions are a direct port from Loom. Summary:
+
+| Gesture | Effect |
+|---|---|
+| Click on ruler | Seek playhead to that frame |
+| Drag on ruler | Scrub playhead; pauses if playing, resumes on release |
+| Click on lane row (not on a KF) | Add keyframe at that frame capturing the current evaluated value |
+| Click on keyframe diamond | Select it; seek playhead to its frame |
+| Drag on selected KF diamond | Move KF to new frame (preview position shown while dragging) |
+| Option+drag / drag on lane header area | Pan timeline horizontally |
+| Drag on empty area | Rubber-band multi-select |
+| Shift+click | Additive select |
+| Drag start/end triangle | Move start/end frame markers |
+| Double-click marker strip | Create named marker at that frame (popover names it) |
+| Cmd+C / Cmd+V | Copy/paste selected KFs (paste at playhead, relative offsets preserved) |
+| Cmd+Z / Cmd+Shift+Z | Timeline undo/redo (50-state stack on `AppController.camera` + layer drivers) |
+| Delete | Delete selected KFs |
+| Cmd+A | Select all KFs |
+| Scale % field + Return | Scale selected KF timing by percentage from earliest frame pivot |
+
+**Adding a keyframe** captures the *current evaluated value* at the playhead from `DriverEvaluator.evaluate(driver, frame: controller.currentFrame)`. This means:
+- If the driver is in `.constant` mode, the base value is used (correct — you're "baking" the current constant into a KF).
+- If the driver is already in `.keyframe` mode, the interpolated value at that frame is used (allows inserting a KF without changing the curve).
+- The driver's `mode` is set to `.keyframe` automatically when the first KF is added. On removal of the last KF it reverts to `.constant`.
+
+---
+
+#### 15.11.4 Keyframe Inspector (Quick Adjust)
+
+When a keyframe is selected, a **KEYFRAME** section appears at the bottom of Quick Adjust (below CAMERA), showing:
+
+- **Lane** label (read-only): e.g. "Camera · Pan" or "Layer 2 · Opacity".
+- **Frame** field (editable integer): moving a KF by typing.
+- **Value** field(s): editable numeric input.
+  - Scalar KF: one field (opacity 0–1; zoom 0.1–4; rotation −180–180).
+  - Vector KF: two fields labelled X and Y (pan, offset — in canvas pixels).
+- **Easing** picker: Linear | Ease In | Ease Out | Ease In/Out | Step | Back In | Back Out | Back In/Out | Bounce Out (same 9 options as PATH EDITOR keyframe editor, all already in `EasingType`).
+
+Editing the frame or value field commits immediately to the driver (same undo snapshot pattern as other timeline mutations). This inspector lives in `QuickAdjustView` and reads `controller.selectedTimelineKF` / `controller.selectedCameraKF`.
+
+---
+
+#### 15.11.5 Live Canvas and Export Integration
+
+Once keyframe mode is wired, `DriverEvaluator.evaluate` is already stateless and deterministic — no further canvas changes are needed for keyframe evaluation beyond what Phase 2 (§15.8) already does for oscillator mode. The same three call sites that evaluate drivers per-frame cover keyframes automatically:
+
+1. Live canvas `drawLayer` — evaluates `opacityDriver` and `layerOffset` at `controller.currentFrame`.
+2. `umRenderComposited` (PNG export) — evaluates at each export frame.
+3. `UMVideoExporter.renderComposited` — evaluates at each video frame.
+
+Camera drivers: `UMCamera.evaluate(frame:)` returns `UMCameraFrame`; already called in all three paths.
+
+---
+
+#### 15.11.6 Transport Bar (`UMRunControlBar`)
+
+UM already has a bottom control bar. It needs the following additions modelled on Loom's `RunControlBar`:
+
+- **Start frame** and **End frame** fields (already exist as `controller.startFrame`/`controller.endFrame` — just need to be wired visibly).
+- **Scrub row** toggle (`showScrubBar: Bool` on `AppController`): shows a full-width scrub slider below the main row when enabled.
+- **Show Timeline** toggle button: expands/collapses `UMTimelinePanel` (`isTimelineCollapsed: Bool`).
+- The existing play/pause/stop/frame-counter/export buttons are unchanged.
+
+`UMTimelinePanel` is driven by `@Binding var seekFrame: Int?` (same as Loom) so the transport bar and the timeline ruler both write seeks, and `AppController` applies them in a single `.onChange` handler.
+
+---
+
+#### 15.11.7 Phased Build Plan
+
+**Phase A — Model & transport (prerequisite for everything)**
+1. Consolidate `UMCamera.panX/panY` → `UMCamera.pan: UMVectorDriver`; update `evaluate()`, `umLayerTransform`, exporter call sites, CAMERA Quick Adjust section. ProjectConfig v5.
+2. Add `UMTimelineLane`, `UMCameraLane`, `UMTimelineKFSelection`, `UMCameraKFSelection`.
+3. Wire `opacityDriver` and `layerOffset` evaluations into live canvas and exporters (Phase 2 of §15.8 — prerequisite).
+4. Add scrub row + Start/End fields to `UMRunControlBar`; add `showScrubBar` and `isTimelineCollapsed` to `AppController`.
+
+**Phase B — Timeline panel (the visual editor)**
+5. Implement `UMTimelinePanel` view: resize handle, header column, Canvas-based timeline area.
+6. Implement ruler, marker strip, grid lines, playhead drawing.
+7. Implement camera block (expand/collapse, lane rows, KF diamonds).
+8. Implement layer blocks (one per layer, expand/collapse, opacity + offset lane rows).
+9. Implement drag interactions: seek, KF drag-to-move, pan, rubber-band.
+10. Implement click-to-add-KF (captures current value, switches driver to keyframe mode).
+11. Implement KF selection → sync to `controller.selectedTimelineKF/selectedCameraKF`.
+
+**Phase C — Editing & inspector**
+12. Implement timeline Cmd+C/V/Z/Delete/A actions.
+13. Implement timing scale (% field).
+14. Add KEYFRAME section to Quick Adjust (frame, value, easing fields).
+15. Named marker creation/deletion.
+
+Phase A can be started immediately alongside Phase 2 oscillator wiring. Phase B requires Phase A. Phase C requires Phase B.
+
+---
+
 ### Summary Table
 
 | Area | Item | Depends on |
@@ -1901,7 +2131,8 @@ SEQUENCE controls (removed in the 4-axis refactor) will reappear here when SEQUE
 | **Layers** | Camera system (pan, zoom, rotation) | ✓ Built 2026-06-19 |
 | **Layers** | Parallax (per-layer depth factor) | ✓ Built 2026-06-19 |
 | **Layers** | Per-layer blend modes | — |
-| **Layers** | Animated layer opacity / parallax drivers (oscillator/keyframe UI) | Phase 2 of §15.8 |
+| **Layers** | Animated layer opacity / parallax drivers (oscillator UI) | Phase 2 of §15.8 |
+| **Timeline** | Keyframe timeline panel (camera + per-layer lanes) | §15.11 — Phase A then B then C |
 | **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

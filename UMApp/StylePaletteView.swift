@@ -263,59 +263,69 @@ struct StylePaletteView: View {
 
     private func layerRow(_ ls: UMLayerState, index: Int) -> some View {
         let active = (index == controller.activeLayerIndex)
-        return HStack(spacing: 5) {
-            // Visibility toggle
-            Button {
-                ls.isVisible.toggle()
-            } label: {
-                Image(systemName: ls.isVisible ? "eye" : "eye.slash")
-                    .font(.system(size: 10))
-                    .foregroundStyle(ls.isVisible ? Color.primary.opacity(0.7) : Color.secondary.opacity(0.4))
-                    .frame(width: 14)
-            }
-            .buttonStyle(.plain)
+        return VStack(alignment: .leading, spacing: 3) {
+            // Row 1: visibility, active dot, name
+            HStack(spacing: 5) {
+                Button {
+                    ls.isVisible.toggle()
+                } label: {
+                    Image(systemName: ls.isVisible ? "eye" : "eye.slash")
+                        .font(.system(size: 10))
+                        .foregroundStyle(ls.isVisible ? Color.primary.opacity(0.7) : Color.secondary.opacity(0.4))
+                        .frame(width: 14)
+                }
+                .buttonStyle(.plain)
 
-            // Active indicator dot
-            Circle()
-                .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
-                .frame(width: 6, height: 6)
+                Circle()
+                    .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .frame(width: 6, height: 6)
 
-            // Name
-            if renamingLayerID == ls.id {
-                TextField("Layer name", text: Binding(
-                    get: { ls.name },
-                    set: { ls.name = $0 }
-                ))
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .onSubmit { renamingLayerID = nil }
-            } else {
-                Text(ls.name)
+                if renamingLayerID == ls.id {
+                    TextField("Layer name", text: Binding(
+                        get: { ls.name },
+                        set: { ls.name = $0 }
+                    ))
+                    .textFieldStyle(.plain)
                     .font(.system(size: 12))
-                    .lineLimit(1)
-                    .onTapGesture(count: 2) { renamingLayerID = ls.id }
+                    .onSubmit { renamingLayerID = nil }
+                } else {
+                    Text(ls.name)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) { renamingLayerID = ls.id }
+                }
             }
 
-            Spacer()
+            // Row 2: opacity
+            HStack(spacing: 4) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12)
+                    .help("Opacity")
+                Slider(value: Binding(get: { ls.opacity }, set: { ls.opacity = $0 }), in: 0...1)
+                    .controlSize(.mini)
+                Text("\(Int((ls.opacity * 100).rounded()))%")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.quaternary)
+                    .frame(width: 28, alignment: .trailing)
+            }
 
-            // Opacity slider + label
-            Slider(value: Binding(get: { ls.opacity }, set: { ls.opacity = $0 }), in: 0...1)
-                .controlSize(.mini)
-                .frame(width: 56)
-            Text("\(Int((ls.opacity * 100).rounded()))%")
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.quaternary)
-                .frame(width: 28, alignment: .trailing)
-
-            // Parallax slider — how strongly this layer responds to camera pan
-            Image(systemName: "camera")
-                .font(.system(size: 9))
-                .foregroundStyle(.tertiary)
-                .help("Parallax factor: 0 = background-fixed, 1 = full camera tracking")
-            Slider(value: Binding(get: { ls.parallaxFactor }, set: { ls.parallaxFactor = $0 }), in: 0...1)
-                .controlSize(.mini)
-                .frame(width: 40)
-                .help("Parallax factor")
+            // Row 3: parallax
+            HStack(spacing: 4) {
+                Image(systemName: "camera")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 12)
+                    .help("Parallax factor: 0 = background-fixed, 1 = full camera tracking")
+                Slider(value: Binding(get: { ls.parallaxFactor }, set: { ls.parallaxFactor = $0 }), in: 0...1)
+                    .controlSize(.mini)
+                    .help("Parallax factor")
+                Text("\(Int((ls.parallaxFactor * 100).rounded()))%")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.quaternary)
+                    .frame(width: 28, alignment: .trailing)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
