@@ -557,6 +557,21 @@ final class AppController {
             try? shape.geometryJSON.write(to: dest, atomically: true, encoding: .utf8)
         }
 
+        // Copy any color source files not yet inside the project (e.g. loaded before first save)
+        let colorSourcesDir = url.appendingPathComponent("colorSources")
+        try? fm.createDirectory(at: colorSourcesDir, withIntermediateDirectories: true)
+        for li in layerStates.indices {
+            guard var src = layerStates[li].engine.document.colorSource,
+                  src.relativeFilePath == nil else { continue }
+            let srcURL = URL(fileURLWithPath: src.filePath)
+            guard fm.fileExists(atPath: srcURL.path) else { continue }
+            let dest = uniqueURL(in: colorSourcesDir, for: srcURL.lastPathComponent)
+            try? fm.copyItem(at: srcURL, to: dest)
+            src.relativeFilePath = dest.lastPathComponent
+            src.filePath         = dest.path
+            layerStates[li].engine.document.colorSource = src
+        }
+
         // Create empty render directories (mirrors Loom project layout)
         try? fm.createDirectory(at: url.appendingPathComponent("renders/animations"),
                                 withIntermediateDirectories: true)
@@ -659,6 +674,17 @@ final class AppController {
         selectedIndices   = []
         currentFileURL    = url
         rebuildShapePolygonMap()
+
+        // Resolve relative color source paths to absolute, patching in-memory state
+        let colorSourcesDir = url.appendingPathComponent("colorSources")
+        for li in layerStates.indices {
+            guard var src = layerStates[li].engine.document.colorSource else { continue }
+            if let rel = src.relativeFilePath {
+                src.filePath = colorSourcesDir.appendingPathComponent(rel).path
+                layerStates[li].engine.document.colorSource = src
+            }
+        }
+
         colorMapEngine.clear()
         if let src = layerStates[0].engine.document.colorSource {
             let rows = layerStates[0].engine.document.gridConfig.rows
@@ -917,10 +943,21 @@ final class AppController {
     // MARK: Color map
 
     func loadColorSource(url: URL) {
-        engine.document.colorSource = UMColorSource(filePath: url.path)
+        var resolvedURL = url
+        var relPath: String? = nil
+        if let projectURL = currentFileURL {
+            let colorSourcesDir = projectURL.appendingPathComponent("colorSources")
+            try? FileManager.default.createDirectory(at: colorSourcesDir, withIntermediateDirectories: true)
+            let dest = uniqueURL(in: colorSourcesDir, for: url.lastPathComponent)
+            if (try? FileManager.default.copyItem(at: url, to: dest)) != nil {
+                resolvedURL = dest
+                relPath = dest.lastPathComponent
+            }
+        }
+        engine.document.colorSource = UMColorSource(filePath: resolvedURL.path, relativeFilePath: relPath)
         let rows = engine.document.gridConfig.rows
         let cols = engine.document.gridConfig.cols
-        colorMapEngine.load(url: url, rows: rows, cols: cols)
+        colorMapEngine.load(url: resolvedURL, rows: rows, cols: cols)
     }
 
     func clearColorSource() {

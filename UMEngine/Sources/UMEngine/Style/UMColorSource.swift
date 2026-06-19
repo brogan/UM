@@ -1,20 +1,23 @@
 import Foundation
 
 public struct UMColorSource: Codable, Sendable, Equatable {
-    public var filePath:           String           // absolute path to image or video file
+    public var filePath:           String    // absolute path, resolved at load time; legacy fallback
+    public var relativeFilePath:   String?   // filename within project's colorSources/ dir (preferred)
     public var applyTo:            ColorApplyTarget
-    public var preserveStyleAlpha: Bool             // use style alpha; ignore sampled alpha
+    public var preserveStyleAlpha: Bool
     public var videoLoopMode:      VideoLoopMode
 
     public var fileName: String { URL(fileURLWithPath: filePath).lastPathComponent }
 
     public init(
         filePath: String,
+        relativeFilePath: String? = nil,
         applyTo: ColorApplyTarget = .fill,
         preserveStyleAlpha: Bool = true,
         videoLoopMode: VideoLoopMode = .loop
     ) {
         self.filePath           = filePath
+        self.relativeFilePath   = relativeFilePath
         self.applyTo            = applyTo
         self.preserveStyleAlpha = preserveStyleAlpha
         self.videoLoopMode      = videoLoopMode
