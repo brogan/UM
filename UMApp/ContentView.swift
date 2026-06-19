@@ -39,7 +39,6 @@ struct ContentView: View {
 
 struct ToolStripView: View {
     @Environment(AppController.self) private var controller
-    @State private var showResampleSheet = false
 
     var body: some View {
         HStack(spacing: 2) {
@@ -100,22 +99,6 @@ struct ToolStripView: View {
             .toggleStyle(.checkbox)
             .font(.system(size: 11))
             .help("Stretch sprites to fill their cell")
-
-            Button {
-                showResampleSheet = true
-            } label: {
-                Text("\(controller.engine.document.gridConfig.rows) × \(controller.engine.document.gridConfig.cols)")
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Resample grid resolution")
-            .sheet(isPresented: $showResampleSheet) {
-                ResampleSheetView(
-                    currentRows: controller.engine.document.gridConfig.rows,
-                    currentCols: controller.engine.document.gridConfig.cols
-                )
-            }
         }
         .font(.system(size: 13))
     }

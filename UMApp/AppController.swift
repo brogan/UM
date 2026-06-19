@@ -139,11 +139,13 @@ final class AppController {
     var activeMotionID:     UUID?    = nil
     var activeShapeID:      UUID?    = nil
 
-    var currentFileURL:    URL?      = nil
-    var globalLibrary:     UMLibrary = .empty
-    var globalShapes:      [UMShape] = []
-    var projectShapes:     [UMShape] = []
-    var projectMotionSets: [UMMotionSet] = []
+    var currentFileURL:             URL?      = nil
+    var globalLibrary:              UMLibrary = .empty
+    var globalShapes:               [UMShape] = []
+    var projectShapes:              [UMShape] = []
+    var projectMotionSets:          [UMMotionSet] = []
+    var projectResolutionPresets:   [UMResolutionPreset] = []
+    var globalResolutionPresets:    [UMResolutionPreset] = []
 
     private var playbackTask: Task<Void, Never>?
     private nonisolated(unsafe) var keyMonitor: Any?
@@ -166,6 +168,7 @@ final class AppController {
                                   styles: doc.styles.count, cells: doc.cells.count)
         loadGlobalLibrary()
         loadGlobalShapes()
+        loadGlobalResolutionPresets()
         startKeyMonitor()
     }
 
@@ -388,14 +391,15 @@ final class AppController {
         layerStates       = [ls]
         engine            = ls.engine
         activeLayerIndex  = 0
-        projectStyles     = doc.styles
-        projectShapes     = []
-        projectMotionSets = []
-        activeStyleID     = doc.styles.first?.id
-        activeMotionID    = nil
-        activeShapeID     = nil
-        selectedIndices   = []
-        currentFileURL    = nil
+        projectStyles             = doc.styles
+        projectShapes             = []
+        projectMotionSets         = []
+        projectResolutionPresets  = []
+        activeStyleID             = doc.styles.first?.id
+        activeMotionID            = nil
+        activeShapeID             = nil
+        selectedIndices           = []
+        currentFileURL            = nil
         rebuildShapePolygonMap()
     }
 
@@ -436,6 +440,14 @@ final class AppController {
 
     // MARK: - Project config (directory format v3)
 
+    struct UMResolutionPreset: Codable, Identifiable, Equatable {
+        var id:   UUID
+        var rows: Int
+        var cols: Int
+        var label: String { "\(rows)×\(cols)" }
+        init(id: UUID = UUID(), rows: Int, cols: Int) { self.id = id; self.rows = rows; self.cols = cols }
+    }
+
     private struct ProjectConfig: Codable {
         struct ShapeRecord: Codable {
             var id: UUID
@@ -459,7 +471,36 @@ final class AppController {
         var projectStyles: [CellStyle]
         var projectShapes: [ShapeRecord]
         var projectMotionSets: [UMMotionSet]
+        var projectResolutionPresets: [UMResolutionPreset]
         var layers: [LayerRecord]
+
+        enum CodingKeys: String, CodingKey {
+            case version, activeLayerIndex, projectStyles, projectShapes
+            case projectMotionSets, projectResolutionPresets, layers
+        }
+
+        init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
+             projectShapes: [ShapeRecord], projectMotionSets: [UMMotionSet],
+             projectResolutionPresets: [UMResolutionPreset], layers: [LayerRecord]) {
+            self.version                  = version
+            self.activeLayerIndex         = activeLayerIndex
+            self.projectStyles            = projectStyles
+            self.projectShapes            = projectShapes
+            self.projectMotionSets        = projectMotionSets
+            self.projectResolutionPresets = projectResolutionPresets
+            self.layers                   = layers
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            version              = try  c.decode(Int.self,             forKey: .version)
+            activeLayerIndex     = try  c.decode(Int.self,             forKey: .activeLayerIndex)
+            projectStyles        = try  c.decode([CellStyle].self,     forKey: .projectStyles)
+            projectShapes        = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
+            projectMotionSets        = (try? c.decodeIfPresent([UMMotionSet].self,        forKey: .projectMotionSets))        ?? []
+            projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self, forKey: .projectResolutionPresets)) ?? []
+            layers               = try  c.decode([LayerRecord].self,   forKey: .layers)
+        }
     }
 
     // Decodes the motion-relevant fields that lived in CellStyle up to v2,
@@ -588,6 +629,7 @@ final class AppController {
                 ProjectConfig.ShapeRecord(id: $0.id, name: $0.name, sourceFilename: $0.sourceFilename)
             },
             projectMotionSets: projectMotionSets,
+            projectResolutionPresets: projectResolutionPresets,
             layers: layerStates.map { ls in
                 ProjectConfig.LayerRecord(
                     id:            ls.id,
@@ -665,10 +707,11 @@ final class AppController {
         let idx      = max(0, min(config.activeLayerIndex, layerStates.count - 1))
         activeLayerIndex  = idx
         engine            = layerStates[idx].engine
-        projectStyles     = styles
-        projectShapes     = loaded
-        projectMotionSets = config.projectMotionSets
-        activeStyleID     = layerStates[idx].activeStyleID ?? styles.first?.id
+        projectStyles             = styles
+        projectShapes             = loaded
+        projectMotionSets         = config.projectMotionSets
+        projectResolutionPresets  = config.projectResolutionPresets
+        activeStyleID             = layerStates[idx].activeStyleID ?? styles.first?.id
         activeMotionID    = projectMotionSets.first?.id
         activeShapeID     = nil
         selectedIndices   = []
@@ -867,6 +910,52 @@ final class AppController {
     func removeMotionSetFromLibrary(_ id: UUID) {
         globalLibrary.motionSets.removeAll { $0.id == id }
         saveGlobalLibrary()
+    }
+
+    // MARK: Resolution preset management
+
+    func addResolutionPreset(rows: Int, cols: Int, global: Bool = false) {
+        let preset = UMResolutionPreset(rows: rows, cols: cols)
+        if global {
+            guard !globalResolutionPresets.contains(where: { $0.rows == rows && $0.cols == cols }) else { return }
+            globalResolutionPresets.append(preset)
+            saveGlobalResolutionPresets()
+        } else {
+            guard !projectResolutionPresets.contains(where: { $0.rows == rows && $0.cols == cols }) else { return }
+            projectResolutionPresets.append(preset)
+        }
+    }
+
+    func deleteResolutionPreset(_ id: UUID, global: Bool = false) {
+        if global {
+            globalResolutionPresets.removeAll { $0.id == id }
+            saveGlobalResolutionPresets()
+        } else {
+            projectResolutionPresets.removeAll { $0.id == id }
+        }
+    }
+
+    private static var globalResolutionPresetsURL: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("UM", isDirectory: true)
+            .appendingPathComponent("resolutionPresets.json")
+    }
+
+    private func loadGlobalResolutionPresets() {
+        guard let data    = try? Data(contentsOf: Self.globalResolutionPresetsURL),
+              let presets = try? JSONDecoder().decode([UMResolutionPreset].self, from: data)
+        else { return }
+        globalResolutionPresets = presets
+    }
+
+    private func saveGlobalResolutionPresets() {
+        let url = Self.globalResolutionPresetsURL
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                  withIntermediateDirectories: true)
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? enc.encode(globalResolutionPresets) else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     // MARK: Path management

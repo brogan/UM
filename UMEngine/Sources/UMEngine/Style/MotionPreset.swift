@@ -25,6 +25,19 @@ public enum MotionPreset: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    public var shortLabel: String {
+        switch self {
+        case .static:     return "—"
+        case .spin:       return "spn"
+        case .pulse:      return "pls"
+        case .wave:       return "wav"
+        case .wander:     return "wnd"
+        case .jitter:     return "jit"
+        case .colorCycle: return "col"
+        case .custom:     return "cst"
+        }
+    }
+
     // Loom driver mappings (implemented when rendering is wired in):
     //   .spin       → rotationDriver: .oscillator  (sine wave)
     //   .pulse      → scaleDriver:    .oscillator  (sine wave)

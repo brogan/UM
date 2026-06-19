@@ -6,11 +6,13 @@ import UMEngine
 struct StylePaletteView: View {
     @Environment(AppController.self) private var controller
     @State private var tab: PaletteTab = .project
-    @State private var renamingLayerID:  UUID? = nil
-    @State private var renamingStyleID:  UUID? = nil
-    @State private var renamingPathID:   UUID? = nil
-    @State private var renamingShapeID:  UUID? = nil
+    @State private var renamingLayerID:   UUID? = nil
+    @State private var renamingStyleID:   UUID? = nil
+    @State private var renamingMotionID:  UUID? = nil
+    @State private var renamingPathID:    UUID? = nil
+    @State private var renamingShapeID:   UUID? = nil
     @State private var dropTargetLayerID: UUID? = nil
+    @State private var showResampleSheet: Bool  = false
 
     private enum PaletteTab { case project, library }
 
@@ -56,6 +58,8 @@ struct StylePaletteView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
 
+                resolutionSection
+
                 Divider().padding(.vertical, 4)
 
                 sectionHeader("STYLES")
@@ -68,6 +72,24 @@ struct StylePaletteView: View {
                     let style = CellStyle(name: "Style \(controller.projectStyles.count + 1)")
                     controller.projectStyles.append(style)
                     controller.activeStyleID = style.id
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("MOTIONS")
+
+                ForEach(controller.projectMotionSets) { ms in
+                    projectMotionRow(ms)
+                }
+
+                Button("+ New Motion") {
+                    controller.addMotionSet()
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
@@ -134,6 +156,22 @@ struct StylePaletteView: View {
                 } else {
                     ForEach(controller.globalLibrary.styles) { style in
                         libraryStyleRow(style)
+                    }
+                }
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("MOTIONS")
+
+                if controller.globalLibrary.motionSets.isEmpty {
+                    Text("No motions saved.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.quaternary)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                } else {
+                    ForEach(controller.globalLibrary.motionSets) { ms in
+                        libraryMotionRow(ms)
                     }
                 }
 
@@ -257,6 +295,195 @@ struct StylePaletteView: View {
             Divider()
             Button("Delete Layer", role: .destructive) { controller.removeLayer(at: index) }
                 .disabled(controller.layerStates.count <= 1)
+        }
+    }
+
+    // MARK: - Resolution section
+
+    private static let builtInPresets: [(rows: Int, cols: Int)] = [
+        (4, 4), (6, 6), (8, 8), (12, 12), (16, 16), (20, 20), (32, 32)
+    ]
+
+    private var resolutionSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Text("RESOLUTION")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button {
+                    showResampleSheet = true
+                } label: {
+                    Text("Other…")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Open resample sheet for custom dimensions and resize policies")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            .sheet(isPresented: $showResampleSheet) {
+                ResampleSheetView(
+                    currentRows: controller.engine.document.gridConfig.rows,
+                    currentCols: controller.engine.document.gridConfig.cols
+                )
+            }
+
+            let currentRows = controller.engine.document.gridConfig.rows
+            let currentCols = controller.engine.document.gridConfig.cols
+
+            FlowLayout(spacing: 4) {
+                ForEach(Self.builtInPresets, id: \.rows) { p in
+                    resolutionChip(rows: p.rows, cols: p.cols,
+                                   active: currentRows == p.rows && currentCols == p.cols,
+                                   removable: false)
+                }
+                ForEach(controller.projectResolutionPresets) { preset in
+                    resolutionChip(rows: preset.rows, cols: preset.cols,
+                                   active: currentRows == preset.rows && currentCols == preset.cols,
+                                   removable: true,
+                                   onRemove: { controller.deleteResolutionPreset(preset.id) })
+                }
+                Button {
+                    controller.addResolutionPreset(rows: currentRows, cols: currentCols)
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 24, height: 20)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+                .help("Save \(currentRows)×\(currentCols) as a project preset")
+                .disabled(Self.builtInPresets.contains(where: { $0.rows == currentRows && $0.cols == currentCols })
+                          || controller.projectResolutionPresets.contains(where: { $0.rows == currentRows && $0.cols == currentCols }))
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
+        }
+    }
+
+    private func resolutionChip(rows: Int, cols: Int, active: Bool, removable: Bool,
+                                 onRemove: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 2) {
+            Button("\(rows)×\(cols)") {
+                controller.resample(toRows: rows, cols: cols)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 10, design: .monospaced))
+            .foregroundStyle(active ? Color.white : Color.primary)
+            if removable, let remove = onRemove {
+                Button { remove() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8))
+                        .foregroundStyle(active ? Color.white.opacity(0.7) : Color.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(active ? Color.accentColor : Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+
+    // MARK: - Motion rows
+
+    private func projectMotionRow(_ ms: UMMotionSet) -> some View {
+        let active = ms.id == controller.activeMotionID
+        return HStack(spacing: 6) {
+            Image(systemName: ms.motionPreset == .static ? "minus" : "waveform")
+                .font(.system(size: 9))
+                .foregroundStyle(active ? Color.accentColor : Color.secondary)
+            if renamingMotionID == ms.id {
+                TextField("Motion name", text: Binding(
+                    get: { controller.projectMotionSets.first { $0.id == ms.id }?.name ?? ms.name },
+                    set: { newName in
+                        if let i = controller.projectMotionSets.firstIndex(where: { $0.id == ms.id }) {
+                            controller.projectMotionSets[i].name = newName
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .onSubmit { renamingMotionID = nil }
+            } else {
+                Text(ms.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .onTapGesture(count: 2) { renamingMotionID = ms.id }
+            }
+            Spacer()
+            Text(ms.motionPreset.shortLabel)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.quaternary)
+            if ms.orderChaos > 0 {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: 8))
+                    .foregroundStyle(Color.orange.opacity(0.6 + ms.orderChaos * 0.4))
+            }
+            Button {
+                controller.promoteMotionSetToLibrary(ms.id)
+            } label: {
+                Image(systemName: "arrow.up.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Save to library")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(active ? Color.accentColor.opacity(0.1) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            renamingMotionID = nil
+            controller.activeMotionID = (controller.activeMotionID == ms.id) ? nil : ms.id
+        }
+        .contextMenu {
+            Button("Rename") { renamingMotionID = ms.id }
+            Button("Save to Library") { controller.promoteMotionSetToLibrary(ms.id) }
+            Divider()
+            Button("Delete Motion", role: .destructive) { controller.deleteMotionSet(ms.id) }
+        }
+    }
+
+    private func libraryMotionRow(_ ms: UMMotionSet) -> some View {
+        let inProject = controller.projectMotionSets.contains { $0.id == ms.id }
+        return HStack(spacing: 6) {
+            Image(systemName: ms.motionPreset == .static ? "minus" : "waveform")
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+            Text(ms.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .foregroundStyle(inProject ? .secondary : .primary)
+            Spacer()
+            Text(ms.motionPreset.shortLabel)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.quaternary)
+            Button {
+                controller.importMotionSetFromLibrary(ms.id)
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 11))
+                    .foregroundStyle(inProject ? Color.quaternary : Color.accentColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(inProject)
+            .help(inProject ? "Already in project" : "Import to project")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Remove from library", role: .destructive) {
+                controller.removeMotionSetFromLibrary(ms.id)
+            }
         }
     }
 
@@ -566,4 +793,30 @@ struct StylePaletteView: View {
 
 private extension Color {
     static let quaternary = Color(nsColor: .quaternaryLabelColor)
+}
+
+// Simple left-to-right wrapping layout for chip rows.
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? 200
+        var x: CGFloat = 0; var y: CGFloat = 0; var rowH: CGFloat = 0
+        for sub in subviews {
+            let s = sub.sizeThatFits(.unspecified)
+            if x + s.width > width, x > 0 { y += rowH + spacing; x = 0; rowH = 0 }
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
+        return CGSize(width: width, height: y + rowH)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX; var y = bounds.minY; var rowH: CGFloat = 0
+        for sub in subviews {
+            let s = sub.sizeThatFits(.unspecified)
+            if x + s.width > bounds.maxX, x > bounds.minX { y += rowH + spacing; x = bounds.minX; rowH = 0 }
+            sub.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
+    }
 }
