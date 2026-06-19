@@ -201,10 +201,11 @@ public final class UMGridEngine {
                 let src = r * cols + c
                 guard snap[src].isDrawn else { continue }
                 let dst = r * cols + (cols - 1 - c)
-                document.cells[dst].isDrawn        = true
-                document.cells[dst].styleID        = snap[src].styleID
-                document.cells[dst].positionOffset = snap[src].positionOffset.flippedHorizontally()
-                document.cells[dst].phaseOffset    = snap[src].phaseOffset + phaseOffset
+                var cell = snap[src]
+                cell.gridIndex      = dst
+                cell.positionOffset = snap[src].positionOffset.flippedHorizontally()
+                cell.phaseOffset    = snap[src].phaseOffset + phaseOffset
+                document.cells[dst] = cell
             }
         }
     }
@@ -219,10 +220,11 @@ public final class UMGridEngine {
                 let src = r * cols + c
                 guard snap[src].isDrawn else { continue }
                 let dst = (rows - 1 - r) * cols + c
-                document.cells[dst].isDrawn        = true
-                document.cells[dst].styleID        = snap[src].styleID
-                document.cells[dst].positionOffset = snap[src].positionOffset.flippedVertically()
-                document.cells[dst].phaseOffset    = snap[src].phaseOffset + phaseOffset
+                var cell = snap[src]
+                cell.gridIndex      = dst
+                cell.positionOffset = snap[src].positionOffset.flippedVertically()
+                cell.phaseOffset    = snap[src].phaseOffset + phaseOffset
+                document.cells[dst] = cell
             }
         }
     }
@@ -237,10 +239,11 @@ public final class UMGridEngine {
                 let src = r * n + c
                 guard snap[src].isDrawn else { continue }
                 let dst = (n - 1 - c) * n + r
-                document.cells[dst].isDrawn        = true
-                document.cells[dst].styleID        = snap[src].styleID
-                document.cells[dst].positionOffset = snap[src].positionOffset.rotatedLeft90()
-                document.cells[dst].phaseOffset    = snap[src].phaseOffset + phaseOffset
+                var cell = snap[src]
+                cell.gridIndex      = dst
+                cell.positionOffset = snap[src].positionOffset.rotatedLeft90()
+                cell.phaseOffset    = snap[src].phaseOffset + phaseOffset
+                document.cells[dst] = cell
             }
         }
     }
@@ -255,10 +258,11 @@ public final class UMGridEngine {
                 let src = r * n + c
                 guard snap[src].isDrawn else { continue }
                 let dst = c * n + (n - 1 - r)
-                document.cells[dst].isDrawn        = true
-                document.cells[dst].styleID        = snap[src].styleID
-                document.cells[dst].positionOffset = snap[src].positionOffset.rotatedRight90()
-                document.cells[dst].phaseOffset    = snap[src].phaseOffset + phaseOffset
+                var cell = snap[src]
+                cell.gridIndex      = dst
+                cell.positionOffset = snap[src].positionOffset.rotatedRight90()
+                cell.phaseOffset    = snap[src].phaseOffset + phaseOffset
+                document.cells[dst] = cell
             }
         }
     }
