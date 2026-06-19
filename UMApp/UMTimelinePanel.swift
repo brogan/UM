@@ -1,0 +1,931 @@
+import AppKit
+import SwiftUI
+import UMEngine
+
+// MARK: - Private row model
+
+private enum TLRowKind {
+    case cameraSummary
+    case cameraLane(UMCameraLane)
+    case layerSummary(Int)               // layer index
+    case layerLane(Int, UMTimelineLane)  // layer index, lane
+}
+
+private struct TLRow {
+    var kind: TLRowKind
+    var y:    CGFloat  // top, relative to end of ruler area
+}
+
+// MARK: - Private selection & drag
+
+private enum TLSelection: Hashable {
+    case layer(layerIndex: Int, lane: UMTimelineLane, keyframeIdx: Int)
+    case camera(lane: UMCameraLane, keyframeIdx: Int)
+}
+
+private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, rubberBand }
+
+private struct LayerKFHit: Equatable {
+    var layerIndex: Int; var lane: UMTimelineLane; var keyframeIdx: Int
+}
+private struct CameraKFHit: Equatable {
+    var lane: UMCameraLane; var keyframeIdx: Int
+}
+
+private struct TLSnapshot {
+    var camera: UMCamera
+    var layers: [(id: UUID, opacity: UMDoubleDriver, offset: UMVectorDriver)]
+}
+
+// MARK: - UMTimelinePanel
+
+struct UMTimelinePanel: View {
+    @Environment(AppController.self) private var controller
+
+    @State private var panelHeight:      CGFloat  = 200
+    @State private var resizeStartH:     CGFloat? = nil
+    @State private var zoom:             Double   = 4.0   // px per frame
+    @State private var hOffset:          Double   = 0.0   // horizontal scroll, px
+    @State private var cameraExpanded:   Bool     = false
+    @State private var expandedLayers:   Set<UUID>   = []
+    @State private var hiddenLanes:      Set<String> = []
+    @State private var dragKind:         TLDragKind  = .none
+    @State private var isDragInit:       Bool     = false
+    @State private var prevDragTX:       CGFloat  = 0
+    @State private var wasPlaying:       Bool     = false
+    @State private var layerKFDrag:   (hit: LayerKFHit,  previewFrame: Int)? = nil
+    @State private var cameraKFDrag:  (hit: CameraKFHit, previewFrame: Int)? = nil
+    @State private var rubberStart:      CGPoint? = nil
+    @State private var rubberEnd:        CGPoint? = nil
+    @State private var selectedItems:    Set<TLSelection> = []
+    @State private var undoStack:        [TLSnapshot] = []
+    @State private var scrollMonitor:    Any?     = nil
+    @State private var mouseOver:        Bool     = false
+
+    private let headerW:    CGFloat = 160
+    private let rowH:       CGFloat = 22
+    private let rulerH:     CGFloat = 28
+    private let markerH:    CGFloat = 18
+    private let handleH:    CGFloat = 26
+    private let minPanelH:  CGFloat = 80
+    private let maxPanelH:  CGFloat = 600
+    private let hitTol:     CGFloat = 8
+    private var totalRulerH: CGFloat { markerH + rulerH }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            resizeHandle
+            if !controller.isTimelineCollapsed {
+                GeometryReader { outer in
+                    let rows     = buildRows()
+                    let contentH = totalRulerH + CGFloat(rows.count) * rowH
+                    ScrollView(.vertical, showsIndicators: true) {
+                        HStack(spacing: 0) {
+                            headerColumn(rows: rows, contentH: contentH)
+                                .frame(width: headerW, height: contentH, alignment: .top)
+                            Divider()
+                            GeometryReader { geo in
+                                timelineCanvas(size: geo.size, rows: rows, contentH: contentH)
+                                    .frame(width: geo.size.width, height: contentH)
+                            }
+                            .frame(height: contentH)
+                        }
+                        .frame(minWidth: outer.size.width, alignment: .leading)
+                        .frame(height: contentH)
+                    }
+                }
+                .frame(height: max(0, panelHeight - handleH))
+                // Keyboard shortcuts
+                .background(keyboardShortcutsView)
+            }
+        }
+        .frame(height: controller.isTimelineCollapsed ? handleH : panelHeight)
+        .background(Color(NSColor.controlBackgroundColor))
+        .onHover { mouseOver = $0 }
+        .onAppear { installScrollMonitor() }
+        .onDisappear { removeScrollMonitor() }
+    }
+
+    // MARK: Keyboard shortcuts
+
+    @ViewBuilder
+    private var keyboardShortcutsView: some View {
+        Group {
+            Button("") { undoLastChange() }
+                .keyboardShortcut("z", modifiers: .command)
+                .opacity(0).frame(width: 0, height: 0)
+            Button("") { deleteSelectedKeyframes() }
+                .keyboardShortcut(.delete, modifiers: [])
+                .opacity(0).frame(width: 0, height: 0)
+            Button("") { selectAllKeyframes() }
+                .keyboardShortcut("a", modifiers: .command)
+                .opacity(0).frame(width: 0, height: 0)
+        }
+    }
+
+    // MARK: Resize handle
+
+    private var resizeHandle: some View {
+        ZStack {
+            Color(NSColor.separatorColor).frame(height: 0.5).frame(maxWidth: .infinity).frame(maxHeight: .infinity, alignment: .top)
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.up").font(.system(size: 7, weight: .semibold))
+                Capsule().fill(Color.secondary.opacity(0.45)).frame(width: 48, height: 4)
+                Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+            }
+            .foregroundStyle(.tertiary)
+        }
+        .frame(height: handleH)
+        .contentShape(Rectangle())
+        .onHover { if $0 { NSCursor.resizeUpDown.push() } else { NSCursor.pop() } }
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { v in
+                    if controller.isTimelineCollapsed {
+                        controller.isTimelineCollapsed = false
+                        resizeStartH = max(panelHeight, minPanelH)
+                    }
+                    let start = resizeStartH ?? panelHeight
+                    resizeStartH = start
+                    panelHeight = max(minPanelH, min(maxPanelH, start - v.translation.height))
+                }
+                .onEnded { _ in resizeStartH = nil }
+        )
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                controller.isTimelineCollapsed.toggle()
+                if !controller.isTimelineCollapsed { panelHeight = max(panelHeight, minPanelH) }
+            }
+        )
+    }
+
+    // MARK: Row layout
+
+    private func buildRows() -> [TLRow] {
+        var rows: [TLRow] = []
+        rows.append(TLRow(kind: .cameraSummary, y: CGFloat(rows.count) * rowH))
+        if cameraExpanded {
+            for lane in UMCameraLane.allCases where !hiddenLanes.contains(camLaneID(lane)) {
+                rows.append(TLRow(kind: .cameraLane(lane), y: CGFloat(rows.count) * rowH))
+            }
+        }
+        for (i, ls) in controller.layerStates.enumerated() {
+            rows.append(TLRow(kind: .layerSummary(i), y: CGFloat(rows.count) * rowH))
+            if expandedLayers.contains(ls.id) {
+                for lane in UMTimelineLane.allCases where !hiddenLanes.contains(layerLaneID(ls.id, lane)) {
+                    rows.append(TLRow(kind: .layerLane(i, lane), y: CGFloat(rows.count) * rowH))
+                }
+            }
+        }
+        return rows
+    }
+
+    // MARK: Header column
+
+    private func headerColumn(rows: [TLRow], contentH: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                Button { zoom = max(1.0, zoom / 1.5) } label: {
+                    Image(systemName: "minus.magnifyingglass").font(.system(size: 12))
+                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22)
+                Button { zoom = min(64.0, zoom * 1.5) } label: {
+                    Image(systemName: "plus.magnifyingglass").font(.system(size: 12))
+                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22)
+                Spacer()
+                if !selectedItems.isEmpty {
+                    Button { deleteSelectedKeyframes() } label: {
+                        Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(.red.opacity(0.7))
+                    }.buttonStyle(.plain).help("Delete selected keyframes")
+                }
+            }
+            .frame(height: totalRulerH).padding(.horizontal, 6)
+
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                headerRow(row)
+            }
+            Spacer(minLength: 0)
+        }
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func headerRow(_ row: TLRow) -> some View {
+        switch row.kind {
+        case .cameraSummary:
+            HStack(spacing: 4) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { cameraExpanded.toggle() }
+                } label: {
+                    Image(systemName: cameraExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).frame(width: 10)
+                }.buttonStyle(.plain)
+                Image(systemName: "camera").font(.system(size: 9)).foregroundStyle(.teal)
+                Text("Camera").font(.system(size: 11, weight: .medium))
+                Spacer()
+            }
+            .frame(height: rowH).padding(.leading, 5)
+
+        case .cameraLane(let lane):
+            laneHeaderRow(label: lane.label, color: lane.color, isEnabled: camLaneEnabled(lane),
+                          onHide: { hiddenLanes.insert(camLaneID(lane)) })
+
+        case .layerSummary(let i):
+            let ls = controller.layerStates[i]
+            let isActive   = i == controller.activeLayerIndex
+            let isExpanded = expandedLayers.contains(ls.id)
+            HStack(spacing: 4) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        if isExpanded { expandedLayers.remove(ls.id) } else { expandedLayers.insert(ls.id) }
+                    }
+                } label: {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8)).frame(width: 10)
+                }.buttonStyle(.plain)
+                Circle()
+                    .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .frame(width: 6, height: 6)
+                Text(ls.name).font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
+                Spacer()
+            }
+            .frame(height: rowH).padding(.leading, 5)
+            .background(isActive ? Color.accentColor.opacity(0.07) : Color.clear)
+            .contentShape(Rectangle())
+            .onTapGesture { controller.selectLayer(i) }
+
+        case .layerLane(let i, let lane):
+            let ls = controller.layerStates[i]
+            let isEnabled: Bool = lane == .opacity
+                ? ls.opacityDriver.mode != .constant
+                : ls.layerOffset.mode  != .constant
+            laneHeaderRow(label: lane.label, color: lane.color, isEnabled: isEnabled,
+                          onHide: { hiddenLanes.insert(layerLaneID(ls.id, lane)) })
+        }
+    }
+
+    private func laneHeaderRow(label: String, color: Color, isEnabled: Bool,
+                                onHide: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Color.clear.frame(width: 14)
+            Circle().fill(color.opacity(0.55)).frame(width: 5, height: 5)
+            Text(label).font(.system(size: 10)).foregroundStyle(isEnabled ? .secondary : .quaternary).lineLimit(1)
+            Spacer(minLength: 2)
+            Button(action: onHide) {
+                Image(systemName: "eye.slash").font(.system(size: 9)).foregroundStyle(.tertiary)
+            }.buttonStyle(.plain).help("Hide lane")
+        }
+        .frame(height: rowH).padding(.horizontal, 6).padding(.leading, 8)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.4))
+    }
+
+    // MARK: Timeline canvas
+
+    private func timelineCanvas(size: CGSize, rows: [TLRow], contentH: CGFloat) -> some View {
+        Canvas { ctx, sz in
+            drawRowBackgrounds(&ctx, size: sz, rows: rows)
+            drawGrid(&ctx, size: sz)
+            drawRuler(&ctx, size: sz)
+            drawMarkerStrip(&ctx, size: sz)
+            drawKeyframes(&ctx, size: sz, rows: rows)
+            drawRubberBand(&ctx)
+            drawPlayhead(&ctx, size: sz)
+        }
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { v in onDragChanged(v, canvasWidth: size.width, rows: buildRows()) }
+                .onEnded   { v in onDragEnded(v,   canvasWidth: size.width, rows: buildRows()) }
+        )
+    }
+
+    // MARK: Drawing
+
+    private func drawRowBackgrounds(_ ctx: inout GraphicsContext, size: CGSize, rows: [TLRow]) {
+        for row in rows {
+            let y = totalRulerH + row.y
+            let color: Color
+            switch row.kind {
+            case .cameraSummary:
+                color = Color(NSColor.controlBackgroundColor).opacity(0.9)
+            case .cameraLane:
+                color = Color(NSColor.windowBackgroundColor).opacity(0.6)
+            case .layerSummary(let i):
+                color = i == controller.activeLayerIndex
+                    ? Color.accentColor.opacity(0.06)
+                    : Color(NSColor.controlBackgroundColor).opacity(0.85)
+            case .layerLane:
+                color = Color(NSColor.windowBackgroundColor).opacity(0.55)
+            }
+            ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: rowH)), with: .color(color))
+        }
+        // Horizontal separators
+        var hPath = Path()
+        var y = totalRulerH + rowH
+        while y <= size.height {
+            hPath.move(to: CGPoint(x: 0, y: y))
+            hPath.addLine(to: CGPoint(x: size.width, y: y))
+            y += rowH
+        }
+        ctx.stroke(hPath, with: .color(Color.secondary.opacity(0.12)), lineWidth: 0.5)
+    }
+
+    private func drawGrid(_ ctx: inout GraphicsContext, size: CGSize) {
+        let (major, _) = tickIntervals()
+        let px = CGFloat(zoom)
+        let first = (Int(CGFloat(hOffset) / px) / major) * major
+        let last  = Int((CGFloat(hOffset) + size.width) / px) + major
+        var path = Path()
+        var f = first
+        while f <= last {
+            let x = CGFloat(f) * px - CGFloat(hOffset)
+            if x >= 0 && x <= size.width {
+                path.move(to: CGPoint(x: x, y: totalRulerH))
+                path.addLine(to: CGPoint(x: x, y: size.height))
+            }
+            f += major
+        }
+        ctx.stroke(path, with: .color(Color.secondary.opacity(0.07)), lineWidth: 0.5)
+    }
+
+    private func drawMarkerStrip(_ ctx: inout GraphicsContext, size: CGSize) {
+        ctx.fill(Path(CGRect(x: 0, y: 0, width: size.width, height: markerH)),
+                 with: .color(Color(NSColor.windowBackgroundColor).opacity(0.8)))
+        ctx.stroke(Path {
+            $0.move(to: CGPoint(x: 0, y: markerH)); $0.addLine(to: CGPoint(x: size.width, y: markerH))
+        }, with: .color(Color.secondary.opacity(0.12)), lineWidth: 0.5)
+        // TODO: named markers drawn here in Phase C
+    }
+
+    private func drawRuler(_ ctx: inout GraphicsContext, size: CGSize) {
+        ctx.fill(Path(CGRect(x: 0, y: markerH, width: size.width, height: rulerH)),
+                 with: .color(Color(NSColor.windowBackgroundColor)))
+        let (major, minor) = tickIntervals()
+        let px    = CGFloat(zoom)
+        let first = (Int(CGFloat(hOffset) / px) / minor) * minor
+        let last  = Int((CGFloat(hOffset) + size.width) / px) + major
+        var f = first
+        while f <= last {
+            let x = CGFloat(f) * px - CGFloat(hOffset)
+            guard x >= 0 && x <= size.width else { f += minor; continue }
+            let isMajor = f % major == 0
+            let tickH: CGFloat = isMajor ? 10 : 5
+            ctx.stroke(Path {
+                $0.move(to: CGPoint(x: x, y: totalRulerH - tickH))
+                $0.addLine(to: CGPoint(x: x, y: totalRulerH))
+            }, with: .color(isMajor ? Color.secondary.opacity(0.5) : Color.secondary.opacity(0.22)), lineWidth: 1)
+            if isMajor {
+                ctx.draw(Text("\(f)").font(.system(size: 8, design: .monospaced)).foregroundStyle(Color.secondary),
+                         at: CGPoint(x: x + 2, y: totalRulerH - 12), anchor: .bottomLeading)
+            }
+            f += minor
+        }
+        ctx.stroke(Path {
+            $0.move(to: CGPoint(x: 0, y: totalRulerH)); $0.addLine(to: CGPoint(x: size.width, y: totalRulerH))
+        }, with: .color(Color.secondary.opacity(0.18)), lineWidth: 0.5)
+    }
+
+    private func drawKeyframes(_ ctx: inout GraphicsContext, size: CGSize, rows: [TLRow]) {
+        let px = CGFloat(zoom)
+        for row in rows {
+            let midY = totalRulerH + row.y + rowH * 0.5
+            switch row.kind {
+
+            case .cameraSummary:
+                let allFrames = Set(UMCameraLane.allCases.flatMap { $0.keyframeFrames(from: controller.camera) })
+                for frame in allFrames {
+                    let x = CGFloat(frame) * px - CGFloat(hOffset)
+                    guard x > -8 && x < size.width + 8 else { continue }
+                    drawDiamond(&ctx, x: x, y: midY, sz: 4.5, color: .teal, selected: false, dragging: false)
+                }
+
+            case .cameraLane(let lane):
+                for (ki, frame) in lane.keyframeFrames(from: controller.camera).enumerated() {
+                    let isDragging = cameraKFDrag?.hit == CameraKFHit(lane: lane, keyframeIdx: ki)
+                    let isSelected = selectedItems.contains(.camera(lane: lane, keyframeIdx: ki))
+                    let df = isDragging ? (cameraKFDrag?.previewFrame ?? frame) : frame
+                    let x  = CGFloat(df) * px - CGFloat(hOffset)
+                    guard x > -8 && x < size.width + 8 else { continue }
+                    drawDiamond(&ctx, x: x, y: midY, sz: 4.0, color: lane.color,
+                                selected: isSelected, dragging: isDragging)
+                }
+
+            case .layerSummary(let i):
+                let ls = controller.layerStates[i]
+                let allFrames = Set(ls.opacityDriver.keyframes.map(\.frame) + ls.layerOffset.keyframes.map(\.frame))
+                for frame in allFrames {
+                    let x = CGFloat(frame) * px - CGFloat(hOffset)
+                    guard x > -8 && x < size.width + 8 else { continue }
+                    drawDiamond(&ctx, x: x, y: midY, sz: 4.5, color: .accentColor, selected: false, dragging: false)
+                }
+
+            case .layerLane(let i, let lane):
+                let ls = controller.layerStates[i]
+                for (ki, frame) in lane.keyframeFrames(from: ls).enumerated() {
+                    let isDragging = layerKFDrag?.hit == LayerKFHit(layerIndex: i, lane: lane, keyframeIdx: ki)
+                    let isSelected = selectedItems.contains(.layer(layerIndex: i, lane: lane, keyframeIdx: ki))
+                    let df = isDragging ? (layerKFDrag?.previewFrame ?? frame) : frame
+                    let x  = CGFloat(df) * px - CGFloat(hOffset)
+                    guard x > -8 && x < size.width + 8 else { continue }
+                    drawDiamond(&ctx, x: x, y: midY, sz: 4.0, color: lane.color,
+                                selected: isSelected, dragging: isDragging)
+                }
+            }
+        }
+    }
+
+    private func drawPlayhead(_ ctx: inout GraphicsContext, size: CGSize) {
+        let x = CGFloat(controller.engine.currentFrame) * CGFloat(zoom) - CGFloat(hOffset)
+        guard x >= -1 && x <= size.width + 1 else { return }
+        ctx.stroke(Path { $0.move(to: CGPoint(x: x, y: 0)); $0.addLine(to: CGPoint(x: x, y: size.height)) },
+                   with: .color(Color.red.opacity(0.75)), lineWidth: 1.5)
+        ctx.fill(Path {
+            $0.move(to: CGPoint(x: x - 5, y: 0))
+            $0.addLine(to: CGPoint(x: x + 5, y: 0))
+            $0.addLine(to: CGPoint(x: x, y: 9))
+            $0.closeSubpath()
+        }, with: .color(Color.red.opacity(0.75)))
+    }
+
+    private func drawDiamond(_ ctx: inout GraphicsContext, x: CGFloat, y: CGFloat, sz: CGFloat,
+                              color: Color, selected: Bool, dragging: Bool) {
+        let s = dragging ? sz * 1.4 : sz
+        let path = Path {
+            $0.move(to:    CGPoint(x: x,     y: y - s))
+            $0.addLine(to: CGPoint(x: x + s, y: y))
+            $0.addLine(to: CGPoint(x: x,     y: y + s))
+            $0.addLine(to: CGPoint(x: x - s, y: y))
+            $0.closeSubpath()
+        }
+        ctx.fill(path, with: .color(color.opacity(dragging ? 1.0 : 0.85)))
+        if selected {
+            ctx.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+        } else if dragging {
+            ctx.stroke(path, with: .color(color), lineWidth: 1.0)
+        }
+    }
+
+    private func drawRubberBand(_ ctx: inout GraphicsContext) {
+        guard let s = rubberStart, let e = rubberEnd,
+              abs(s.x - e.x) > 2 || abs(s.y - e.y) > 2 else { return }
+        let rect = CGRect(x: min(s.x, e.x), y: min(s.y, e.y),
+                          width: abs(s.x - e.x), height: abs(s.y - e.y))
+        let path = Path(rect)
+        ctx.fill(path, with: .color(Color.accentColor.opacity(0.1)))
+        ctx.stroke(path, with: .color(Color.accentColor.opacity(0.7)),
+                   style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+    }
+
+    // MARK: Hit testing
+
+    private func rowAt(_ point: CGPoint, in rows: [TLRow]) -> TLRow? {
+        let cy = point.y - totalRulerH
+        guard cy >= 0 else { return nil }
+        return rows.first { cy >= $0.y && cy < $0.y + rowH }
+    }
+
+    private func hitTestLayerKF(at point: CGPoint, rows: [TLRow]) -> LayerKFHit? {
+        guard let row = rowAt(point, in: rows), case .layerLane(let i, let lane) = row.kind else { return nil }
+        let ls = controller.layerStates[i]
+        let clickFrame = Double(point.x + CGFloat(hOffset)) / zoom
+        let tol = Double(hitTol) / zoom
+        let frames = lane.keyframeFrames(from: ls)
+        guard !frames.isEmpty,
+              let (idx, _) = frames.enumerated().min(by: { abs(Double($0.element) - clickFrame) < abs(Double($1.element) - clickFrame) }),
+              abs(Double(frames[idx]) - clickFrame) <= tol
+        else { return nil }
+        return LayerKFHit(layerIndex: i, lane: lane, keyframeIdx: idx)
+    }
+
+    private func hitTestCameraKF(at point: CGPoint, rows: [TLRow]) -> CameraKFHit? {
+        guard let row = rowAt(point, in: rows), case .cameraLane(let lane) = row.kind else { return nil }
+        let clickFrame = Double(point.x + CGFloat(hOffset)) / zoom
+        let tol = Double(hitTol) / zoom
+        let frames = lane.keyframeFrames(from: controller.camera)
+        guard !frames.isEmpty,
+              let (idx, _) = frames.enumerated().min(by: { abs(Double($0.element) - clickFrame) < abs(Double($1.element) - clickFrame) }),
+              abs(Double(frames[idx]) - clickFrame) <= tol
+        else { return nil }
+        return CameraKFHit(lane: lane, keyframeIdx: idx)
+    }
+
+    // MARK: Gesture handlers
+
+    private func onDragChanged(_ v: DragGesture.Value, canvasWidth: CGFloat, rows: [TLRow]) {
+        if !isDragInit {
+            isDragInit = true
+            prevDragTX = 0
+            if v.startLocation.y < totalRulerH {
+                dragKind  = .seek
+                wasPlaying = controller.isPlaying
+                if controller.isPlaying { controller.togglePlayback() }
+            } else if let hit = hitTestCameraKF(at: v.startLocation, rows: rows) {
+                dragKind     = .cameraKF
+                cameraKFDrag = (hit, storedCameraFrame(hit))
+                tapSelectItem(.camera(lane: hit.lane, keyframeIdx: hit.keyframeIdx), additive: shiftDown)
+            } else if let hit = hitTestLayerKF(at: v.startLocation, rows: rows) {
+                dragKind    = .layerKF
+                layerKFDrag = (hit, storedLayerFrame(hit))
+                tapSelectItem(.layer(layerIndex: hit.layerIndex, lane: hit.lane, keyframeIdx: hit.keyframeIdx), additive: shiftDown)
+            } else if optionDown {
+                dragKind = .pan
+            } else {
+                dragKind   = .rubberBand
+                rubberStart = v.startLocation
+                rubberEnd   = v.location
+            }
+        }
+
+        switch dragKind {
+        case .seek:
+            let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            controller.seekToFrame(f)
+        case .layerKF:
+            let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            if let s = layerKFDrag { layerKFDrag = (s.hit, f) }
+        case .cameraKF:
+            let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            if let s = cameraKFDrag { cameraKFDrag = (s.hit, f) }
+        case .pan:
+            let delta = v.translation.width - prevDragTX
+            hOffset   = max(0, hOffset - Double(delta))
+            prevDragTX = v.translation.width
+        case .rubberBand:
+            rubberEnd = v.location
+        case .none: break
+        }
+    }
+
+    private func onDragEnded(_ v: DragGesture.Value, canvasWidth: CGFloat, rows: [TLRow]) {
+        let isTap = abs(v.translation.width) < 4 && abs(v.translation.height) < 4
+        defer {
+            isDragInit = false
+            prevDragTX = 0
+        }
+        switch dragKind {
+        case .seek:
+            if wasPlaying { controller.togglePlayback() }
+        case .layerKF:
+            if !isTap, let s = layerKFDrag { commitLayerKFDrag(s) }
+            if isTap { seekToKF(layerKFDrag?.previewFrame) }
+            layerKFDrag = nil
+        case .cameraKF:
+            if !isTap, let s = cameraKFDrag { commitCameraKFDrag(s) }
+            if isTap { seekToKF(cameraKFDrag?.previewFrame) }
+            cameraKFDrag = nil
+        case .pan:
+            if isTap { handleTap(at: v.startLocation, rows: rows) }
+        case .rubberBand:
+            if isTap {
+                handleTap(at: v.startLocation, rows: rows)
+            } else if let s = rubberStart, let e = rubberEnd {
+                let rect = CGRect(x: min(s.x, e.x), y: min(s.y, e.y),
+                                  width: abs(s.x - e.x), height: abs(s.y - e.y))
+                selectKFsInRect(rect, rows: rows, additive: shiftDown)
+            }
+            rubberStart = nil; rubberEnd = nil
+        case .none: break
+        }
+        dragKind = .none
+    }
+
+    private func handleTap(at point: CGPoint, rows: [TLRow]) {
+        guard let row = rowAt(point, in: rows) else { clearSelection(); return }
+        let frame = max(0, Int(Double(point.x + CGFloat(hOffset)) / zoom + 0.5))
+        switch row.kind {
+        case .cameraLane(let lane):
+            addCameraKeyframe(lane: lane, frame: frame)
+        case .layerLane(let i, let lane):
+            addLayerKeyframe(layerIndex: i, lane: lane, frame: frame)
+        case .layerSummary(let i):
+            controller.selectLayer(i); clearSelection()
+        default:
+            clearSelection()
+        }
+    }
+
+    private func seekToKF(_ frame: Int?) {
+        if let f = frame { controller.seekToFrame(f) }
+    }
+
+    // MARK: Keyframe mutations
+
+    private func addLayerKeyframe(layerIndex: Int, lane: UMTimelineLane, frame: Int) {
+        guard layerIndex < controller.layerStates.count else { return }
+        recordUndo()
+        let ls = controller.layerStates[layerIndex]
+        switch lane {
+        case .opacity:
+            let val = DriverEvaluator.evaluate(ls.opacityDriver, frame: frame)
+            var d   = ls.opacityDriver
+            d.mode  = .keyframe
+            d.keyframes.removeAll { $0.frame == frame }
+            d.keyframes.append(UMDoubleKeyframe(frame: frame, value: val))
+            d.keyframes.sort { $0.frame < $1.frame }
+            ls.opacityDriver = d
+        case .offset:
+            let val = DriverEvaluator.evaluate(ls.layerOffset, frame: frame)
+            var d   = ls.layerOffset
+            d.mode  = .keyframe
+            d.keyframes.removeAll { $0.frame == frame }
+            d.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
+            d.keyframes.sort { $0.frame < $1.frame }
+            ls.layerOffset = d
+        }
+        let frames = lane.keyframeFrames(from: ls)
+        if let idx = frames.firstIndex(of: frame) {
+            tapSelectItem(.layer(layerIndex: layerIndex, lane: lane, keyframeIdx: idx), additive: false)
+        }
+        controller.seekToFrame(frame)
+    }
+
+    private func addCameraKeyframe(lane: UMCameraLane, frame: Int) {
+        recordUndo()
+        switch lane {
+        case .pan:
+            let val = DriverEvaluator.evaluate(controller.camera.pan, frame: frame)
+            controller.camera.pan.mode = .keyframe
+            controller.camera.pan.keyframes.removeAll { $0.frame == frame }
+            controller.camera.pan.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
+            controller.camera.pan.keyframes.sort { $0.frame < $1.frame }
+        case .zoom:
+            let val = DriverEvaluator.evaluate(controller.camera.zoom, frame: frame)
+            controller.camera.zoom.mode = .keyframe
+            controller.camera.zoom.keyframes.removeAll { $0.frame == frame }
+            controller.camera.zoom.keyframes.append(UMDoubleKeyframe(frame: frame, value: val))
+            controller.camera.zoom.keyframes.sort { $0.frame < $1.frame }
+        case .rotation:
+            let val = DriverEvaluator.evaluate(controller.camera.rotation, frame: frame)
+            controller.camera.rotation.mode = .keyframe
+            controller.camera.rotation.keyframes.removeAll { $0.frame == frame }
+            controller.camera.rotation.keyframes.append(UMDoubleKeyframe(frame: frame, value: val))
+            controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
+        }
+        let frames = lane.keyframeFrames(from: controller.camera)
+        if let idx = frames.firstIndex(of: frame) {
+            tapSelectItem(.camera(lane: lane, keyframeIdx: idx), additive: false)
+        }
+        controller.seekToFrame(frame)
+    }
+
+    private func commitLayerKFDrag(_ state: (hit: LayerKFHit, previewFrame: Int)) {
+        let (hit, newFrame) = (state.hit, state.previewFrame)
+        guard hit.layerIndex < controller.layerStates.count else { return }
+        recordUndo()
+        let ls = controller.layerStates[hit.layerIndex]
+        switch hit.lane {
+        case .opacity:
+            guard hit.keyframeIdx < ls.opacityDriver.keyframes.count else { return }
+            ls.opacityDriver.keyframes[hit.keyframeIdx].frame = newFrame
+            ls.opacityDriver.keyframes.sort { $0.frame < $1.frame }
+        case .offset:
+            guard hit.keyframeIdx < ls.layerOffset.keyframes.count else { return }
+            ls.layerOffset.keyframes[hit.keyframeIdx].frame = newFrame
+            ls.layerOffset.keyframes.sort { $0.frame < $1.frame }
+        }
+        let frames = hit.lane.keyframeFrames(from: ls)
+        if let idx = frames.firstIndex(of: newFrame) {
+            tapSelectItem(.layer(layerIndex: hit.layerIndex, lane: hit.lane, keyframeIdx: idx), additive: false)
+        }
+        syncSelectionToController()
+    }
+
+    private func commitCameraKFDrag(_ state: (hit: CameraKFHit, previewFrame: Int)) {
+        let (hit, newFrame) = (state.hit, state.previewFrame)
+        recordUndo()
+        switch hit.lane {
+        case .pan:
+            guard hit.keyframeIdx < controller.camera.pan.keyframes.count else { return }
+            controller.camera.pan.keyframes[hit.keyframeIdx].frame = newFrame
+            controller.camera.pan.keyframes.sort { $0.frame < $1.frame }
+        case .zoom:
+            guard hit.keyframeIdx < controller.camera.zoom.keyframes.count else { return }
+            controller.camera.zoom.keyframes[hit.keyframeIdx].frame = newFrame
+            controller.camera.zoom.keyframes.sort { $0.frame < $1.frame }
+        case .rotation:
+            guard hit.keyframeIdx < controller.camera.rotation.keyframes.count else { return }
+            controller.camera.rotation.keyframes[hit.keyframeIdx].frame = newFrame
+            controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
+        }
+        let frames = hit.lane.keyframeFrames(from: controller.camera)
+        if let idx = frames.firstIndex(of: newFrame) {
+            tapSelectItem(.camera(lane: hit.lane, keyframeIdx: idx), additive: false)
+        }
+        syncSelectionToController()
+    }
+
+    private func deleteSelectedKeyframes() {
+        guard !selectedItems.isEmpty else { return }
+        recordUndo()
+        // Collect deletions per driver, sorted in reverse so indices stay valid
+        let sorted = selectedItems.sorted { a, b in
+            switch (a, b) {
+            case (.layer(let ai, let al, let aki), .layer(let bi, let bl, let bki)):
+                if ai != bi { return ai > bi }
+                if al.rawValue != bl.rawValue { return al.rawValue > bl.rawValue }
+                return aki > bki
+            case (.camera(let al, let aki), .camera(let bl, let bki)):
+                return al == bl ? aki > bki : al.rawValue > bl.rawValue
+            case (.camera, .layer): return true
+            case (.layer, .camera): return false
+            }
+        }
+        for item in sorted {
+            switch item {
+            case .layer(let i, let lane, let ki):
+                guard i < controller.layerStates.count else { continue }
+                let ls = controller.layerStates[i]
+                switch lane {
+                case .opacity:
+                    guard ki < ls.opacityDriver.keyframes.count else { continue }
+                    ls.opacityDriver.keyframes.remove(at: ki)
+                    if ls.opacityDriver.keyframes.isEmpty { ls.opacityDriver.mode = .constant }
+                case .offset:
+                    guard ki < ls.layerOffset.keyframes.count else { continue }
+                    ls.layerOffset.keyframes.remove(at: ki)
+                    if ls.layerOffset.keyframes.isEmpty { ls.layerOffset.mode = .constant }
+                }
+            case .camera(let lane, let ki):
+                switch lane {
+                case .pan:
+                    guard ki < controller.camera.pan.keyframes.count else { continue }
+                    controller.camera.pan.keyframes.remove(at: ki)
+                    if controller.camera.pan.keyframes.isEmpty { controller.camera.pan.mode = .constant }
+                case .zoom:
+                    guard ki < controller.camera.zoom.keyframes.count else { continue }
+                    controller.camera.zoom.keyframes.remove(at: ki)
+                    if controller.camera.zoom.keyframes.isEmpty { controller.camera.zoom.mode = .constant }
+                case .rotation:
+                    guard ki < controller.camera.rotation.keyframes.count else { continue }
+                    controller.camera.rotation.keyframes.remove(at: ki)
+                    if controller.camera.rotation.keyframes.isEmpty { controller.camera.rotation.mode = .constant }
+                }
+            }
+        }
+        clearSelection()
+    }
+
+    private func selectAllKeyframes() {
+        let rows = buildRows()
+        var items = Set<TLSelection>()
+        for row in rows {
+            switch row.kind {
+            case .cameraLane(let lane):
+                for (ki, _) in lane.keyframeFrames(from: controller.camera).enumerated() {
+                    items.insert(.camera(lane: lane, keyframeIdx: ki))
+                }
+            case .layerLane(let i, let lane):
+                guard i < controller.layerStates.count else { continue }
+                let ls = controller.layerStates[i]
+                for (ki, _) in lane.keyframeFrames(from: ls).enumerated() {
+                    items.insert(.layer(layerIndex: i, lane: lane, keyframeIdx: ki))
+                }
+            default: break
+            }
+        }
+        selectedItems = items
+        syncSelectionToController()
+    }
+
+    // MARK: Selection
+
+    private func tapSelectItem(_ item: TLSelection, additive: Bool) {
+        if additive { selectedItems.insert(item) } else { selectedItems = [item] }
+        syncSelectionToController()
+    }
+
+    private func clearSelection() {
+        selectedItems.removeAll()
+        controller.selectedTimelineKF = nil
+        controller.selectedCameraKF   = nil
+    }
+
+    private func selectKFsInRect(_ rect: CGRect, rows: [TLRow], additive: Bool) {
+        let px = CGFloat(zoom)
+        var items = Set<TLSelection>()
+        for row in rows {
+            let midY = totalRulerH + row.y + rowH * 0.5
+            guard midY >= rect.minY && midY <= rect.maxY else { continue }
+            switch row.kind {
+            case .cameraLane(let lane):
+                for (ki, frame) in lane.keyframeFrames(from: controller.camera).enumerated() {
+                    let x = CGFloat(frame) * px - CGFloat(hOffset)
+                    if x >= rect.minX && x <= rect.maxX { items.insert(.camera(lane: lane, keyframeIdx: ki)) }
+                }
+            case .layerLane(let i, let lane):
+                guard i < controller.layerStates.count else { continue }
+                let ls = controller.layerStates[i]
+                for (ki, frame) in lane.keyframeFrames(from: ls).enumerated() {
+                    let x = CGFloat(frame) * px - CGFloat(hOffset)
+                    if x >= rect.minX && x <= rect.maxX {
+                        items.insert(.layer(layerIndex: i, lane: lane, keyframeIdx: ki))
+                    }
+                }
+            default: break
+            }
+        }
+        if additive { selectedItems.formUnion(items) } else { selectedItems = items }
+        syncSelectionToController()
+    }
+
+    private func syncSelectionToController() {
+        guard let first = selectedItems.first else {
+            controller.selectedTimelineKF = nil
+            controller.selectedCameraKF   = nil
+            return
+        }
+        switch first {
+        case .layer(let i, let lane, let ki):
+            controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: i, lane: lane, keyframeIdx: ki)
+            controller.selectedCameraKF   = nil
+        case .camera(let lane, let ki):
+            controller.selectedCameraKF   = UMCameraKFSelection(lane: lane, keyframeIdx: ki)
+            controller.selectedTimelineKF = nil
+        }
+    }
+
+    // MARK: Undo
+
+    private func recordUndo() {
+        let snap = TLSnapshot(
+            camera: controller.camera,
+            layers: controller.layerStates.map { (id: $0.id, opacity: $0.opacityDriver, offset: $0.layerOffset) }
+        )
+        undoStack.append(snap)
+        if undoStack.count > 50 { undoStack.removeFirst(undoStack.count - 50) }
+    }
+
+    private func undoLastChange() {
+        guard let snap = undoStack.popLast() else { return }
+        controller.camera = snap.camera
+        for item in snap.layers {
+            guard let ls = controller.layerStates.first(where: { $0.id == item.id }) else { continue }
+            ls.opacityDriver = item.opacity
+            ls.layerOffset   = item.offset
+        }
+        clearSelection()
+    }
+
+    // MARK: Helpers
+
+    private func storedLayerFrame(_ hit: LayerKFHit) -> Int {
+        guard hit.layerIndex < controller.layerStates.count else { return 0 }
+        let ls = controller.layerStates[hit.layerIndex]
+        let frames = hit.lane.keyframeFrames(from: ls)
+        return frames.indices.contains(hit.keyframeIdx) ? frames[hit.keyframeIdx] : 0
+    }
+
+    private func storedCameraFrame(_ hit: CameraKFHit) -> Int {
+        let frames = hit.lane.keyframeFrames(from: controller.camera)
+        return frames.indices.contains(hit.keyframeIdx) ? frames[hit.keyframeIdx] : 0
+    }
+
+    private func camLaneEnabled(_ lane: UMCameraLane) -> Bool {
+        switch lane {
+        case .pan:      return controller.camera.pan.mode      != .constant
+        case .zoom:     return controller.camera.zoom.mode     != .constant
+        case .rotation: return controller.camera.rotation.mode != .constant
+        }
+    }
+
+    private func tickIntervals() -> (major: Int, minor: Int) {
+        switch zoom {
+        case 20...: return (10, 1)
+        case 8...:  return (10, 5)
+        case 4...:  return (20, 10)
+        case 2...:  return (50, 10)
+        default:    return (100, 25)
+        }
+    }
+
+    private func camLaneID(_ lane: UMCameraLane)                    -> String { "cam-\(lane.rawValue)" }
+    private func layerLaneID(_ id: UUID, _ lane: UMTimelineLane)    -> String { "\(id)-\(lane.rawValue)" }
+
+    private var shiftDown:  Bool { NSEvent.modifierFlags.contains(.shift) }
+    private var optionDown: Bool { NSEvent.modifierFlags.contains(.option) }
+
+    private func installScrollMonitor() {
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [self] ev in
+            guard self.mouseOver else { return ev }
+            if ev.modifierFlags.contains(.option) {
+                // Option+scroll = zoom
+                let delta = abs(ev.scrollingDeltaX) > abs(ev.scrollingDeltaY)
+                    ? Double(ev.scrollingDeltaX) : Double(ev.scrollingDeltaY)
+                let newZoom = max(1.0, min(64.0, self.zoom * (1 + delta * 0.05)))
+                // Keep playhead in view during zoom
+                let pivotFrame = Double(self.controller.engine.currentFrame)
+                let pivotPx    = pivotFrame * self.zoom - self.hOffset
+                self.zoom    = newZoom
+                self.hOffset = max(0, pivotFrame * newZoom - pivotPx)
+                return nil
+            } else if ev.modifierFlags.isEmpty || ev.modifierFlags == [] {
+                // Horizontal scroll without modifiers = pan
+                let dx = Double(ev.scrollingDeltaX)
+                if abs(dx) > 0.1 { self.hOffset = max(0, self.hOffset + dx); return nil }
+            }
+            return ev
+        }
+    }
+
+    private func removeScrollMonitor() {
+        if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
+    }
+}

@@ -27,6 +27,8 @@ struct ContentView: View {
 
             Divider()
 
+            UMTimelinePanel()
+
             TransportBarView()
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
