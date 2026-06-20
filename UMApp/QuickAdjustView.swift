@@ -147,6 +147,31 @@ struct QuickAdjustView: View {
                 ColorWell(color: canvasColorBinding(\.backgroundColor), supportsOpacity: false)
                     .frame(width: 40, height: 24)
             }
+            InspectorField("Bg Image") {
+                if controller.backgroundCGImage != nil,
+                   let name = controller.backgroundImagePath.map({ URL(fileURLWithPath: $0).lastPathComponent }) {
+                    Image(systemName: "photo")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                    Text(name)
+                        .font(.system(size: 11))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button(action: { controller.clearBackgroundImage() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear background image")
+                } else {
+                    Button("Choose…") { chooseBgImage() }
+                        .font(.system(size: 11))
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
             InspectorField("Draw") {
                 Toggle("Background draw", isOn: Binding(
                     get: { controller.backgroundDraw },
@@ -303,6 +328,18 @@ struct QuickAdjustView: View {
                         .padding(.bottom, 4)
                 }
             }
+        }
+    }
+
+    private func chooseBgImage() {
+        let panel = NSOpenPanel()
+        panel.title                 = "Choose Background Image"
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories  = false
+        panel.allowedContentTypes   = [.image]
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            controller.setBackgroundImage(url: url)
         }
     }
 

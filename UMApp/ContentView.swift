@@ -255,6 +255,7 @@ private struct AccumulationSnapshot: @unchecked Sendable {
     let layers: [LayerAccumulationData]
     let previousBuffer: CGImage?
     let backgroundColor: UMColor
+    let backgroundImage: CGImage?
     let shapePolygonMap: [UUID: [Polygon2D]]
     let fallbackPolygons: [Polygon2D]
     let projectMotionSets: [UMMotionSet]
@@ -276,13 +277,14 @@ private nonisolated func renderAccumulationCG(_ snap: AccumulationSnapshot) -> C
                                    bitmapInfo: bitmapInfo) else { return nil }
     let frame = CGRect(x: 0, y: 0, width: snap.pw, height: snap.ph)
 
-    // Base layer: previous accumulated frame, or solid background
+    // Base layer: previous accumulated frame, or solid background + image
     if let buf = snap.previousBuffer {
         mainCtx.draw(buf, in: frame)
     } else {
         let bg = snap.backgroundColor
         mainCtx.setFillColor(CGColor(red: bg.r, green: bg.g, blue: bg.b, alpha: bg.a))
         mainCtx.fill(frame)
+        if let bgImg = snap.backgroundImage { mainCtx.draw(bgImg, in: frame) }
     }
 
     for layer in snap.layers {
@@ -434,16 +436,23 @@ struct GridCanvasPlaceholder: View {
                     ctx.clip(to: Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))))
 
                     // Background
-                    let bgColor = Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)
+                    let bgColor   = Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)
+                    let bgRect    = CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))
                     if controller.backgroundDraw {
-                        ctx.fill(Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))),
-                                 with: .color(bgColor))
+                        ctx.fill(Path(bgRect), with: .color(bgColor))
+                        if let bgImg = controller.backgroundCGImage {
+                            let resolved = ctx.resolve(Image(decorative: bgImg, scale: 1))
+                            ctx.draw(resolved, in: bgRect)
+                        }
                     } else if let buf = controller.frameBuffer {
                         let img = ctx.resolve(Image(decorative: buf, scale: displayScale))
-                        ctx.draw(img, in: CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH)))
+                        ctx.draw(img, in: bgRect)
                     } else {
-                        ctx.fill(Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))),
-                                 with: .color(bgColor))
+                        ctx.fill(Path(bgRect), with: .color(bgColor))
+                        if let bgImg = controller.backgroundCGImage {
+                            let resolved = ctx.resolve(Image(decorative: bgImg, scale: 1))
+                            ctx.draw(resolved, in: bgRect)
+                        }
                     }
 
                     // Grid lines — only when enabled
@@ -818,6 +827,7 @@ struct GridCanvasPlaceholder: View {
                         },
                         previousBuffer:    controller.frameBuffer,
                         backgroundColor:   controller.backgroundColor,
+                        backgroundImage:   controller.backgroundCGImage,
                         shapePolygonMap:   controller.shapePolygonMap,
                         fallbackPolygons:  controller.shapePolygons,
                         projectMotionSets: controller.projectMotionSets,
@@ -1393,6 +1403,7 @@ func umLayerTransform(
 func umRenderComposited(
     layerStates: [UMLayerState],
     backgroundColor: UMColor,
+    backgroundImage: CGImage? = nil,
     shapePolygonMap: [UUID: [Polygon2D]],
     fallbackPolygons: [Polygon2D],
     projectMotionSets: [UMMotionSet],
@@ -1423,6 +1434,7 @@ func umRenderComposited(
         ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
                                  blue: backgroundColor.b, alpha: backgroundColor.a))
         ctx.fill(destRect)
+        if let bgImg = backgroundImage { ctx.draw(bgImg, in: destRect) }
     }
 
     let cameraFrame = camera.evaluate(frame: frame)

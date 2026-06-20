@@ -167,6 +167,8 @@ final class AppController {
     var gridColor: UMColor           = UMColor(r: 0.5, g: 0.5, b: 0.5, a: 1)
     var gridLineWidth: Double        = 0.5
     var backgroundColor: UMColor     = UMColor(r: 1, g: 1, b: 1, a: 1)
+    var backgroundCGImage: CGImage?  = nil
+    var backgroundImagePath: String? = nil
     var isPlaying: Bool              = false
     var selectedIndices:    Set<Int> = []
     var activeStyleID:      UUID?    = nil
@@ -446,6 +448,18 @@ final class AppController {
 
     // MARK: Save / Load
 
+    func setBackgroundImage(url: URL) {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image  = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return }
+        backgroundCGImage  = image
+        backgroundImagePath = url.path
+    }
+
+    func clearBackgroundImage() {
+        backgroundCGImage   = nil
+        backgroundImagePath = nil
+    }
+
     func newDocument() {
         UMLogger.shared.log("newDocument")
         let doc = UMGridDocument.makeDefault()
@@ -469,6 +483,8 @@ final class AppController {
         selectedIndices           = []
         currentFileURL            = nil
         camera            = .identity
+        backgroundCGImage   = nil
+        backgroundImagePath = nil
         rebuildShapePolygonMap()
         seedDefaultShape()
     }
@@ -553,11 +569,12 @@ final class AppController {
         var layers: [LayerRecord]
         var camera: UMCamera?             // Added in v4; nil → .identity
         var timelineMarkers: [UMTimelineMarker]?  // Added in v5; nil → []
+        var backgroundImageRelPath: String?       // Added in v7; nil → no background image
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
             case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
-            case camera, timelineMarkers
+            case camera, timelineMarkers, backgroundImageRelPath
         }
 
         init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
@@ -565,7 +582,8 @@ final class AppController {
              projectColorPalettes: [UMColorPalette],
              projectResolutionPresets: [UMResolutionPreset],
              layers: [LayerRecord], camera: UMCamera?,
-             timelineMarkers: [UMTimelineMarker]?) {
+             timelineMarkers: [UMTimelineMarker]?,
+             backgroundImageRelPath: String?) {
             self.version                  = version
             self.activeLayerIndex         = activeLayerIndex
             self.projectStyles            = projectStyles
@@ -576,6 +594,7 @@ final class AppController {
             self.layers                   = layers
             self.camera                   = camera
             self.timelineMarkers          = timelineMarkers
+            self.backgroundImageRelPath   = backgroundImageRelPath
         }
 
         init(from decoder: Decoder) throws {
@@ -590,6 +609,7 @@ final class AppController {
             layers                   = try  c.decode([LayerRecord].self,   forKey: .layers)
             camera                   = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
             timelineMarkers          = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
+            backgroundImageRelPath   = try? c.decodeIfPresent(String.self,                forKey: .backgroundImageRelPath)
         }
     }
 
@@ -703,6 +723,20 @@ final class AppController {
             layerStates[li].engine.document.colorSource = src
         }
 
+        // Copy background image into project package
+        var bgImageRelPath: String? = nil
+        if let bgPath = backgroundImagePath {
+            let srcURL = URL(fileURLWithPath: bgPath)
+            if fm.fileExists(atPath: srcURL.path) {
+                let bgDir = url.appendingPathComponent("backgroundImage")
+                try? fm.createDirectory(at: bgDir, withIntermediateDirectories: true)
+                let dest  = bgDir.appendingPathComponent(srcURL.lastPathComponent)
+                if !fm.fileExists(atPath: dest.path) { try? fm.copyItem(at: srcURL, to: dest) }
+                bgImageRelPath    = "backgroundImage/\(srcURL.lastPathComponent)"
+                backgroundImagePath = dest.path
+            }
+        }
+
         // Create empty render directories (mirrors Loom project layout)
         try? fm.createDirectory(at: url.appendingPathComponent("renders/animations"),
                                 withIntermediateDirectories: true)
@@ -712,7 +746,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 5,
+            version: 7,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -741,7 +775,8 @@ final class AppController {
                 )
             },
             camera: camera,
-            timelineMarkers: timelineMarkers.isEmpty ? nil : timelineMarkers
+            timelineMarkers: timelineMarkers.isEmpty ? nil : timelineMarkers,
+            backgroundImageRelPath: bgImageRelPath
         )
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -837,6 +872,22 @@ final class AppController {
                 src.filePath = colorSourcesDir.appendingPathComponent(rel).path
                 layerStates[li].engine.document.colorSource = src
             }
+        }
+
+        // Load background image
+        if let rel = config.backgroundImageRelPath {
+            let imageURL = url.appendingPathComponent(rel)
+            if let src = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
+               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) {
+                backgroundCGImage   = img
+                backgroundImagePath = imageURL.path
+            } else {
+                backgroundCGImage   = nil
+                backgroundImagePath = nil
+            }
+        } else {
+            backgroundCGImage   = nil
+            backgroundImagePath = nil
         }
 
         layerColorMapEngines.removeAll()
@@ -1499,6 +1550,7 @@ final class AppController {
                 guard let cgImage = umRenderComposited(
                     layerStates:       self.layerStates,
                     backgroundColor:   self.backgroundColor,
+                    backgroundImage:   self.backgroundCGImage,
                     shapePolygonMap:   self.shapePolygonMap,
                     fallbackPolygons:  self.shapePolygons,
                     projectMotionSets: self.projectMotionSets,
@@ -1559,6 +1611,7 @@ final class AppController {
                     try await UMVideoExporter.export(
                         layers:            layers,
                         backgroundColor:   bg,
+                        backgroundImage:   self.backgroundCGImage,
                         shapePolygonMap:   polyMap,
                         fallbackPolygons:  polys,
                         projectMotionSets: self.projectMotionSets,

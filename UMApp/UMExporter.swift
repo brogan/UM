@@ -16,6 +16,7 @@ enum UMVideoExporter {
     static func export(
         layers: [UMLayer],
         backgroundColor: UMColor,
+        backgroundImage: CGImage? = nil,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
@@ -72,6 +73,7 @@ enum UMVideoExporter {
             let cgImage = renderComposited(
                 layers:            visibleLayers,
                 backgroundColor:   backgroundColor,
+                backgroundImage:   backgroundImage,
                 shapePolygonMap:   shapePolygonMap,
                 fallbackPolygons:  fallbackPolygons,
                 projectMotionSets: projectMotionSets,
@@ -133,6 +135,7 @@ enum UMVideoExporter {
     private static func renderComposited(
         layers: [UMLayer],
         backgroundColor: UMColor,
+        backgroundImage: CGImage? = nil,
         shapePolygonMap: [UUID: [Polygon2D]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
@@ -162,6 +165,7 @@ enum UMVideoExporter {
             ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
                                      blue: backgroundColor.b, alpha: backgroundColor.a))
             ctx.fill(destRect)
+            if let bgImg = backgroundImage { ctx.draw(bgImg, in: destRect) }
         }
 
         let cameraFrame = camera.evaluate(frame: frame)
