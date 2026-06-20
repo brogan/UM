@@ -361,14 +361,16 @@ private let layersBody = #"""
 <div class="tip"><strong>Typical workflow</strong> — build a background layer (large cells, slow motion, low opacity), add a foreground layer (smaller cells, faster motion), and adjust the balance with the opacity sliders. Each layer can have its own color map source for complex image-driven color effects.</div>
 
 <h2>Camera and parallax</h2>
-<p>The <strong>CAMERA</strong> section in Quick Adjust lets you position a virtual camera over the entire composition. All layers render through the camera:</p>
+<p>The <strong>CAMERA</strong> section in Quick Adjust lets you position and animate a virtual camera over the entire composition. All layers render through the camera. Each of the three camera properties — <strong>PAN</strong>, <strong>ZOOM</strong>, and <strong>ROTATION</strong> — has an independent <strong>Mode</strong> picker, so you can mix constant positioning with animated oscillation or noise on a per-axis basis.</p>
 <table>
-  <tr><th>Control</th><th>Range</th><th>Description</th></tr>
-  <tr><td>Pan X / Y</td><td>−500 … 500 px</td><td>Shift the camera horizontally and vertically in canvas pixels.</td></tr>
-  <tr><td>Zoom</td><td>0.1 – 4.0×</td><td>Scale the canvas from its centre. 1.0 = no zoom.</td></tr>
-  <tr><td>Rotation</td><td>−180° … 180°</td><td>Rotate the canvas around its centre.</td></tr>
-  <tr><td>Reset</td><td>—</td><td>Return all camera values to neutral (pan 0, zoom 1, rotation 0).</td></tr>
+  <tr><th>Mode</th><th>Controls shown</th><th>Effect</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Slider or value field</td><td>Static camera position — no animation.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Amplitude (and X/Y for Pan), Period (s), Phase (0–1), Offset (Pan only)</td><td>Sinusoidal back-and-forth drift around the centre value.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range (and X/Y for Pan), Duration (frames)</td><td>Stepped random jumps held for the given number of frames.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amplitude (and X/Y for Pan), Frequency (cyc/s)</td><td>Smooth Perlin-style wander.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driven by keyframes in the timeline. Add keyframes using the Pan / Zoom / Rotation lane in the Keyframe Timeline panel.</td></tr>
 </table>
+<p>The <strong>Reset Camera</strong> button (bottom of the section) returns all three drivers to their identity defaults (Pan 0, Zoom 1×, Rotation 0°, mode Constant). It is greyed out when the camera is already at identity.</p>
 
 <p>Each layer row has a <strong>parallax slider</strong> (the camera icon) that controls how much of the camera pan this layer absorbs:</p>
 <table>
@@ -487,7 +489,7 @@ private let layersBody = #"""
   <tr><td><strong>Oscillator</strong></td><td>Amp X/Y (px), Period (s), Phase (0–1)</td><td>Sinusoidal back-and-forth drift. The sprite oscillates symmetrically around its base position.</td></tr>
   <tr><td><strong>Jitter</strong></td><td>Range X/Y (px), Duration (frames)</td><td>Step-change jitter: the offset jumps to a new random value within ±Range every Duration frames, then holds.</td></tr>
   <tr><td><strong>Noise</strong></td><td>Amp X/Y (px), Frequency (cyc/s)</td><td>Smooth Perlin-style noise drift. Organic, non-repeating position wander.</td></tr>
-  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driver mode reserved for future timeline integration.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>Frame, Pos X, Pos Y, Easing (in KF inspector)</td><td>Keyframe-driven position. Expand the sprite's layer in the timeline — each sprite shows a purple <strong>↑ [name]</strong> lane. Click the lane to add a keyframe at the current frame; drag to move it; Delete to remove. The KF inspector in Quick Adjust shows Frame, Pos X, Pos Y (canvas pixels), and Easing. All standard timeline operations apply: rubber-band select, Cmd+C/V, timing-scale, Cmd+Z undo.</td></tr>
 </table>
 <div class="tip"><strong>Position Driver + Motion Set</strong> — both contribute independently. The motion set&apos;s oscillation is driven by its preset and speed/amount parameters; the Position Driver runs its own separate waveform. Stacking an Oscillator motion set (slow, large arc) with a Noise Position Driver (fast, small amplitude) gives organic floating motion with a directional bias.</div>
 
@@ -518,7 +520,7 @@ private let layersBody = #"""
 <ul>
   <li><strong>Motion controls</strong> — when a sprite is selected and has a motion set assigned, the <strong>MOTION — [name]</strong> section appears below SPRITES in Quick Adjust, showing all motion parameters for that motion set. If no sprite is selected, the section shows the palette&apos;s active motion set (if any).</li>
   <li><strong>No path animation on sprites</strong> — sprites support a motion set and a Position Driver for animated movement, but not keyframe paths.</li>
-  <li><strong>Position Driver keyframe mode</strong> — the Keyframe mode is selectable but produces no animation until timeline integration is added in a future update.</li>
+  <li><strong>Polygon override index stability</strong> — polygon overrides are keyed by positional index. Re-importing a shape from Loom with a different polygon ordering will shift overrides to different polygons.</li>
 </ul>
 
 <h2>Grid Scroll</h2>
@@ -766,12 +768,13 @@ private let playbackBody = #"""
 <p>The <strong>Keyframe Timeline</strong> panel sits below the canvas (drag the handle at the top edge to resize; tap it to collapse). It controls <em>driver-based</em> animation — smooth interpolated motion that uses the same frame clock as parametric animation, distinct from the cut-based recording timeline above.</p>
 
 <h3>Lanes</h3>
-<p>Each layer has three driver lanes; the camera has three additional lanes:</p>
+<p>Each <strong>grid layer</strong> has three driver lanes. <strong>Sprite layers</strong> have two layer-level lanes plus one per-sprite position lane. The camera has three additional lanes:</p>
 <table>
   <tr><th>Lane</th><th>Colour</th><th>Controls</th></tr>
-  <tr><td>Opacity</td><td>Pink</td><td>Layer opacity over time (0–1)</td></tr>
-  <tr><td>Offset</td><td>Blue</td><td>Layer canvas-pixel position offset (X, Y)</td></tr>
-  <tr><td>Grid Scroll</td><td>Orange</td><td>Per-layer grid scroll amount (X, Y in cell units)</td></tr>
+  <tr><td>Opacity</td><td>Pink</td><td>Layer opacity over time (0–1). Grid and sprite layers.</td></tr>
+  <tr><td>Offset</td><td>Blue</td><td>Layer canvas-pixel position offset (X, Y). Grid and sprite layers.</td></tr>
+  <tr><td>Grid Scroll</td><td>Orange</td><td>Per-layer grid scroll amount (X, Y in cell units). Grid layers only.</td></tr>
+  <tr><td>↑ [Sprite name]</td><td>Purple</td><td>Position Driver offset for that sprite (X, Y in canvas pixels). One lane per sprite; sprite layers only.</td></tr>
   <tr><td>Camera Pan</td><td>Teal</td><td>Camera pan offset (X, Y in pixels)</td></tr>
   <tr><td>Camera Zoom</td><td>Green</td><td>Camera zoom factor</td></tr>
   <tr><td>Camera Rotation</td><td>Cyan</td><td>Camera rotation in degrees</td></tr>
@@ -929,17 +932,41 @@ private let qaProjectBody = #"""
 <p>When a Color Map source is loaded, UM can sample it to build a named <strong>colour palette</strong> — a set of swatches you can use to hand-pick fill and stroke colours for your styles. See <a href="um-help://help/palette">Style Palette &amp; Library → PALETTES</a> for how to generate and manage palettes, and <a href="um-help://help/qa-style">Style (RENDER)</a> for how to apply palette colours to a style's fill or stroke.</p>
 
 <h2>CAMERA</h2>
-<p>The CAMERA section sits below CANVAS in the Quick Adjust panel. It positions a virtual camera over the entire composition — all layers render through it. Camera state is saved in the project and applied to all PNG and video exports.</p>
+<p>The CAMERA section sits below CANVAS in the Quick Adjust panel. It positions and animates a virtual camera over the entire composition — all layers render through it. Camera state is saved in the project and applied to all PNG and video exports.</p>
+<p>The section is divided into three subsections — <strong>PAN</strong>, <strong>ZOOM</strong>, and <strong>ROTATION</strong> — each with its own <strong>Mode</strong> picker. This lets you mix animation modes independently: for example, a noise-driven pan with a constant zoom.</p>
+
+<h3>PAN</h3>
 <table>
-  <tr><th>Control</th><th>Range</th><th>Description</th></tr>
-  <tr><td><strong>Pan X</strong></td><td>−500 … 500 px</td><td>Shift the viewport left (negative) or right (positive) in canvas pixels.</td></tr>
-  <tr><td><strong>Pan Y</strong></td><td>−500 … 500 px</td><td>Shift the viewport up (negative) or down (positive) in canvas pixels.</td></tr>
-  <tr><td><strong>Zoom</strong></td><td>0.1 – 4.0×</td><td>Scale the canvas around its centre point. 1.0 = native size.</td></tr>
-  <tr><td><strong>Rotation</strong></td><td>−180° … 180°</td><td>Rotate the canvas clockwise (positive) or counter-clockwise (negative) around its centre.</td></tr>
-  <tr><td><strong>Reset</strong></td><td>—</td><td>Return all values to neutral (Pan 0, Zoom 1×, Rotation 0°). Greyed out when already at identity.</td></tr>
+  <tr><th>Mode</th><th>Controls</th><th>Effect</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Pan X slider (−500…500 px), Pan Y slider</td><td>Static camera position.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Amp X / Amp Y (px), Period (s), Phase (0–1), Offset X / Offset Y (px)</td><td>Sinusoidal back-and-forth drift. Amplitude controls the half-range; Offset shifts the centre.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range X / Range Y (px), Duration (frames)</td><td>Stepped random jumps at the given frame interval.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amp X / Amp Y (px), Frequency (cyc/s)</td><td>Smooth independent noise on each axis.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driven by the <strong>Camera Pan</strong> lane in the Keyframe Timeline.</td></tr>
 </table>
+
+<h3>ZOOM</h3>
+<table>
+  <tr><th>Mode</th><th>Controls</th><th>Effect</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Zoom slider (0.1 – 4.0×)</td><td>Static zoom level. 1.0 = native size.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Centre (×), Amplitude (×), Period (s), Phase (0–1)</td><td>Sinusoidal breathing zoom.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range (×), Duration (frames)</td><td>Stepped random zoom jumps.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amplitude (×), Frequency (cyc/s)</td><td>Smooth zoom wander.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driven by the <strong>Camera Zoom</strong> lane in the Keyframe Timeline.</td></tr>
+</table>
+
+<h3>ROTATION</h3>
+<table>
+  <tr><th>Mode</th><th>Controls</th><th>Effect</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Rotation slider (−180° … 180°)</td><td>Static rotation around the canvas centre.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Centre (°), Amplitude (°), Period (s), Phase (0–1)</td><td>Sinusoidal rock.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range (°), Duration (frames)</td><td>Stepped random rotation jumps.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amplitude (°), Frequency (cyc/s)</td><td>Smooth rotation wander.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driven by the <strong>Camera Rotation</strong> lane in the Keyframe Timeline.</td></tr>
+</table>
+
+<p>The <strong>Reset Camera</strong> button (bottom of the section) returns all three drivers to identity (Pan 0, Zoom 1×, Rotation 0°, mode Constant). It is greyed out when already at identity.</p>
 <p>Parallax per layer is controlled by the small slider (camera icon) in each layer row — see <a href="um-help://help/layers">Working with Layers</a> for details on how parallax interacts with camera pan.</p>
-<div class="note"><strong>Phase 1 — constant values only.</strong> The camera currently supports static positioning (constant mode). Oscillator and keyframe animation of camera movement (camera moves over the timeline) will be added in a future release.</div>
 """#
 
 private let qaStyleBody = #"""
@@ -1213,6 +1240,7 @@ private let paletteBody = #"""
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
+<p>Below the layer list, the LAYERS section also shows <strong>resolution preset chips</strong> — click any chip to instantly resample the active layer to that grid size. Built-in sizes (4×4 through 32×32) are always present. To save the current resolution as a project preset, click the <strong>+</strong> button at the end of the chip row. To save a project preset to your global library, right-click it and choose <strong>Save to Library</strong>. To remove a project preset, right-click → <strong>Remove</strong>.</p>
 
 <h3>STYLES</h3>
 <p>A style controls rendering only: fill colour, stroke colour, stroke width, and render mode. Click a style row to make it the <strong>active style</strong> — new cells you draw will carry this style. The active style is highlighted with an accent indicator.</p>
@@ -1284,11 +1312,12 @@ private let paletteBody = #"""
 <div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
 
 <h2>Library tab</h2>
-<p>Shows your global user library — styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
+<p>Shows your global user library — resolution presets, styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
 <ul>
-  <li>Style, motion, shape, and palette rows show whether the item is already in the current project. If not, a <strong>↓</strong> button imports it.</li>
-  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions/palettes) and <code>~/Library/Application Support/UM/shapes/</code> (shapes).</li>
-  <li>Right-click any library row to remove it from the library.</li>
+  <li>Each section shows whether the item is already in the current project. If not, a <strong>↓</strong> button (or chip) imports it.</li>
+  <li>The <strong>RESOLUTION</strong> section lists global resolution presets as chips. Click ↓ on a chip to import it into the current project (greyed when already present). Right-click a chip to remove it from the library.</li>
+  <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions/palettes), <code>~/Library/Application Support/UM/shapes/</code> (shapes), and <code>~/Library/Application Support/UM/resolutionPresets.json</code> (resolution presets).</li>
+  <li>Right-click any library row or chip to remove it from the library.</li>
 </ul>
 """#
 
@@ -1493,7 +1522,7 @@ private let pendingBody = #"""
 <table>
   <tr><th>Area</th><th>Feature</th><th>Notes</th></tr>
   <tr><td>Right panel</td><td>Full palette-context right panel (Style / Shape detail sections)</td><td>✓ Built — the RENDER section header now reads <strong>STYLE — [name]</strong> when a style is active. A <strong>SHAPE — [name]</strong> section appears below MOTION when a shape is active. A <strong>LAYER DRIVERS</strong> section (collapsed by default) exposes oscillator, jitter, and noise modes for layer opacity and layer offset.</td></tr>
-  <tr><td>Left panel</td><td>Resolution preset library (global tabs)</td><td>The LAYERS section already shows preset resolution chips (4×4 through 32×32) and project-saved presets. What's missing is a Library tab to save resolution presets globally across projects.</td></tr>
+  <tr><td>Left panel</td><td>Resolution preset library (global tabs)</td><td>✓ Built — the Library tab now shows a <strong>RESOLUTION</strong> section with global presets. Right-click a project preset chip (↑ Save to Library); in the Library tab, click ↓ to import a preset into the current project. See <a href="um-help://help/palette">Style Palette</a>.</td></tr>
   <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed but not yet wired.</td></tr>
   <tr><td>Rendering</td><td>Full Loom render modes</td><td>Brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of geometry). Current build: Filled, Stroked, Fill &amp; Stroke only.</td></tr>
   <tr><td>Rendering</td><td>Animated style thumbnails</td><td>Style rows in the palette show a static coloured dot. Live animated miniature previews are planned.</td></tr>

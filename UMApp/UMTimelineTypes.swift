@@ -99,6 +99,7 @@ struct UMKFClipboard {
         case cameraPan(      frameOffset: Int, value: UMVec2,  easing: PathEasing)
         case cameraZoom(     frameOffset: Int, value: Double,  easing: PathEasing)
         case cameraRotation( frameOffset: Int, value: Double,  easing: PathEasing)
+        case spritePos(      layerIndex: Int, spriteID: UUID, frameOffset: Int, value: UMVec2, easing: PathEasing)
     }
     var items:       [Item]
     var anchorFrame: Int
@@ -114,5 +115,11 @@ struct UMTimelineKFSelection: Equatable {
 
 struct UMCameraKFSelection: Equatable, Hashable {
     var lane:        UMCameraLane
+    var keyframeIdx: Int
+}
+
+struct UMSpriteKFSelection: Equatable {
+    var layerIndex:  Int
+    var spriteID:    UUID
     var keyframeIdx: Int
 }

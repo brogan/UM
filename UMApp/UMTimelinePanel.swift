@@ -9,6 +9,7 @@ private enum TLRowKind {
     case cameraLane(UMCameraLane)
     case layerSummary(Int)               // layer index
     case layerLane(Int, UMTimelineLane)  // layer index, lane
+    case spriteLane(Int, UUID)           // layer index, sprite ID
 }
 
 private struct TLRow {
@@ -21,9 +22,10 @@ private struct TLRow {
 private enum TLSelection: Hashable {
     case layer(layerIndex: Int, lane: UMTimelineLane, keyframeIdx: Int)
     case camera(lane: UMCameraLane, keyframeIdx: Int)
+    case sprite(layerIndex: Int, spriteID: UUID, keyframeIdx: Int)
 }
 
-private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, rubberBand, markerStrip }
+private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, spriteKF, rubberBand, markerStrip }
 
 private struct LayerKFHit: Equatable {
     var layerIndex: Int; var lane: UMTimelineLane; var keyframeIdx: Int
@@ -31,10 +33,14 @@ private struct LayerKFHit: Equatable {
 private struct CameraKFHit: Equatable {
     var lane: UMCameraLane; var keyframeIdx: Int
 }
+private struct SpriteKFHit: Equatable {
+    var layerIndex: Int; var spriteID: UUID; var keyframeIdx: Int
+}
 
 private struct TLSnapshot {
     var camera: UMCamera
-    var layers: [(id: UUID, opacity: UMDoubleDriver, offset: UMVectorDriver, gridScroll: UMVectorDriver)]
+    var layers: [(id: UUID, opacity: UMDoubleDriver, offset: UMVectorDriver, gridScroll: UMVectorDriver,
+                  sprites: [(id: UUID, positionDriver: UMVectorDriver)])]
 }
 
 // MARK: - UMTimelinePanel
@@ -55,6 +61,7 @@ struct UMTimelinePanel: View {
     @State private var wasPlaying:       Bool     = false
     @State private var layerKFDrag:   (hit: LayerKFHit,  previewFrame: Int)? = nil
     @State private var cameraKFDrag:  (hit: CameraKFHit, previewFrame: Int)? = nil
+    @State private var spriteKFDrag:  (hit: SpriteKFHit, previewFrame: Int)? = nil
     @State private var rubberStart:      CGPoint? = nil
     @State private var rubberEnd:        CGPoint? = nil
     @State private var selectedItems:    Set<TLSelection> = []
@@ -181,8 +188,18 @@ struct UMTimelinePanel: View {
         for (i, ls) in controller.layerStates.enumerated() {
             rows.append(TLRow(kind: .layerSummary(i), y: CGFloat(rows.count) * rowH))
             if expandedLayers.contains(ls.id) {
-                for lane in UMTimelineLane.allCases where !hiddenLanes.contains(layerLaneID(ls.id, lane)) {
-                    rows.append(TLRow(kind: .layerLane(i, lane), y: CGFloat(rows.count) * rowH))
+                if ls.layerMode == .sprite {
+                    // Sprite layers: opacity and offset apply; gridScroll does not
+                    for lane in [UMTimelineLane.opacity, .offset] where !hiddenLanes.contains(layerLaneID(ls.id, lane)) {
+                        rows.append(TLRow(kind: .layerLane(i, lane), y: CGFloat(rows.count) * rowH))
+                    }
+                    for sprite in ls.sprites where !hiddenLanes.contains(spriteLaneID(ls.id, sprite.id)) {
+                        rows.append(TLRow(kind: .spriteLane(i, sprite.id), y: CGFloat(rows.count) * rowH))
+                    }
+                } else {
+                    for lane in UMTimelineLane.allCases where !hiddenLanes.contains(layerLaneID(ls.id, lane)) {
+                        rows.append(TLRow(kind: .layerLane(i, lane), y: CGFloat(rows.count) * rowH))
+                    }
                 }
             }
         }
@@ -326,6 +343,14 @@ struct UMTimelinePanel: View {
             }()
             laneHeaderRow(label: lane.label, color: lane.color, isEnabled: isEnabled,
                           onHide: { hiddenLanes.insert(layerLaneID(ls.id, lane)) })
+
+        case .spriteLane(let i, let spriteID):
+            let ls = controller.layerStates[i]
+            let sprite = ls.sprites.first(where: { $0.id == spriteID })
+            let name = sprite?.name ?? "Sprite"
+            let isEnabled = sprite?.positionDriver.mode == .keyframe
+            laneHeaderRow(label: "↑ \(name)", color: .purple, isEnabled: isEnabled,
+                          onHide: { hiddenLanes.insert(spriteLaneID(ls.id, spriteID)) })
         }
     }
 
@@ -380,6 +405,8 @@ struct UMTimelinePanel: View {
                     : Color(NSColor.controlBackgroundColor).opacity(0.85)
             case .layerLane:
                 color = Color(NSColor.windowBackgroundColor).opacity(0.55)
+            case .spriteLane:
+                color = Color.purple.opacity(0.04)
             }
             ctx.fill(Path(CGRect(x: 0, y: y, width: size.width, height: rowH)), with: .color(color))
         }
@@ -504,9 +531,10 @@ struct UMTimelinePanel: View {
 
             case .layerSummary(let i):
                 let ls = controller.layerStates[i]
-                let allFrames = Set(ls.opacityDriver.keyframes.map(\.frame)
+                var allFrames = Set(ls.opacityDriver.keyframes.map(\.frame)
                                   + ls.layerOffset.keyframes.map(\.frame)
                                   + ls.gridScrollDriver.keyframes.map(\.frame))
+                for sprite in ls.sprites { allFrames.formUnion(sprite.positionDriver.keyframes.map(\.frame)) }
                 for frame in allFrames {
                     let x = CGFloat(frame) * px - CGFloat(hOffset)
                     guard x > -8 && x < size.width + 8 else { continue }
@@ -522,6 +550,20 @@ struct UMTimelinePanel: View {
                     let x  = CGFloat(df) * px - CGFloat(hOffset)
                     guard x > -8 && x < size.width + 8 else { continue }
                     drawDiamond(&ctx, x: x, y: midY, sz: 4.0, color: lane.color,
+                                selected: isSelected, dragging: isDragging)
+                }
+
+            case .spriteLane(let i, let spriteID):
+                let ls = controller.layerStates[i]
+                guard let sprite = ls.sprites.first(where: { $0.id == spriteID }) else { continue }
+                for (ki, kf) in sprite.positionDriver.keyframes.enumerated() {
+                    let hit = SpriteKFHit(layerIndex: i, spriteID: spriteID, keyframeIdx: ki)
+                    let isDragging = spriteKFDrag?.hit == hit
+                    let isSelected = selectedItems.contains(.sprite(layerIndex: i, spriteID: spriteID, keyframeIdx: ki))
+                    let df = isDragging ? (spriteKFDrag?.previewFrame ?? kf.frame) : kf.frame
+                    let x  = CGFloat(df) * px - CGFloat(hOffset)
+                    guard x > -8 && x < size.width + 8 else { continue }
+                    drawDiamond(&ctx, x: x, y: midY, sz: 4.0, color: .purple,
                                 selected: isSelected, dragging: isDragging)
                 }
             }
@@ -603,6 +645,20 @@ struct UMTimelinePanel: View {
         return CameraKFHit(lane: lane, keyframeIdx: idx)
     }
 
+    private func hitTestSpriteKF(at point: CGPoint, rows: [TLRow]) -> SpriteKFHit? {
+        guard let row = rowAt(point, in: rows), case .spriteLane(let i, let spriteID) = row.kind else { return nil }
+        guard let ls = controller.layerStates[safe: i],
+              let sprite = ls.sprites.first(where: { $0.id == spriteID }) else { return nil }
+        let clickFrame = Double(point.x + CGFloat(hOffset)) / zoom
+        let tol = Double(hitTol) / zoom
+        let frames = sprite.positionDriver.keyframes.map(\.frame)
+        guard !frames.isEmpty,
+              let (idx, _) = frames.enumerated().min(by: { abs(Double($0.element) - clickFrame) < abs(Double($1.element) - clickFrame) }),
+              abs(Double(frames[idx]) - clickFrame) <= tol
+        else { return nil }
+        return SpriteKFHit(layerIndex: i, spriteID: spriteID, keyframeIdx: idx)
+    }
+
     // MARK: Gesture handlers
 
     private func onDragChanged(_ v: DragGesture.Value, canvasWidth: CGFloat, rows: [TLRow]) {
@@ -619,6 +675,10 @@ struct UMTimelinePanel: View {
                 dragKind     = .cameraKF
                 cameraKFDrag = (hit, storedCameraFrame(hit))
                 tapSelectItem(.camera(lane: hit.lane, keyframeIdx: hit.keyframeIdx), additive: shiftDown)
+            } else if let hit = hitTestSpriteKF(at: v.startLocation, rows: rows) {
+                dragKind     = .spriteKF
+                spriteKFDrag = (hit, storedSpriteFrame(hit))
+                tapSelectItem(.sprite(layerIndex: hit.layerIndex, spriteID: hit.spriteID, keyframeIdx: hit.keyframeIdx), additive: shiftDown)
             } else if let hit = hitTestLayerKF(at: v.startLocation, rows: rows) {
                 dragKind    = .layerKF
                 layerKFDrag = (hit, storedLayerFrame(hit))
@@ -642,6 +702,9 @@ struct UMTimelinePanel: View {
         case .cameraKF:
             let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
             if let s = cameraKFDrag { cameraKFDrag = (s.hit, f) }
+        case .spriteKF:
+            let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            if let s = spriteKFDrag { spriteKFDrag = (s.hit, f) }
         case .pan:
             let delta = v.translation.width - prevDragTX
             hOffset   = max(0, hOffset - Double(delta))
@@ -669,6 +732,10 @@ struct UMTimelinePanel: View {
             if !isTap, let s = cameraKFDrag { commitCameraKFDrag(s) }
             if isTap { seekToKF(cameraKFDrag?.previewFrame) }
             cameraKFDrag = nil
+        case .spriteKF:
+            if !isTap, let s = spriteKFDrag { commitSpriteKFDrag(s) }
+            if isTap { seekToKF(spriteKFDrag?.previewFrame) }
+            spriteKFDrag = nil
         case .pan:
             if isTap { handleTap(at: v.startLocation, rows: rows) }
         case .rubberBand:
@@ -698,6 +765,8 @@ struct UMTimelinePanel: View {
             addCameraKeyframe(lane: lane, frame: frame)
         case .layerLane(let i, let lane):
             addLayerKeyframe(layerIndex: i, lane: lane, frame: frame)
+        case .spriteLane(let i, let spriteID):
+            addSpriteKeyframe(layerIndex: i, spriteID: spriteID, frame: frame)
         case .layerSummary(let i):
             controller.selectLayer(i); clearSelection()
         default:
@@ -737,6 +806,10 @@ struct UMTimelinePanel: View {
                 f = lane.keyframeFrames(from: ls)[safe: ki] ?? 0
             case .camera(let lane, let ki):
                 f = lane.keyframeFrames(from: controller.camera)[safe: ki] ?? 0
+            case .sprite(let i, let spriteID, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let sprite = ls.sprites.first(where: { $0.id == spriteID }) else { continue }
+                f = sprite.positionDriver.keyframes[safe: ki]?.frame ?? 0
             }
             minFrame = min(minFrame, f)
         }
@@ -775,6 +848,12 @@ struct UMTimelinePanel: View {
                     guard let kf = controller.camera.rotation.keyframes[safe: ki] else { continue }
                     items.append(.cameraRotation(frameOffset: offset, value: kf.value, easing: kf.easing))
                 }
+            case .sprite(let i, let spriteID, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let sprite = ls.sprites.first(where: { $0.id == spriteID }),
+                      let kf = sprite.positionDriver.keyframes[safe: ki] else { continue }
+                let offset = kf.frame - minFrame
+                items.append(.spritePos(layerIndex: i, spriteID: spriteID, frameOffset: offset, value: kf.value, easing: kf.easing))
             }
         }
         if !items.isEmpty {
@@ -845,6 +924,17 @@ struct UMTimelinePanel: View {
                 controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
                 if let ki = controller.camera.rotation.keyframes.firstIndex(where: { $0.frame == f }) {
                     selectedItems.insert(.camera(lane: .rotation, keyframeIdx: ki))
+                }
+            case .spritePos(let i, let spriteID, let offset, let value, let easing):
+                guard let ls = controller.layerStates[safe: i],
+                      let si = ls.sprites.firstIndex(where: { $0.id == spriteID }) else { continue }
+                let f = base + offset
+                ls.sprites[si].positionDriver.mode = .keyframe
+                ls.sprites[si].positionDriver.keyframes.removeAll { $0.frame == f }
+                ls.sprites[si].positionDriver.keyframes.append(UMVectorKeyframe(frame: f, value: value, easing: easing))
+                ls.sprites[si].positionDriver.keyframes.sort { $0.frame < $1.frame }
+                if let ki = ls.sprites[si].positionDriver.keyframes.firstIndex(where: { $0.frame == f }) {
+                    selectedItems.insert(.sprite(layerIndex: i, spriteID: spriteID, keyframeIdx: ki))
                 }
             }
         }
@@ -919,6 +1009,37 @@ struct UMTimelinePanel: View {
         controller.seekToFrame(frame)
     }
 
+    private func addSpriteKeyframe(layerIndex: Int, spriteID: UUID, frame: Int) {
+        guard let ls = controller.layerStates[safe: layerIndex],
+              let si = ls.sprites.firstIndex(where: { $0.id == spriteID }) else { return }
+        recordUndo()
+        let val = DriverEvaluator.evaluate(ls.sprites[si].positionDriver, frame: frame)
+        var d = ls.sprites[si].positionDriver
+        d.mode = .keyframe
+        d.keyframes.removeAll { $0.frame == frame }
+        d.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
+        d.keyframes.sort { $0.frame < $1.frame }
+        ls.sprites[si].positionDriver = d
+        if let ki = ls.sprites[si].positionDriver.keyframes.firstIndex(where: { $0.frame == frame }) {
+            tapSelectItem(.sprite(layerIndex: layerIndex, spriteID: spriteID, keyframeIdx: ki), additive: false)
+        }
+        controller.seekToFrame(frame)
+    }
+
+    private func commitSpriteKFDrag(_ state: (hit: SpriteKFHit, previewFrame: Int)) {
+        let (hit, newFrame) = (state.hit, state.previewFrame)
+        guard let ls = controller.layerStates[safe: hit.layerIndex],
+              let si = ls.sprites.firstIndex(where: { $0.id == hit.spriteID }),
+              hit.keyframeIdx < ls.sprites[si].positionDriver.keyframes.count else { return }
+        recordUndo()
+        ls.sprites[si].positionDriver.keyframes[hit.keyframeIdx].frame = newFrame
+        ls.sprites[si].positionDriver.keyframes.sort { $0.frame < $1.frame }
+        if let ki = ls.sprites[si].positionDriver.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+            tapSelectItem(.sprite(layerIndex: hit.layerIndex, spriteID: hit.spriteID, keyframeIdx: ki), additive: false)
+        }
+        syncSelectionToController()
+    }
+
     private func commitLayerKFDrag(_ state: (hit: LayerKFHit, previewFrame: Int)) {
         let (hit, newFrame) = (state.hit, state.previewFrame)
         guard hit.layerIndex < controller.layerStates.count else { return }
@@ -981,8 +1102,13 @@ struct UMTimelinePanel: View {
                 return aki > bki
             case (.camera(let al, let aki), .camera(let bl, let bki)):
                 return al == bl ? aki > bki : al.rawValue > bl.rawValue
+            case (.sprite(let ai, let as_, let aki), .sprite(let bi, let bs, let bki)):
+                if ai != bi { return ai > bi }
+                if as_.uuidString != bs.uuidString { return as_.uuidString > bs.uuidString }
+                return aki > bki
             case (.camera, .layer): return true
             case (.layer, .camera): return false
+            default: return false
             }
         }
         for item in sorted {
@@ -1019,6 +1145,14 @@ struct UMTimelinePanel: View {
                     controller.camera.rotation.keyframes.remove(at: ki)
                     if controller.camera.rotation.keyframes.isEmpty { controller.camera.rotation.mode = .constant }
                 }
+            case .sprite(let i, let spriteID, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let si = ls.sprites.firstIndex(where: { $0.id == spriteID }),
+                      ki < ls.sprites[si].positionDriver.keyframes.count else { continue }
+                ls.sprites[si].positionDriver.keyframes.remove(at: ki)
+                if ls.sprites[si].positionDriver.keyframes.isEmpty {
+                    ls.sprites[si].positionDriver.mode = .constant
+                }
             }
         }
         clearSelection()
@@ -1039,6 +1173,11 @@ struct UMTimelinePanel: View {
                 f = frame
             case .camera(let lane, let ki):
                 guard let frame = lane.keyframeFrames(from: controller.camera)[safe: ki] else { continue }
+                f = frame
+            case .sprite(let i, let spriteID, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let sprite = ls.sprites.first(where: { $0.id == spriteID }),
+                      let frame = sprite.positionDriver.keyframes[safe: ki]?.frame else { continue }
                 f = frame
             }
             pivotFrame = min(pivotFrame, f)
@@ -1081,6 +1220,12 @@ struct UMTimelinePanel: View {
                     let old = controller.camera.rotation.keyframes[ki].frame
                     controller.camera.rotation.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
                 }
+            case .sprite(let i, let spriteID, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let si = ls.sprites.firstIndex(where: { $0.id == spriteID }),
+                      ki < ls.sprites[si].positionDriver.keyframes.count else { continue }
+                let old = ls.sprites[si].positionDriver.keyframes[ki].frame
+                ls.sprites[si].positionDriver.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
             }
         }
 
@@ -1090,6 +1235,9 @@ struct UMTimelinePanel: View {
         })
         let affectedCamLanes = Set(selectedItems.compactMap {
             if case .camera(let lane, _) = $0 { lane } else { nil }
+        })
+        let affectedSprites = Set(selectedItems.compactMap { item -> String? in
+            if case .sprite(let i, let sid, _) = item { "\(i):\(sid.uuidString)" } else { nil }
         })
         for i in affectedLayers {
             guard let ls = controller.layerStates[safe: i] else { continue }
@@ -1103,6 +1251,13 @@ struct UMTimelinePanel: View {
             case .zoom:     controller.camera.zoom.keyframes.sort     { $0.frame < $1.frame }
             case .rotation: controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
             }
+        }
+        for key in affectedSprites {
+            let parts = key.split(separator: ":")
+            guard parts.count == 2, let i = Int(parts[0]), let sid = UUID(uuidString: String(parts[1])),
+                  let ls = controller.layerStates[safe: i],
+                  let si = ls.sprites.firstIndex(where: { $0.id == sid }) else { continue }
+            ls.sprites[si].positionDriver.keyframes.sort { $0.frame < $1.frame }
         }
         clearSelection()
     }
@@ -1122,6 +1277,12 @@ struct UMTimelinePanel: View {
                 for (ki, _) in lane.keyframeFrames(from: ls).enumerated() {
                     items.insert(.layer(layerIndex: i, lane: lane, keyframeIdx: ki))
                 }
+            case .spriteLane(let i, let spriteID):
+                guard let ls = controller.layerStates[safe: i],
+                      let sprite = ls.sprites.first(where: { $0.id == spriteID }) else { continue }
+                for (ki, _) in sprite.positionDriver.keyframes.enumerated() {
+                    items.insert(.sprite(layerIndex: i, spriteID: spriteID, keyframeIdx: ki))
+                }
             default: break
             }
         }
@@ -1140,6 +1301,7 @@ struct UMTimelinePanel: View {
         selectedItems.removeAll()
         controller.selectedTimelineKF = nil
         controller.selectedCameraKF   = nil
+        controller.selectedSpriteKF   = nil
     }
 
     private func selectKFsInRect(_ rect: CGRect, rows: [TLRow], additive: Bool) {
@@ -1163,6 +1325,15 @@ struct UMTimelinePanel: View {
                         items.insert(.layer(layerIndex: i, lane: lane, keyframeIdx: ki))
                     }
                 }
+            case .spriteLane(let i, let spriteID):
+                guard let ls = controller.layerStates[safe: i],
+                      let sprite = ls.sprites.first(where: { $0.id == spriteID }) else { continue }
+                for (ki, kf) in sprite.positionDriver.keyframes.enumerated() {
+                    let x = CGFloat(kf.frame) * px - CGFloat(hOffset)
+                    if x >= rect.minX && x <= rect.maxX {
+                        items.insert(.sprite(layerIndex: i, spriteID: spriteID, keyframeIdx: ki))
+                    }
+                }
             default: break
             }
         }
@@ -1174,15 +1345,22 @@ struct UMTimelinePanel: View {
         guard let first = selectedItems.first else {
             controller.selectedTimelineKF = nil
             controller.selectedCameraKF   = nil
+            controller.selectedSpriteKF   = nil
             return
         }
         switch first {
         case .layer(let i, let lane, let ki):
             controller.selectedTimelineKF = UMTimelineKFSelection(layerIndex: i, lane: lane, keyframeIdx: ki)
             controller.selectedCameraKF   = nil
+            controller.selectedSpriteKF   = nil
         case .camera(let lane, let ki):
             controller.selectedCameraKF   = UMCameraKFSelection(lane: lane, keyframeIdx: ki)
             controller.selectedTimelineKF = nil
+            controller.selectedSpriteKF   = nil
+        case .sprite(let i, let spriteID, let ki):
+            controller.selectedSpriteKF   = UMSpriteKFSelection(layerIndex: i, spriteID: spriteID, keyframeIdx: ki)
+            controller.selectedTimelineKF = nil
+            controller.selectedCameraKF   = nil
         }
     }
 
@@ -1191,8 +1369,12 @@ struct UMTimelinePanel: View {
     private func recordUndo() {
         let snap = TLSnapshot(
             camera: controller.camera,
-            layers: controller.layerStates.map {
-                (id: $0.id, opacity: $0.opacityDriver, offset: $0.layerOffset, gridScroll: $0.gridScrollDriver)
+            layers: controller.layerStates.map { ls in
+                (id: ls.id,
+                 opacity: ls.opacityDriver,
+                 offset: ls.layerOffset,
+                 gridScroll: ls.gridScrollDriver,
+                 sprites: ls.sprites.map { (id: $0.id, positionDriver: $0.positionDriver) })
             }
         )
         undoStack.append(snap)
@@ -1207,6 +1389,10 @@ struct UMTimelinePanel: View {
             ls.opacityDriver    = item.opacity
             ls.layerOffset      = item.offset
             ls.gridScrollDriver = item.gridScroll
+            for spriteSnap in item.sprites {
+                guard let si = ls.sprites.firstIndex(where: { $0.id == spriteSnap.id }) else { continue }
+                ls.sprites[si].positionDriver = spriteSnap.positionDriver
+            }
         }
         clearSelection()
     }
@@ -1245,6 +1431,14 @@ struct UMTimelinePanel: View {
 
     private func camLaneID(_ lane: UMCameraLane)                    -> String { "cam-\(lane.rawValue)" }
     private func layerLaneID(_ id: UUID, _ lane: UMTimelineLane)    -> String { "\(id)-\(lane.rawValue)" }
+    private func spriteLaneID(_ layerID: UUID, _ spriteID: UUID)    -> String { "spr-\(layerID)-\(spriteID)" }
+
+    private func storedSpriteFrame(_ hit: SpriteKFHit) -> Int {
+        guard let ls = controller.layerStates[safe: hit.layerIndex],
+              let sprite = ls.sprites.first(where: { $0.id == hit.spriteID }),
+              sprite.positionDriver.keyframes.indices.contains(hit.keyframeIdx) else { return 0 }
+        return sprite.positionDriver.keyframes[hit.keyframeIdx].frame
+    }
 
     private var shiftDown:  Bool { NSEvent.modifierFlags.contains(.shift) }
     private var optionDown: Bool { NSEvent.modifierFlags.contains(.option) }

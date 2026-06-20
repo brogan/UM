@@ -299,6 +299,7 @@ private struct AccumulationSnapshot: @unchecked Sendable {
     let backgroundColor: UMColor
     let backgroundImage: CGImage?
     let shapePolygonMap: [UUID: [Polygon2D]]
+    let shapePolygonIDMap: [UUID: [UUID]]
     let fallbackPolygons: [Polygon2D]
     let projectMotionSets: [UMMotionSet]
     let stretchSprites: Bool
@@ -377,9 +378,10 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
             let my = (sprite.y * layer.gridH + motion.dy + driverPos.y) * dsf
             let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
                                                           frame: snap.frame, phaseOffset: sprite.phaseOffset)
-            let polygons = resolvePolygons(shapeID: effectiveShapeID,
-                                           shapeMap: snap.shapePolygonMap,
-                                           fallback: snap.fallbackPolygons)
+            let polygons   = resolvePolygons(shapeID: effectiveShapeID,
+                                             shapeMap: snap.shapePolygonMap,
+                                             fallback: snap.fallbackPolygons)
+            let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: snap.shapePolygonIDMap)
             let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * dsf
             let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * dsf
             let rot   = sprite.rotation + motion.rotation
@@ -393,8 +395,8 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                 ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a))
                 ctx.addPath(cgp); ctx.fillPath()
             } else {
-                for (polyIdx, polygon) in polygons.filter(\.visible).enumerated() {
-                    let ovr = sprite.polygonOverrides[polyIdx]
+                for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                    let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
                     let fC  = ovr?.fill   ?? fillC
                     let sC  = ovr?.stroke ?? strokeC
                     let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
@@ -598,8 +600,9 @@ struct GridCanvasPlaceholder: View {
                     }
 
                     // Drawn cells — render each layer into an isolated compositing group.
-                    let shapePolyMap  = controller.shapePolygonMap
-                    let fallbackPolys = controller.shapePolygons
+                    let shapePolyMap   = controller.shapePolygonMap
+                    let shapePolyIDMap = controller.shapePolygonIDMap
+                    let fallbackPolys  = controller.shapePolygons
                     let stretch       = controller.stretchSpritesToCell
                     let cameraFrame   = controller.camera.evaluate(frame: currentFrame)
 
@@ -635,9 +638,10 @@ struct GridCanvasPlaceholder: View {
                                     let rot = sprite.rotation + motion.rotation
                                     let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
                                                                                   frame: currentFrame, phaseOffset: sprite.phaseOffset)
-                                    let polygons = resolvePolygons(shapeID: effectiveShapeID,
-                                                                   shapeMap: shapePolyMap,
-                                                                   fallback: fallbackPolys)
+                                    let polygons   = resolvePolygons(shapeID: effectiveShapeID,
+                                                                     shapeMap: shapePolyMap,
+                                                                     fallback: fallbackPolys)
+                                    let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolyIDMap)
                                     let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
                                     let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
                                     let isSelected = sprite.id == controller.activeSpriteID
@@ -656,14 +660,14 @@ struct GridCanvasPlaceholder: View {
                                         let strokeC = style?.strokeColor ?? .defaultStroke
                                         let strokeW = style?.strokeWidth ?? 1.5
                                         let mode    = style?.renderMode  ?? .filledStroked
-                                        let paths   = polygons.filter(\.visible).enumerated().map { (polyIdx, polygon) -> CGPath in
+                                        let paths   = polygons.filter(\.visible).enumerated().map { (_, polygon) -> CGPath in
                                             buildPolygonPath(polygon, cx: mx, cy: my,
                                                              zoomX: zoomX, zoomY: zoomY,
                                                              scaleX: 1.0, scaleY: 1.0,
                                                              rotation: rot)
                                         }
-                                        for (polyIdx, cgp) in paths.enumerated() {
-                                            let ovr   = sprite.polygonOverrides[polyIdx]
+                                        for (i, cgp) in paths.enumerated() {
+                                            let ovr   = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
                                             let fC    = ovr?.fill   ?? fillC
                                             let sC    = ovr?.stroke ?? strokeC
                                             if mode == .filled || mode == .filledStroked {
@@ -1098,6 +1102,7 @@ struct GridCanvasPlaceholder: View {
                         backgroundColor:   controller.backgroundColor,
                         backgroundImage:   controller.backgroundCGImage,
                         shapePolygonMap:   controller.shapePolygonMap,
+                        shapePolygonIDMap: controller.shapePolygonIDMap,
                         fallbackPolygons:  controller.shapePolygons,
                         projectMotionSets: controller.projectMotionSets,
                         stretchSprites:    controller.stretchSpritesToCell,
@@ -1436,6 +1441,12 @@ private func resolvePolygons(shapeID: UUID?,
     return polys
 }
 
+/// Resolve the ordered EditableClosedPolygon IDs for a shape. Returns [] when no shape is assigned.
+private func resolvePolygonIDs(shapeID: UUID?, idMap: [UUID: [UUID]]) -> [UUID] {
+    guard let id = shapeID, let ids = idMap[id] else { return [] }
+    return ids
+}
+
 private func computeParametric(motionSet: UMMotionSet, style: CellStyle?,
                                 frame: Int, phaseOffset: Int,
                                 cellW: Double, cellH: Double) -> SpriteMotion {
@@ -1622,6 +1633,7 @@ struct SpriteCapture: View {
     let projectStyles: [CellStyle]
     let projectMotionSets: [UMMotionSet]
     let shapePolygonMap: [UUID: [Polygon2D]]
+    let shapePolygonIDMap: [UUID: [UUID]]
     let fallbackPolygons: [Polygon2D]
     let currentFrame: Int
     let gridW: Double
@@ -1649,9 +1661,10 @@ struct SpriteCapture: View {
                 let rot = sprite.rotation + motion.rotation
                 let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
                                                               frame: currentFrame, phaseOffset: sprite.phaseOffset)
-                let polygons = resolvePolygons(shapeID: effectiveShapeID,
-                                               shapeMap: shapePolygonMap,
-                                               fallback: fallbackPolygons)
+                let polygons   = resolvePolygons(shapeID: effectiveShapeID,
+                                                 shapeMap: shapePolygonMap,
+                                                 fallback: fallbackPolygons)
+                let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
                 let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
                 let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
 
@@ -1665,8 +1678,8 @@ struct SpriteCapture: View {
                     let strokeC = style?.strokeColor ?? .defaultStroke
                     let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
                     let mode    = style?.renderMode  ?? .filledStroked
-                    for (polyIdx, polygon) in polygons.filter(\.visible).enumerated() {
-                        let ovr = sprite.polygonOverrides[polyIdx]
+                    for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                        let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
                         let fC  = ovr?.fill   ?? fillC
                         let sC  = ovr?.stroke ?? strokeC
                         let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
@@ -1768,6 +1781,7 @@ func umRenderComposited(
     backgroundColor: UMColor,
     backgroundImage: CGImage? = nil,
     shapePolygonMap: [UUID: [Polygon2D]],
+    shapePolygonIDMap: [UUID: [UUID]],
     fallbackPolygons: [Polygon2D],
     projectMotionSets: [UMMotionSet],
     colorMapEngines: [UUID: UMColorMapEngine],
@@ -1815,6 +1829,7 @@ func umRenderComposited(
                 projectStyles:     ls.engine.document.styles,
                 projectMotionSets: projectMotionSets,
                 shapePolygonMap:   shapePolygonMap,
+                shapePolygonIDMap: shapePolygonIDMap,
                 fallbackPolygons:  fallbackPolygons,
                 currentFrame:      frame,
                 gridW: exportW, gridH: exportH,

@@ -176,6 +176,28 @@ struct StylePaletteView: View {
     private var libraryTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                sectionHeader("RESOLUTION")
+
+                if controller.globalResolutionPresets.isEmpty {
+                    Text("No presets saved.\nPromote a project preset (↑) to add one.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    FlowLayout(spacing: 4) {
+                        ForEach(controller.globalResolutionPresets) { preset in
+                            libraryResolutionChip(preset)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 6)
+                }
+
+                Divider().padding(.vertical, 4)
+
                 sectionHeader("STYLES")
 
                 if controller.globalLibrary.styles.isEmpty {
@@ -421,6 +443,16 @@ struct StylePaletteView: View {
                                    active: currentRows == preset.rows && currentCols == preset.cols,
                                    removable: true,
                                    onRemove: { controller.deleteResolutionPreset(preset.id) })
+                    .contextMenu {
+                        let inLibrary = controller.globalResolutionPresets.contains { $0.rows == preset.rows && $0.cols == preset.cols }
+                        Button("Save to Library") {
+                            controller.addResolutionPreset(rows: preset.rows, cols: preset.cols, global: true)
+                        }
+                        .disabled(inLibrary)
+                        Button("Remove", role: .destructive) {
+                            controller.deleteResolutionPreset(preset.id)
+                        }
+                    }
                 }
                 Button {
                     controller.addResolutionPreset(rows: currentRows, cols: currentCols)
@@ -893,6 +925,34 @@ struct StylePaletteView: View {
             Button("Save to Library") { controller.promoteColorPaletteToLibrary(palette.id) }
             Divider()
             Button("Delete Palette", role: .destructive) { controller.deleteColorPalette(palette.id) }
+        }
+    }
+
+    private func libraryResolutionChip(_ preset: AppController.UMResolutionPreset) -> some View {
+        let inProject = controller.projectResolutionPresets.contains { $0.rows == preset.rows && $0.cols == preset.cols }
+        return HStack(spacing: 4) {
+            Text(preset.label)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(inProject ? Color.secondary : Color.primary)
+            Button {
+                controller.addResolutionPreset(rows: preset.rows, cols: preset.cols, global: false)
+            } label: {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 9))
+                    .foregroundStyle(inProject ? Color.quaternary : Color.accentColor)
+            }
+            .buttonStyle(.plain)
+            .disabled(inProject)
+            .help(inProject ? "Already in project" : "Import to project")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .contextMenu {
+            Button("Remove from library", role: .destructive) {
+                controller.deleteResolutionPreset(preset.id, global: true)
+            }
         }
     }
 

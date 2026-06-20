@@ -574,52 +574,293 @@ struct QuickAdjustView: View {
     private var cameraSection: some View {
         @Bindable var ctrl = controller
         return InspectorSection("CAMERA", isCollapsed: $cameraCollapsed) {
-            InspectorField("Pan X") {
-                Slider(value: Binding(
-                    get: { ctrl.camera.pan.base.x },
-                    set: { ctrl.camera.pan.base.x = $0 }
-                ), in: -500...500)
-                .frame(maxWidth: 110)
-                Text(String(format: "%.0f", ctrl.camera.pan.base.x))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
+
+            // ── PAN ──────────────────────────────────────────────
+            Text("PAN")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: $ctrl.camera.pan.mode) {
+                    ForEach(UMVectorDriverMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
             }
-            InspectorField("Pan Y") {
-                Slider(value: Binding(
-                    get: { ctrl.camera.pan.base.y },
-                    set: { ctrl.camera.pan.base.y = $0 }
-                ), in: -500...500)
-                .frame(maxWidth: 110)
-                Text(String(format: "%.0f", ctrl.camera.pan.base.y))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
+            switch ctrl.camera.pan.mode {
+            case .constant:
+                InspectorField("Pan X") {
+                    Slider(value: $ctrl.camera.pan.base.x, in: -500...500).frame(maxWidth: 110)
+                    Text(String(format: "%.0f", ctrl.camera.pan.base.x))
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+                InspectorField("Pan Y") {
+                    Slider(value: $ctrl.camera.pan.base.y, in: -500...500).frame(maxWidth: 110)
+                    Text(String(format: "%.0f", ctrl.camera.pan.base.y))
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            case .oscillator:
+                InspectorField("Amp X") {
+                    TextField("", value: $ctrl.camera.pan.oscillatorAmplitude.x,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: $ctrl.camera.pan.oscillatorAmplitude.y,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.pan.oscillatorPeriod },
+                        set: { ctrl.camera.pan.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: $ctrl.camera.pan.oscillatorPhase, in: 0...1).frame(maxWidth: 90)
+                }
+                InspectorField("Offset X") {
+                    TextField("", value: $ctrl.camera.pan.oscillatorOffset.x,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Offset Y") {
+                    TextField("", value: $ctrl.camera.pan.oscillatorOffset.y,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .jitter:
+                InspectorField("Range X") {
+                    TextField("", value: $ctrl.camera.pan.jitterRange.x,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Range Y") {
+                    TextField("", value: $ctrl.camera.pan.jitterRange.y,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.pan.jitterDuration },
+                        set: { ctrl.camera.pan.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amp X") {
+                    TextField("", value: $ctrl.camera.pan.noiseAmplitude.x,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: $ctrl.camera.pan.noiseAmplitude.y,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.pan.noiseFrequency },
+                        set: { ctrl.camera.pan.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline Pan lane for keyframes.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
             }
-            InspectorField("Zoom") {
-                Slider(value: Binding(
-                    get: { ctrl.camera.zoom.base },
-                    set: { ctrl.camera.zoom.base = $0 }
-                ), in: 0.1...4.0)
-                .frame(maxWidth: 110)
-                Text(String(format: "%.2f×", ctrl.camera.zoom.base))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
+
+            // ── ZOOM ─────────────────────────────────────────────
+            Text("ZOOM")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: $ctrl.camera.zoom.mode) {
+                    ForEach(UMDoubleDriverMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
             }
-            InspectorField("Rotation") {
-                Slider(value: Binding(
-                    get: { ctrl.camera.rotation.base },
-                    set: { ctrl.camera.rotation.base = $0 }
-                ), in: -180...180)
-                .frame(maxWidth: 110)
-                Text(String(format: "%.0f°", ctrl.camera.rotation.base))
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 36, alignment: .trailing)
+            switch ctrl.camera.zoom.mode {
+            case .constant:
+                InspectorField("Zoom") {
+                    Slider(value: $ctrl.camera.zoom.base, in: 0.1...4.0).frame(maxWidth: 110)
+                    Text(String(format: "%.2f×", ctrl.camera.zoom.base))
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            case .oscillator:
+                InspectorField("Centre") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.base },
+                        set: { ctrl.camera.zoom.base = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("×").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.oscillatorAmplitude },
+                        set: { ctrl.camera.zoom.oscillatorAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("×").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.oscillatorPeriod },
+                        set: { ctrl.camera.zoom.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: $ctrl.camera.zoom.oscillatorPhase, in: 0...1).frame(maxWidth: 90)
+                }
+            case .jitter:
+                InspectorField("Range") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.jitterRange },
+                        set: { ctrl.camera.zoom.jitterRange = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("×").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.jitterDuration },
+                        set: { ctrl.camera.zoom.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.noiseAmplitude },
+                        set: { ctrl.camera.zoom.noiseAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("×").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.zoom.noiseFrequency },
+                        set: { ctrl.camera.zoom.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline Zoom lane for keyframes.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
             }
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
+
+            // ── ROTATION ─────────────────────────────────────────
+            Text("ROTATION")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: $ctrl.camera.rotation.mode) {
+                    ForEach(UMDoubleDriverMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            switch ctrl.camera.rotation.mode {
+            case .constant:
+                InspectorField("Rotation") {
+                    Slider(value: $ctrl.camera.rotation.base, in: -180...180).frame(maxWidth: 110)
+                    Text(String(format: "%.0f°", ctrl.camera.rotation.base))
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            case .oscillator:
+                InspectorField("Centre") {
+                    TextField("", value: $ctrl.camera.rotation.base,
+                              format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.oscillatorAmplitude },
+                        set: { ctrl.camera.rotation.oscillatorAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.oscillatorPeriod },
+                        set: { ctrl.camera.rotation.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: $ctrl.camera.rotation.oscillatorPhase, in: 0...1).frame(maxWidth: 90)
+                }
+            case .jitter:
+                InspectorField("Range") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.jitterRange },
+                        set: { ctrl.camera.rotation.jitterRange = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.jitterDuration },
+                        set: { ctrl.camera.rotation.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.noiseAmplitude },
+                        set: { ctrl.camera.rotation.noiseAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { ctrl.camera.rotation.noiseFrequency },
+                        set: { ctrl.camera.rotation.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline Rotation lane for keyframes.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
+            }
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
+
             InspectorField("") {
-                Button("Reset") {
+                Button("Reset Camera") {
                     ctrl.camera = .identity
                 }
                 .font(.system(size: 11))
@@ -633,12 +874,14 @@ struct QuickAdjustView: View {
     @ViewBuilder
     private var kfInspectorSection: some View {
         @Bindable var ctrl = controller
-        if ctrl.selectedTimelineKF != nil || ctrl.selectedCameraKF != nil {
+        if ctrl.selectedTimelineKF != nil || ctrl.selectedCameraKF != nil || ctrl.selectedSpriteKF != nil {
             InspectorSection("KEYFRAME", isCollapsed: $kfInspectorCollapsed) {
                 if let sel = ctrl.selectedTimelineKF {
                     kfLayerFields(sel: sel)
                 } else if let sel = ctrl.selectedCameraKF {
                     kfCameraFields(sel: sel)
+                } else if let sel = ctrl.selectedSpriteKF {
+                    kfSpriteFields(sel: sel)
                 }
             }
         }
@@ -861,6 +1104,60 @@ struct QuickAdjustView: View {
             controller.camera.zoom.keyframes[safe: sel.keyframeIdx]?.easing = easing
         case .rotation:
             controller.camera.rotation.keyframes[safe: sel.keyframeIdx]?.easing = easing
+        }
+    }
+
+    @ViewBuilder
+    private func kfSpriteFields(sel: UMSpriteKFSelection) -> some View {
+        let ls = controller.layerStates[safe: sel.layerIndex]
+        let spriteIdx = ls?.sprites.firstIndex(where: { $0.id == sel.spriteID })
+        let spriteName = ls?.sprites.first(where: { $0.id == sel.spriteID })?.name ?? "Sprite"
+        InspectorField("Sprite") { Text(spriteName).font(.system(size: 11)).foregroundStyle(.secondary) }
+        InspectorField("Frame") {
+            TextField("", value: Binding(
+                get: { ls?.sprites[safe: spriteIdx ?? -1]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.frame ?? 0 },
+                set: { newF in moveSpriteKF(sel: sel, toFrame: max(0, newF)) }
+            ), format: .number)
+            .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 54)
+        }
+        InspectorField("Pos X") {
+            TextField("", value: Binding(
+                get: { ls?.sprites[safe: spriteIdx ?? -1]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.value.x ?? 0 },
+                set: { v in
+                    if let ls, let si = spriteIdx {
+                        ls.sprites[safe: si]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.value.x = v
+                    }
+                }
+            ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+        }
+        InspectorField("Pos Y") {
+            TextField("", value: Binding(
+                get: { ls?.sprites[safe: spriteIdx ?? -1]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.value.y ?? 0 },
+                set: { v in
+                    if let ls, let si = spriteIdx {
+                        ls.sprites[safe: si]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.value.y = v
+                    }
+                }
+            ), format: .number).textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+        }
+        easingField(
+            get: { ls?.sprites[safe: spriteIdx ?? -1]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.easing ?? .easeInOut },
+            set: { e in
+                if let ls, let si = spriteIdx {
+                    ls.sprites[safe: si]?.positionDriver.keyframes[safe: sel.keyframeIdx]?.easing = e
+                }
+            }
+        )
+    }
+
+    private func moveSpriteKF(sel: UMSpriteKFSelection, toFrame newFrame: Int) {
+        guard let ls = controller.layerStates[safe: sel.layerIndex],
+              let si = ls.sprites.firstIndex(where: { $0.id == sel.spriteID }),
+              sel.keyframeIdx < ls.sprites[si].positionDriver.keyframes.count else { return }
+        ls.sprites[si].positionDriver.keyframes[sel.keyframeIdx].frame = newFrame
+        ls.sprites[si].positionDriver.keyframes.sort { $0.frame < $1.frame }
+        if let ki = ls.sprites[si].positionDriver.keyframes.firstIndex(where: { $0.frame == newFrame }) {
+            controller.selectedSpriteKF = UMSpriteKFSelection(layerIndex: sel.layerIndex, spriteID: sel.spriteID, keyframeIdx: ki)
         }
     }
 
@@ -1855,8 +2152,9 @@ struct QuickAdjustView: View {
             }
 
             // MARK: Polygon overrides
-            let polygons = (s.shapeID.flatMap { controller.shapePolygonMap[$0] } ?? controller.shapePolygons)
+            let polygons   = (s.shapeID.flatMap { controller.shapePolygonMap[$0] } ?? controller.shapePolygons)
                 .filter(\.visible)
+            let polygonIDs = s.shapeID.flatMap { controller.shapePolygonIDMap[$0] } ?? []
             if !polygons.isEmpty {
                 Divider().padding(.vertical, 4)
                 Text("POLYGON OVERRIDES")
@@ -1865,6 +2163,7 @@ struct QuickAdjustView: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 2)
                 ForEach(Array(polygons.indices), id: \.self) { polyIdx in
+                    let polyKey = polygonIDs[safe: polyIdx]?.uuidString ?? ""
                     HStack(spacing: 6) {
                         Text("#\(polyIdx)")
                             .font(.system(size: 10, design: .monospaced))
@@ -1873,29 +2172,29 @@ struct QuickAdjustView: View {
                         Text("F")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                        if let fillOvr = s.polygonOverrides[polyIdx]?.fill {
+                        if let fillOvr = s.polygonOverrides[polyKey]?.fill {
                             ColorWell(color: Binding(
                                 get: { fillOvr.swiftUIColor },
                                 set: { newC in
-                                    var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                    var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
                                     ovr.fill = UMColor(newC)
-                                    sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                    sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                                 }
                             ), supportsOpacity: true)
                             .frame(width: 28, height: 18)
                             Button {
-                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx]
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyKey]
                                 ovr?.fill = nil
-                                if ovr?.stroke == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyIdx) }
-                                else { sprite.wrappedValue.polygonOverrides[polyIdx] = ovr }
+                                if ovr?.stroke == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyKey) }
+                                else { sprite.wrappedValue.polygonOverrides[polyKey] = ovr }
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
                             }.buttonStyle(.plain)
                         } else {
                             Button {
-                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
                                 ovr.fill = UMColor(r: 1, g: 1, b: 1, a: 1)
-                                sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                             } label: {
                                 Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
                             }.buttonStyle(.plain)
@@ -1904,29 +2203,29 @@ struct QuickAdjustView: View {
                         Text("S")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                        if let strokeOvr = s.polygonOverrides[polyIdx]?.stroke {
+                        if let strokeOvr = s.polygonOverrides[polyKey]?.stroke {
                             ColorWell(color: Binding(
                                 get: { strokeOvr.swiftUIColor },
                                 set: { newC in
-                                    var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                    var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
                                     ovr.stroke = UMColor(newC)
-                                    sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                    sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                                 }
                             ), supportsOpacity: true)
                             .frame(width: 28, height: 18)
                             Button {
-                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx]
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyKey]
                                 ovr?.stroke = nil
-                                if ovr?.fill == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyIdx) }
-                                else { sprite.wrappedValue.polygonOverrides[polyIdx] = ovr }
+                                if ovr?.fill == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyKey) }
+                                else { sprite.wrappedValue.polygonOverrides[polyKey] = ovr }
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
                             }.buttonStyle(.plain)
                         } else {
                             Button {
-                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
                                 ovr.stroke = UMColor(r: 0, g: 0, b: 0, a: 1)
-                                sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                             } label: {
                                 Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
                             }.buttonStyle(.plain)
@@ -1944,7 +2243,7 @@ struct QuickAdjustView: View {
 
     @ViewBuilder
     private var nothingActiveHint: some View {
-        let hasKF     = controller.selectedTimelineKF != nil || controller.selectedCameraKF != nil
+        let hasKF     = controller.selectedTimelineKF != nil || controller.selectedCameraKF != nil || controller.selectedSpriteKF != nil
         let hasMotion = effectiveMotionSet != nil
         let hasCells  = !controller.selectedIndices.isEmpty
         let hasShape  = controller.activeShapeID != nil

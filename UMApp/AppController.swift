@@ -221,6 +221,7 @@ final class AppController {
 
     var shapePolygons: [Polygon2D] = []        // bundled default
     var shapePolygonMap: [UUID: [Polygon2D]] = [:]
+    var shapePolygonIDMap: [UUID: [UUID]] = [:]  // shape ID → ordered polygon UUIDs (EditableClosedPolygon.id)
 
     // MARK: Global UI state
 
@@ -267,6 +268,7 @@ final class AppController {
     var endFrame: Int              = 240
     var selectedTimelineKF: UMTimelineKFSelection? = nil
     var selectedCameraKF:   UMCameraKFSelection?   = nil
+    var selectedSpriteKF:   UMSpriteKFSelection?   = nil
     var timelineMarkers:    [UMTimelineMarker]     = []
     var kfClipboard:        UMKFClipboard?         = nil
 
@@ -317,15 +319,25 @@ final class AppController {
     }
 
     private func rebuildShapePolygonMap() {
-        var map: [UUID: [Polygon2D]] = [:]
+        var map:   [UUID: [Polygon2D]] = [:]
+        var idMap: [UUID: [UUID]]      = [:]
         for shape in projectShapes {
             guard let data  = shape.geometryJSON.data(using: .utf8),
                   let geo   = try? EditableGeometryJSONLoader.decode(from: data),
                   let polys = try? geo.runtimePolygons()
             else { continue }
             map[shape.id] = polys
+            // Collect EditableClosedPolygon.id values in the same visible order as runtimePolygons()
+            var ids: [UUID] = []
+            for layer in geo.layers where layer.isVisible {
+                ids += layer.polygons.filter(\.isVisible).map(\.id)
+                ids += layer.openCurves.filter(\.isVisible).map(\.id)
+                ids += layer.points.filter(\.isVisible).map(\.id)
+            }
+            idMap[shape.id] = ids
         }
-        shapePolygonMap = map
+        shapePolygonMap   = map
+        shapePolygonIDMap = idMap
     }
 
     // MARK: Accumulation buffer
@@ -1627,6 +1639,7 @@ final class AppController {
                     backgroundColor:   self.backgroundColor,
                     backgroundImage:   self.backgroundCGImage,
                     shapePolygonMap:   self.shapePolygonMap,
+                    shapePolygonIDMap: self.shapePolygonIDMap,
                     fallbackPolygons:  self.shapePolygons,
                     projectMotionSets: self.projectMotionSets,
                     colorMapEngines:   self.layerColorMapEngines,
@@ -1668,6 +1681,7 @@ final class AppController {
         let layers     = layerStates.map { $0.toUMLayer() }
         let bg         = backgroundColor
         let polyMap    = shapePolygonMap
+        let polyIDMap  = shapePolygonIDMap
         let polys      = shapePolygons
         let cmEngines  = layerColorMapEngines
         let bgDraw     = backgroundDraw
@@ -1689,6 +1703,7 @@ final class AppController {
                         backgroundColor:   bg,
                         backgroundImage:   self.backgroundCGImage,
                         shapePolygonMap:   polyMap,
+                        shapePolygonIDMap: polyIDMap,
                         fallbackPolygons:  polys,
                         projectMotionSets: self.projectMotionSets,
                         colorMapEngines:   cmEngines,

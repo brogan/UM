@@ -9,9 +9,9 @@ public enum LayerMode: String, Codable, Sendable {
 
 // MARK: - Per-polygon color override
 
-/// Overrides the style's fill and/or stroke for a specific polygon index within a shape.
-/// Keyed by polygon index in the shape's array — stable as long as the shape is not
-/// re-imported with different polygon ordering.
+/// Overrides the style's fill and/or stroke for a specific polygon in a shape.
+/// Keyed by `EditableClosedPolygon.id.uuidString` — stable across re-imports of the same
+/// JSON file regardless of polygon ordering changes.
 public struct UMPolygonOverride: Codable, Sendable {
     public var fill:   UMColor?
     public var stroke: UMColor?
@@ -38,7 +38,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
     public var shapeID:          UUID?
     public var motionID:         UUID?
     public var phaseOffset:      Int
-    public var polygonOverrides: [Int: UMPolygonOverride]
+    public var polygonOverrides: [String: UMPolygonOverride]
     /// Animated position offset added on top of (x*gridW + motion.dx). Output units are canvas pixels.
     public var positionDriver:   UMVectorDriver
 
@@ -54,7 +54,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         shapeID:          UUID?                    = nil,
         motionID:         UUID?                    = nil,
         phaseOffset:      Int                      = 0,
-        polygonOverrides: [Int: UMPolygonOverride] = [:],
+        polygonOverrides: [String: UMPolygonOverride] = [:],
         positionDriver:   UMVectorDriver            = .zero
     ) {
         self.id               = id
@@ -94,12 +94,10 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         motionID      = try? c.decodeIfPresent(UUID.self, forKey: .motionID)
         phaseOffset   = (try? c.decodeIfPresent(Int.self,              forKey: .phaseOffset))    ?? 0
         positionDriver = (try? c.decodeIfPresent(UMVectorDriver.self,  forKey: .positionDriver)) ?? .zero
-        // [Int: UMPolygonOverride] — JSON keys are strings; decode via [String: T] then rekey
-        let rawOvr    = (try? c.decodeIfPresent([String: UMPolygonOverride].self, forKey: .polygonOverrides)) ?? [:]
-        polygonOverrides = Dictionary(uniqueKeysWithValues: rawOvr.compactMap { k, v in
-            guard let i = Int(k) else { return nil }
-            return (i, v)
-        })
+        // [String: UMPolygonOverride] — keyed by EditableClosedPolygon.id.uuidString.
+        // Legacy files used numeric strings ("0","1",...) which won't match any UUID
+        // and are safely dropped on first load.
+        polygonOverrides = (try? c.decodeIfPresent([String: UMPolygonOverride].self, forKey: .polygonOverrides)) ?? [:]
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -117,8 +115,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         if phaseOffset != 0  { try c.encode(phaseOffset, forKey: .phaseOffset) }
         if positionDriver != .zero { try c.encode(positionDriver, forKey: .positionDriver) }
         if !polygonOverrides.isEmpty {
-            let strKeyed = Dictionary(uniqueKeysWithValues: polygonOverrides.map { (String($0.key), $0.value) })
-            try c.encode(strKeyed, forKey: .polygonOverrides)
+            try c.encode(polygonOverrides, forKey: .polygonOverrides)
         }
     }
 }
