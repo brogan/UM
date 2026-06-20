@@ -54,7 +54,7 @@ struct QuickAdjustView: View {
     @State private var cameraCollapsed      = false
     @State private var gridScrollCollapsed  = true
     @State private var kfInspectorCollapsed = false
-    @State private var selectedKeyframeID: UUID? = nil
+    // controller.selectedPathKeyframeID is now controller.selectedPathKeyframeID (shared with canvas overlay)
     @State private var newKeyframeFrame: Int = 24
     @State private var spritesCollapsed      = false
     @State private var shapeCollapsed        = false
@@ -1591,7 +1591,7 @@ struct QuickAdjustView: View {
             HStack(spacing: 6) {
                 Picker("", selection: Binding(
                     get: { controller.activePathID },
-                    set: { controller.activePathID = $0; selectedKeyframeID = nil }
+                    set: { controller.activePathID = $0; controller.selectedPathKeyframeID = nil }
                 )) {
                     Text("—").tag(nil as UUID?)
                     ForEach(controller.engine.document.paths) { p in
@@ -1601,7 +1601,7 @@ struct QuickAdjustView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
 
-                Button { controller.createPath(); selectedKeyframeID = nil } label: {
+                Button { controller.createPath(); controller.selectedPathKeyframeID = nil } label: {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.plain)
@@ -1610,7 +1610,7 @@ struct QuickAdjustView: View {
                 if controller.activePathID != nil {
                     Button {
                         if let id = controller.activePathID { controller.deletePath(id) }
-                        selectedKeyframeID = nil
+                        controller.selectedPathKeyframeID = nil
                     } label: {
                         Image(systemName: "trash")
                     }
@@ -1680,7 +1680,7 @@ struct QuickAdjustView: View {
                     Button {
                         guard let activeID = controller.activePathID else { return }
                         controller.addKeyframe(frame: newKeyframeFrame, to: activeID)
-                        selectedKeyframeID = controller.engine.document.paths
+                        controller.selectedPathKeyframeID = controller.engine.document.paths
                             .first(where: { $0.id == activeID })?
                             .keyframes.first(where: { $0.frame == newKeyframeFrame })?.id
                     } label: {
@@ -1706,12 +1706,12 @@ struct QuickAdjustView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .onChange(of: controller.activePathID) { selectedKeyframeID = nil }
+        .onChange(of: controller.activePathID) { controller.selectedPathKeyframeID = nil }
     }
 
     @ViewBuilder
     private func keyframeRow(_ kf: PathKeyframe) -> some View {
-        let selected = kf.id == selectedKeyframeID
+        let selected = kf.id == controller.selectedPathKeyframeID
         HStack(spacing: 4) {
             Text("\(kf.frame)")
                 .font(.system(size: 11, design: .monospaced))
@@ -1731,7 +1731,7 @@ struct QuickAdjustView: View {
             Button {
                 guard let pathID = controller.activePathID else { return }
                 controller.removeKeyframe(id: kf.id, from: pathID)
-                if selectedKeyframeID == kf.id { selectedKeyframeID = nil }
+                if controller.selectedPathKeyframeID == kf.id { controller.selectedPathKeyframeID = nil }
             } label: {
                 Image(systemName: "minus.circle")
                     .font(.system(size: 10))
@@ -1745,7 +1745,7 @@ struct QuickAdjustView: View {
         .background(selected ? Color.accentColor.opacity(0.08) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
-            selectedKeyframeID = (selectedKeyframeID == kf.id) ? nil : kf.id
+            controller.selectedPathKeyframeID = (controller.selectedPathKeyframeID == kf.id) ? nil : kf.id
         }
     }
 
@@ -1758,7 +1758,7 @@ struct QuickAdjustView: View {
                             get: { self.activeKeyframe?.frame ?? kf.frame },
                             set: { val in
                                 guard let pathID = self.controller.activePathID,
-                                      let kfID   = self.selectedKeyframeID,
+                                      let kfID   = self.controller.selectedPathKeyframeID,
                                       let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
                                       let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
                                 else { return }
@@ -1790,7 +1790,7 @@ struct QuickAdjustView: View {
                         get: { self.activeKeyframe?.scaleX ?? kf.scaleX },
                         set: {
                             guard let pathID = self.controller.activePathID,
-                                  let kfID   = self.selectedKeyframeID,
+                                  let kfID   = self.controller.selectedPathKeyframeID,
                                   let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
                                   let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
                             else { return }
@@ -1806,7 +1806,7 @@ struct QuickAdjustView: View {
                         get: { self.activeKeyframe?.scaleY ?? kf.scaleY },
                         set: {
                             guard let pathID = self.controller.activePathID,
-                                  let kfID   = self.selectedKeyframeID,
+                                  let kfID   = self.controller.selectedPathKeyframeID,
                                   let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
                                   let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
                             else { return }
@@ -1825,6 +1825,45 @@ struct QuickAdjustView: View {
                 .labelsHidden()
                 .pickerStyle(.menu)
                 .frame(maxWidth: 120)
+                Text("(used when no handles)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.quaternary)
+            }
+
+            Divider().padding(.horizontal, 12).padding(.top, 4)
+
+            HStack(spacing: 6) {
+                Toggle("Smooth", isOn: kfBinding(\.smooth, default: false))
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 11))
+                    .padding(.leading, 12)
+                Spacer()
+                Text("Mirror in↔out")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.quaternary)
+                    .padding(.trailing, 12)
+            }
+            .padding(.vertical, 2)
+
+            InspectorField("Out X") {
+                ResettableSlider(value: tangentBinding(\.outTangentX, mirror: \.inTangentX), range: -5...5, defaultValue: 0)
+                valueLabel(activeKeyframe?.outTangentX ?? 0, digits: 2)
+                unitLabel("c")
+            }
+            InspectorField("Out Y") {
+                ResettableSlider(value: tangentBinding(\.outTangentY, mirror: \.inTangentY), range: -5...5, defaultValue: 0)
+                valueLabel(activeKeyframe?.outTangentY ?? 0, digits: 2)
+                unitLabel("c")
+            }
+            InspectorField("In X") {
+                ResettableSlider(value: tangentBinding(\.inTangentX, mirror: \.outTangentX), range: -5...5, defaultValue: 0)
+                valueLabel(activeKeyframe?.inTangentX ?? 0, digits: 2)
+                unitLabel("c")
+            }
+            InspectorField("In Y") {
+                ResettableSlider(value: tangentBinding(\.inTangentY, mirror: \.outTangentY), range: -5...5, defaultValue: 0)
+                valueLabel(activeKeyframe?.inTangentY ?? 0, digits: 2)
+                unitLabel("c")
             }
         }
     }
@@ -1837,8 +1876,27 @@ struct QuickAdjustView: View {
     }
 
     private var activeKeyframe: PathKeyframe? {
-        guard let kfID = selectedKeyframeID else { return nil }
+        guard let kfID = controller.selectedPathKeyframeID else { return nil }
         return activePath?.keyframes.first { $0.id == kfID }
+    }
+
+    /// Binding for a tangent component that mirrors the opposite tangent when `smooth == true`.
+    private func tangentBinding(_ kp: WritableKeyPath<PathKeyframe, Double>,
+                                mirror mKp: WritableKeyPath<PathKeyframe, Double>) -> Binding<Double> {
+        Binding(
+            get: { self.activeKeyframe?[keyPath: kp] ?? 0 },
+            set: { val in
+                guard let pathID = self.controller.activePathID,
+                      let kfID   = self.controller.selectedPathKeyframeID,
+                      let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                      let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+                else { return }
+                self.controller.engine.document.paths[pi].keyframes[ki][keyPath: kp] = val
+                if self.controller.engine.document.paths[pi].keyframes[ki].smooth {
+                    self.controller.engine.document.paths[pi].keyframes[ki][keyPath: mKp] = -val
+                }
+            }
+        )
     }
 
     /// Generic keyframe field binding. Finds path and keyframe by stable ID at write time
@@ -1848,7 +1906,7 @@ struct QuickAdjustView: View {
             get: { self.activeKeyframe?[keyPath: kp] ?? def },
             set: { val in
                 guard let pathID = self.controller.activePathID,
-                      let kfID   = self.selectedKeyframeID,
+                      let kfID   = self.controller.selectedPathKeyframeID,
                       let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
                       let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
                 else { return }

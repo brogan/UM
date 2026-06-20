@@ -94,14 +94,35 @@ public struct UMMotionPath: Codable, Identifiable, Sendable {
 
         let raw   = Double(frame - k0.frame) / span
         let alpha = k0.easing.apply(raw)
-        func lerp(_ a: Double, _ b: Double) -> Double { a + (b - a) * alpha }
+        func lerp(_ a: Double, _ b: Double, _ t: Double) -> Double { a + (b - a) * t }
 
-        return (
-            dx:       lerp(k0.dx,       k1.dx)       * cellW,
-            dy:       lerp(k0.dy,       k1.dy)       * cellH,
-            rotation: lerp(k0.rotation, k1.rotation),
-            scaleX:   lerp(k0.scaleX,   k1.scaleX),
-            scaleY:   lerp(k0.scaleY,   k1.scaleY)
-        )
+        // Rotation and scale always use the per-segment easing curve.
+        let rotation = lerp(k0.rotation, k1.rotation, alpha)
+        let scaleX   = lerp(k0.scaleX,   k1.scaleX,   alpha)
+        let scaleY   = lerp(k0.scaleY,   k1.scaleY,   alpha)
+
+        // Position: cubic Bezier when either endpoint has a tangent; easing lerp otherwise.
+        let dx: Double
+        let dy: Double
+        if k0.hasTangents || k1.hasTangents {
+            // Control points (cell-fraction):
+            //   B0 = (k0.dx, k0.dy)
+            //   B1 = (k0.dx + k0.outTangentX, k0.dy + k0.outTangentY)
+            //   B2 = (k1.dx + k1.inTangentX,  k1.dy + k1.inTangentY)
+            //   B3 = (k1.dx, k1.dy)
+            let t  = raw   // linear time in [0, 1]
+            let t1 = 1 - t
+            let b0x = k0.dx, b0y = k0.dy
+            let b1x = k0.dx + k0.outTangentX, b1y = k0.dy + k0.outTangentY
+            let b2x = k1.dx + k1.inTangentX,  b2y = k1.dy + k1.inTangentY
+            let b3x = k1.dx, b3y = k1.dy
+            dx = (t1*t1*t1*b0x + 3*t1*t1*t*b1x + 3*t1*t*t*b2x + t*t*t*b3x) * cellW
+            dy = (t1*t1*t1*b0y + 3*t1*t1*t*b1y + 3*t1*t*t*b2y + t*t*t*b3y) * cellH
+        } else {
+            dx = lerp(k0.dx, k1.dx, alpha) * cellW
+            dy = lerp(k0.dy, k1.dy, alpha) * cellH
+        }
+
+        return (dx: dx, dy: dy, rotation: rotation, scaleX: scaleX, scaleY: scaleY)
     }
 }

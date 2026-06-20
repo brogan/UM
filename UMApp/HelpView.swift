@@ -1148,7 +1148,10 @@ private let qaPathBody = #"""
   <tr><td><strong>Offset Y</strong></td><td>−3 – 3</td><td>c</td><td>Vertical offset in cell-height fractions.</td></tr>
   <tr><td><strong>Rotation</strong></td><td>−360 – 360</td><td>°</td><td>Rotation added to the cell's base rotation and any parametric rotation.</td></tr>
   <tr><td><strong>Scale X / Y</strong></td><td>0.1 – 3</td><td>×</td><td>Scale multiplier, combined with cell scale and parametric scale.</td></tr>
-  <tr><td><strong>Easing</strong></td><td>—</td><td>—</td><td>Interpolation curve from this keyframe to the next.</td></tr>
+  <tr><td><strong>Easing</strong></td><td>—</td><td>—</td><td>Interpolation curve from this keyframe to the next <em>(used only when both tangents are zero)</em>.</td></tr>
+  <tr><td><strong>Smooth</strong></td><td>—</td><td>—</td><td>When checked, dragging one tangent handle automatically mirrors the opposite one (C1 continuity — smooth arc through the keyframe).</td></tr>
+  <tr><td><strong>Out X / Out Y</strong></td><td>−5 – 5</td><td>c</td><td>Out tangent — the control point that shapes the exit curve from this keyframe. In cell-fraction units.</td></tr>
+  <tr><td><strong>In X / In Y</strong></td><td>−5 – 5</td><td>c</td><td>In tangent — the control point that shapes the arrival curve at this keyframe. In cell-fraction units.</td></tr>
 </table>
 <table>
   <tr><th>Easing</th><th>Shape</th></tr>
@@ -1159,6 +1162,24 @@ private let qaPathBody = #"""
   <tr><td>Step</td><td>Holds the current keyframe's values and jumps instantly to the next.</td></tr>
 </table>
 <p>Double-click any slider in the property editor to reset it to its default value.</p>
+
+<h2>Bezier tangent handles</h2>
+<p>Each keyframe has two tangent handles that shape the cubic Bezier curve through that point. When all tangents are zero (default), the path falls back to linear interpolation with the Easing curve applied. As soon as any tangent is non-zero, Bezier interpolation takes over for position — the Easing picker is then ignored for that segment.</p>
+
+<table>
+  <tr><th>Handle</th><th>Colour</th><th>Controls</th></tr>
+  <tr><td><strong>Out handle</strong></td><td>Accent-coloured ring</td><td>Direction and curvature of the <em>exit</em> from this keyframe.</td></tr>
+  <tr><td><strong>In handle</strong></td><td>Grey ring</td><td>Direction and curvature of the <em>arrival</em> at this keyframe.</td></tr>
+</table>
+
+<h3>Using handles on the canvas</h3>
+<ol class="steps">
+  <li>Select a path in the Style Palette to make it active and show the overlay on the canvas.</li>
+  <li>Click a keyframe dot on the canvas to select it — the dot grows and the two tangent handle circles appear connected by thin lines.</li>
+  <li>Drag an out (accent) or in (grey) handle to shape the curve. The path trajectory updates in real time.</li>
+  <li>To make a smooth arc through the keyframe, enable <strong>Smooth</strong> in the property editor — dragging one handle mirrors the other automatically.</li>
+  <li>To remove tangent influence (revert to Easing-based interpolation), reset the Out/In X/Y sliders to 0 (double-click each to snap to zero).</li>
+</ol>
 
 <h2>Step-by-step: a simple orbit path</h2>
 <ol class="steps">
@@ -1529,7 +1550,6 @@ private let pendingBody = #"""
   <tr><td>Canvas</td><td>Hover preview</td><td>No visual feedback on undrawn cells before committing a stroke. A faint style preview on hover is planned.</td></tr>
   <tr><td>Export</td><td>SVG export</td><td>The SVG button in the Transport Bar is present but has no action yet.</td></tr>
   <tr><td>Export</td><td>Timeline video export</td><td>The Video button exports live animation (parametric + keyframe motion). A separate mode that renders the recorded timeline states as discrete cuts is planned.</td></tr>
-  <tr><td>Path Editor</td><td>Bezier tangent handles</td><td>The PATH EDITOR uses per-segment easing (Linear, Ease In/Out, Step). Cubic bezier tangent handles (in/out per keyframe, drawn on the canvas as draggable circles) are designed but not yet built.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>✓ Built — <strong>Phase map</strong> checkbox in the CANVAS section of Quick Adjust. Colours each drawn cell in the active grid layer by phaseOffset: blue (0) → red (max), 50% opacity. See <a href="um-help://help/layers">Layers</a>.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>

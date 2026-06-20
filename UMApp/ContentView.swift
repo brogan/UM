@@ -488,6 +488,18 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     return ctx.makeImage()
 }
 
+// MARK: - Tangent drag state
+
+private enum TangentHandle { case out, `in` }
+
+private struct TangentDragState {
+    var kfID:         UUID
+    var which:        TangentHandle
+    var startTangentX: Double
+    var startTangentY: Double
+    var startCanvasPt: CGPoint
+}
+
 // MARK: - Grid canvas
 
 struct GridCanvasPlaceholder: View {
@@ -512,6 +524,8 @@ struct GridCanvasPlaceholder: View {
     @State private var scrollMonitor: Any? = nil
     // Hover preview state
     @State private var hoverViewPoint: CGPoint? = nil
+    // Bezier tangent handle drag state
+    @State private var tangentDragState: TangentDragState? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -891,11 +905,12 @@ struct GridCanvasPlaceholder: View {
                             t += step
                         }
 
-                        // Keyframe relative positions
+                        // Keyframe positions (direct from model — avoids evaluate at exact boundary)
                         let kfRelPts: [CGPoint] = activePath.keyframes.map { kf in
-                            let (dx, dy, _, _, _) = activePath.evaluate(atFrame: kf.frame, cellW: cellW, cellH: cellH)
-                            return CGPoint(x: dx, y: dy)
+                            CGPoint(x: kf.dx * cellW, y: kf.dy * cellH)
                         }
+
+                        let selectedKFID = controller.selectedPathKeyframeID
 
                         for cell in pathCells {
                             let row = cell.gridIndex / config.cols
@@ -918,11 +933,46 @@ struct GridCanvasPlaceholder: View {
                                            style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                             }
 
-                            // Keyframe dots
-                            for kfPt in kfRelPts {
-                                let p = CGPoint(x: cx + kfPt.x, y: cy + kfPt.y)
-                                ctx.fill(Path(ellipseIn: CGRect(x: p.x-3, y: p.y-3, width: 6, height: 6)),
-                                         with: .color(Color.accentColor.opacity(0.85)))
+                            // Keyframe dots + tangent handles
+                            for (ki, kf) in activePath.keyframes.enumerated() {
+                                let kfPt = CGPoint(x: cx + kfRelPts[ki].x, y: cy + kfRelPts[ki].y)
+                                let isSelected = kf.id == selectedKFID
+
+                                // Tangent arms for the selected keyframe
+                                if isSelected {
+                                    let outPt = CGPoint(x: kfPt.x + kf.outTangentX * cellW,
+                                                        y: kfPt.y + kf.outTangentY * cellH)
+                                    let inPt  = CGPoint(x: kfPt.x + kf.inTangentX  * cellW,
+                                                        y: kfPt.y + kf.inTangentY  * cellH)
+                                    // Arm lines
+                                    ctx.stroke(Path { $0.move(to: kfPt); $0.addLine(to: outPt) },
+                                               with: .color(Color.white.opacity(0.7)),
+                                               style: StrokeStyle(lineWidth: 1))
+                                    ctx.stroke(Path { $0.move(to: kfPt); $0.addLine(to: inPt) },
+                                               with: .color(Color.white.opacity(0.5)),
+                                               style: StrokeStyle(lineWidth: 1))
+                                    // Out handle (white fill, accent stroke)
+                                    ctx.fill(Path(ellipseIn: CGRect(x: outPt.x-4, y: outPt.y-4, width: 8, height: 8)),
+                                             with: .color(Color.white))
+                                    ctx.stroke(Path(ellipseIn: CGRect(x: outPt.x-4, y: outPt.y-4, width: 8, height: 8)),
+                                               with: .color(Color.accentColor), lineWidth: 1.5)
+                                    // In handle (white fill, secondary stroke)
+                                    ctx.fill(Path(ellipseIn: CGRect(x: inPt.x-4, y: inPt.y-4, width: 8, height: 8)),
+                                             with: .color(Color.white))
+                                    ctx.stroke(Path(ellipseIn: CGRect(x: inPt.x-4, y: inPt.y-4, width: 8, height: 8)),
+                                               with: .color(Color.secondary), lineWidth: 1.5)
+                                }
+
+                                // Keyframe dot
+                                let dotR: CGFloat = isSelected ? 4.5 : 3
+                                ctx.fill(Path(ellipseIn: CGRect(x: kfPt.x-dotR, y: kfPt.y-dotR,
+                                                                 width: dotR*2, height: dotR*2)),
+                                         with: .color(isSelected ? Color.white : Color.accentColor.opacity(0.85)))
+                                if isSelected {
+                                    ctx.stroke(Path(ellipseIn: CGRect(x: kfPt.x-dotR, y: kfPt.y-dotR,
+                                                                       width: dotR*2, height: dotR*2)),
+                                               with: .color(Color.accentColor), lineWidth: 1.5)
+                                }
                             }
 
                             // Animated playhead
@@ -964,6 +1014,26 @@ struct GridCanvasPlaceholder: View {
                             let pt = canvasPoint(value.location,
                                                  viewSize: geo.size,
                                                  gridW: gridW, gridH: gridH)
+
+                            // Bezier tangent handle intercept (path overlay active + KF selected)
+                            if let drag = tangentDragState {
+                                applyTangentDrag(drag, pt: pt, cellW: cellW, cellH: cellH)
+                                return
+                            }
+                            if controller.showPathOverlay,
+                               let kfID = controller.selectedPathKeyframeID {
+                                let startPt = canvasPoint(value.startLocation,
+                                                          viewSize: geo.size,
+                                                          gridW: gridW, gridH: gridH)
+                                if let hit = hitTestTangentHandles(at: startPt, kfID: kfID,
+                                                                   cellW: cellW, cellH: cellH,
+                                                                   scaleX: scaleX, scaleY: scaleY) {
+                                    tangentDragState = hit
+                                    applyTangentDrag(hit, pt: pt, cellW: cellW, cellH: cellH)
+                                    return
+                                }
+                            }
+
                             // Sprite layer intercept
                             let activeLS = controller.layerStates[controller.activeLayerIndex]
                             if activeLS.layerMode == .sprite {
@@ -1008,6 +1078,45 @@ struct GridCanvasPlaceholder: View {
                             }
                         }
                         .onEnded { value in
+                            // Tangent drag end
+                            if tangentDragState != nil {
+                                tangentDragState = nil
+                                lastDragIndex    = nil
+                                lastNudgeLocation = nil
+                                return
+                            }
+
+                            // KF dot tap → select / deselect keyframe
+                            let dist = hypot(value.translation.width, value.translation.height)
+                            if dist < 6, controller.showPathOverlay,
+                               let activePID = controller.activePathID,
+                               let activePath = controller.engine.document.paths.first(where: { $0.id == activePID }) {
+                                let tapPt = canvasPoint(value.startLocation,
+                                                        viewSize: geo.size,
+                                                        gridW: cachedGridW, gridH: cachedGridH)
+                                let config2 = controller.engine.document.gridConfig
+                                let cW = cachedGridW / Double(config2.cols)
+                                let cH = cachedGridH / Double(config2.rows)
+                                let pathCells2 = controller.engine.document.cells
+                                    .filter { $0.isDrawn && $0.pathID == activePID }.prefix(30)
+                                let sX2 = cW / config2.cellWidth; let sY2 = cH / config2.cellHeight
+                                outer: for cell2 in pathCells2 {
+                                    let r2 = cell2.gridIndex / config2.cols
+                                    let c2 = cell2.gridIndex % config2.cols
+                                    let cx2 = Double(c2) * cW + cW / 2 + cell2.positionOffset.dx * sX2
+                                    let cy2 = Double(r2) * cH + cH / 2 + cell2.positionOffset.dy * sY2
+                                    for kf in activePath.keyframes {
+                                        let kfX = cx2 + kf.dx * cW
+                                        let kfY = cy2 + kf.dy * cH
+                                        if hypot(tapPt.x - kfX, tapPt.y - kfY) <= 8 {
+                                            controller.selectedPathKeyframeID =
+                                                (controller.selectedPathKeyframeID == kf.id) ? nil : kf.id
+                                            break outer
+                                        }
+                                    }
+                                }
+                            }
+
                             let activeLS = controller.layerStates[controller.activeLayerIndex]
                             if activeLS.layerMode == .sprite {
                                 if spriteDragID != nil {
@@ -1169,6 +1278,78 @@ struct GridCanvasPlaceholder: View {
         }
     }
 
+
+    // MARK: - Tangent handle helpers
+
+    private func hitTestTangentHandles(at pt: CGPoint, kfID: UUID,
+                                       cellW: Double, cellH: Double,
+                                       scaleX: Double, scaleY: Double) -> TangentDragState? {
+        guard let activePID = controller.activePathID,
+              let activePath = controller.engine.document.paths.first(where: { $0.id == activePID }),
+              let kf = activePath.keyframes.first(where: { $0.id == kfID })
+        else { return nil }
+
+        let config   = controller.engine.document.gridConfig
+        let pathCells = controller.engine.document.cells
+            .filter { $0.isDrawn && $0.pathID == activePID }.prefix(30)
+        let hitR: Double = 8
+
+        for cell in pathCells {
+            let row = cell.gridIndex / config.cols
+            let col = cell.gridIndex % config.cols
+            let cx  = Double(col) * cellW + cellW / 2 + cell.positionOffset.dx * scaleX
+            let cy  = Double(row) * cellH + cellH / 2 + cell.positionOffset.dy * scaleY
+            let kfX = cx + kf.dx * cellW
+            let kfY = cy + kf.dy * cellH
+
+            let outX = kfX + kf.outTangentX * cellW
+            let outY = kfY + kf.outTangentY * cellH
+            if hypot(pt.x - outX, pt.y - outY) <= hitR {
+                return TangentDragState(kfID: kfID, which: .out,
+                                        startTangentX: kf.outTangentX, startTangentY: kf.outTangentY,
+                                        startCanvasPt: pt)
+            }
+            let inX = kfX + kf.inTangentX * cellW
+            let inY = kfY + kf.inTangentY * cellH
+            if hypot(pt.x - inX, pt.y - inY) <= hitR {
+                return TangentDragState(kfID: kfID, which: .in,
+                                        startTangentX: kf.inTangentX, startTangentY: kf.inTangentY,
+                                        startCanvasPt: pt)
+            }
+        }
+        return nil
+    }
+
+    private func applyTangentDrag(_ drag: TangentDragState, pt: CGPoint,
+                                  cellW: Double, cellH: Double) {
+        guard let activePID = controller.activePathID,
+              let pi = controller.engine.document.paths.firstIndex(where: { $0.id == activePID }),
+              let ki = controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == drag.kfID })
+        else { return }
+
+        let dxCell = (pt.x - drag.startCanvasPt.x) / cellW
+        let dyCell = (pt.y - drag.startCanvasPt.y) / cellH
+        let newX = drag.startTangentX + dxCell
+        let newY = drag.startTangentY + dyCell
+        let smooth = controller.engine.document.paths[pi].keyframes[ki].smooth
+
+        switch drag.which {
+        case .out:
+            controller.engine.document.paths[pi].keyframes[ki].outTangentX = newX
+            controller.engine.document.paths[pi].keyframes[ki].outTangentY = newY
+            if smooth {
+                controller.engine.document.paths[pi].keyframes[ki].inTangentX = -newX
+                controller.engine.document.paths[pi].keyframes[ki].inTangentY = -newY
+            }
+        case .in:
+            controller.engine.document.paths[pi].keyframes[ki].inTangentX = newX
+            controller.engine.document.paths[pi].keyframes[ki].inTangentY = newY
+            if smooth {
+                controller.engine.document.paths[pi].keyframes[ki].outTangentX = -newX
+                controller.engine.document.paths[pi].keyframes[ki].outTangentY = -newY
+            }
+        }
+    }
 
     private func canvasPoint(_ viewPt: CGPoint, viewSize: CGSize,
                              gridW: Double, gridH: Double) -> CGPoint {

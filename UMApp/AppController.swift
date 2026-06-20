@@ -1260,8 +1260,9 @@ final class AppController {
 
     // MARK: Path management
 
-    var activePathID: UUID?      = nil
-    var showPathOverlay: Bool    = true
+    var activePathID: UUID?              = nil
+    var showPathOverlay: Bool            = true
+    var selectedPathKeyframeID: UUID?    = nil
 
     // Per-layer colour map engines keyed by layer UUID.
     // colorMapEngine always refers to the active layer's engine and is what the UI binds to.
@@ -1278,7 +1279,8 @@ final class AppController {
     func createPath() {
         let p = UMMotionPath(name: "Path \(engine.document.paths.count + 1)")
         engine.document.paths.append(p)
-        activePathID = p.id
+        activePathID             = p.id
+        selectedPathKeyframeID   = nil
     }
 
     func deletePath(_ id: UUID) {
@@ -1286,7 +1288,10 @@ final class AppController {
         for i in engine.document.cells.indices where engine.document.cells[i].pathID == id {
             engine.document.cells[i].pathID = nil
         }
-        if activePathID == id { activePathID = engine.document.paths.first?.id }
+        if activePathID == id {
+            activePathID           = engine.document.paths.first?.id
+            selectedPathKeyframeID = nil
+        }
     }
 
     func assignPathToSelection(_ pathID: UUID?) {

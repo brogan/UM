@@ -67,28 +67,89 @@ public enum PathEasing: String, Codable, Sendable, CaseIterable {
 /// Position offsets (dx, dy) are stored in **cell-fraction units** so that paths
 /// are independent of grid resolution: 1.0 = shift one full cell dimension.
 /// The easing field describes the curve from *this* keyframe to the *next* one.
+///
+/// Tangent fields (outTangentX/Y, inTangentX/Y) are also in cell-fraction units.
+/// Both default to zero (degenerate = current linear behaviour; backward compatible).
+/// When either endpoint has a non-zero tangent, cubic Bezier interpolation is used
+/// for position (with linear time t), superseding the easing enum for position only.
+/// `smooth` mirrors the opposite tangent for C1 continuity when dragging.
 public struct PathKeyframe: Codable, Identifiable, Sendable {
-    public var id:       UUID
-    public var frame:    Int
-    public var dx:       Double      // +right, cell-width fractions
-    public var dy:       Double      // +down,  cell-height fractions
-    public var rotation: Double      // degrees, added to cell.rotation + parametric rotation
-    public var scaleX:   Double      // multiplied with cell.scaleX and parametric scaleX
-    public var scaleY:   Double
-    public var easing:   PathEasing  // curve from this keyframe to the next
+    public var id:          UUID
+    public var frame:       Int
+    public var dx:          Double      // +right, cell-width fractions
+    public var dy:          Double      // +down,  cell-height fractions
+    public var rotation:    Double      // degrees
+    public var scaleX:      Double
+    public var scaleY:      Double
+    public var easing:      PathEasing  // curve from this keyframe to the next (position when no tangents)
+    public var outTangentX: Double      // out control-point offset from this KF, cell-fraction units
+    public var outTangentY: Double
+    public var inTangentX:  Double      // in control-point offset from this KF, cell-fraction units
+    public var inTangentY:  Double
+    public var smooth:      Bool        // mirror in↔out for C1 continuity
+
+    public var hasTangents: Bool {
+        outTangentX != 0 || outTangentY != 0 || inTangentX != 0 || inTangentY != 0
+    }
 
     public init(frame: Int,
                 dx: Double = 0, dy: Double = 0,
                 rotation: Double = 0,
                 scaleX: Double = 1, scaleY: Double = 1,
                 easing: PathEasing = .easeInOut) {
-        self.id       = UUID()
-        self.frame    = frame
-        self.dx       = dx
-        self.dy       = dy
-        self.rotation = rotation
-        self.scaleX   = scaleX
-        self.scaleY   = scaleY
-        self.easing   = easing
+        self.id          = UUID()
+        self.frame       = frame
+        self.dx          = dx
+        self.dy          = dy
+        self.rotation    = rotation
+        self.scaleX      = scaleX
+        self.scaleY      = scaleY
+        self.easing      = easing
+        self.outTangentX = 0
+        self.outTangentY = 0
+        self.inTangentX  = 0
+        self.inTangentY  = 0
+        self.smooth      = false
+    }
+
+    // MARK: - Codable
+
+    private enum CodingKeys: String, CodingKey {
+        case id, frame, dx, dy, rotation, scaleX, scaleY, easing
+        case outTangentX, outTangentY, inTangentX, inTangentY, smooth
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c        = try decoder.container(keyedBy: CodingKeys.self)
+        id           = try c.decode(UUID.self,       forKey: .id)
+        frame        = try c.decode(Int.self,        forKey: .frame)
+        dx           = try c.decode(Double.self,     forKey: .dx)
+        dy           = try c.decode(Double.self,     forKey: .dy)
+        rotation     = try c.decode(Double.self,     forKey: .rotation)
+        scaleX       = try c.decode(Double.self,     forKey: .scaleX)
+        scaleY       = try c.decode(Double.self,     forKey: .scaleY)
+        easing       = try c.decode(PathEasing.self, forKey: .easing)
+        outTangentX  = (try? c.decodeIfPresent(Double.self, forKey: .outTangentX)) ?? 0
+        outTangentY  = (try? c.decodeIfPresent(Double.self, forKey: .outTangentY)) ?? 0
+        inTangentX   = (try? c.decodeIfPresent(Double.self, forKey: .inTangentX))  ?? 0
+        inTangentY   = (try? c.decodeIfPresent(Double.self, forKey: .inTangentY))  ?? 0
+        smooth       = (try? c.decodeIfPresent(Bool.self,   forKey: .smooth))       ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id,       forKey: .id)
+        try c.encode(frame,    forKey: .frame)
+        try c.encode(dx,       forKey: .dx)
+        try c.encode(dy,       forKey: .dy)
+        try c.encode(rotation, forKey: .rotation)
+        try c.encode(scaleX,   forKey: .scaleX)
+        try c.encode(scaleY,   forKey: .scaleY)
+        try c.encode(easing,   forKey: .easing)
+        if outTangentX != 0 { try c.encode(outTangentX, forKey: .outTangentX) }
+        if outTangentY != 0 { try c.encode(outTangentY, forKey: .outTangentY) }
+        if inTangentX  != 0 { try c.encode(inTangentX,  forKey: .inTangentX) }
+        if inTangentY  != 0 { try c.encode(inTangentY,  forKey: .inTangentY) }
+        if smooth            { try c.encode(smooth,      forKey: .smooth) }
     }
 }
