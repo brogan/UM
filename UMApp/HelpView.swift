@@ -660,11 +660,13 @@ private let qaProjectBody = #"""
 <table>
   <tr><th>Field</th><th>Description</th></tr>
   <tr><td><strong>Background</strong></td><td>Canvas background colour. Click the swatch to open the colour panel. Default: white.</td></tr>
+  <tr><td><strong>Bg Image</strong></td><td>Background image composited behind all layers, on top of the background colour. Click <strong>Choose…</strong> to pick any image file (JPEG, PNG, TIFF, HEIC…). The image fills the full canvas area. Click ✕ to remove it. Saved with the project.</td></tr>
   <tr><td><strong>Draw</strong></td><td>Background draw checkbox. When checked (default) the canvas clears to the background colour before each frame — a fresh render each tick. When unchecked, frames accumulate: each new frame's sprites layer on top of the previous frame's content without clearing. Rewinding to frame 0 clears the accumulation.</td></tr>
   <tr><td><strong>Capture</strong></td><td>Auto-capture interval during recording (0.5 s – 8.0 s, default 2.0 s).</td></tr>
   <tr><td><strong>Grid</strong></td><td>Show grid checkbox. When on, lines divide the canvas into cells. Off by default.</td></tr>
   <tr><td><strong>Grid colour / width</strong></td><td>Colour, opacity, and stroke width of the grid lines. Dimmed when Show grid is off.</td></tr>
 </table>
+<div class="note"><strong>Background image vs Color Map</strong> — the background image is drawn as a visible backdrop behind sprites. The Color Map is an invisible sampling source that drives sprite colours. They serve entirely different purposes and can be used simultaneously.</div>
 
 <h3>Accumulation mode</h3>
 <p>Turning <strong>Background draw</strong> off is the primary way to create time-based build-up effects. Earlier frames remain visible as new sprites are drawn on top. Combined with motion paths or the Wander/Wave presets, this traces visible motion trajectories across the canvas. The accumulation persists until you press ⏮ (rewind) or turn Background draw back on.</p>
@@ -1304,7 +1306,7 @@ private let pendingBody = #"""
   <tr><td>Path Editor</td><td>Bezier tangent handles</td><td>The PATH EDITOR uses per-segment easing (Linear, Ease In/Out, Step). Cubic bezier tangent handles (in/out per keyframe, drawn on the canvas as draggable circles) are designed but not yet built.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>A toggleable overlay colouring each cell by its phaseOffset value (blue = 0, red = max) to make temporal structure visible without playing the animation.</td></tr>
-  <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>CANVAS supports a solid background colour. Loading a visible image composited behind the grid is planned (distinct from the Color Map).</td></tr>
+  <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
   <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>Camera pan, zoom, and rotation support constant values today. Oscillator and keyframe modes (driving camera motion over time) and the per-layer opacity/offset drivers are Phase 2.</td></tr>
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>

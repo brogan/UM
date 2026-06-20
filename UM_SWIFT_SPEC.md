@@ -1919,9 +1919,17 @@ Rendering mirrors the live cell draw path:
 - No per-cell phase visualisation on the canvas.
 - Required: a toggleable overlay that colours each drawn cell by its `phaseOffset` value (e.g. a heat-map from blue = 0 to red = max), making the temporal structure of the composition visible without playing the animation.
 
-**Background image**
-- The CANVAS section supports a solid background colour only.
-- Required: an option to load a visible image that is composited behind the grid as a backdrop, distinct from the Color Map (which recolors sprites but never renders the image itself).
+**Background image** ✓ Built 2026-06-20
+
+`AppController` gains `backgroundCGImage: CGImage?` and `backgroundImagePath: String?`. `setBackgroundImage(url:)` loads via `CGImageSourceCreateImageAtIndex`; `clearBackgroundImage()` nils both. Cleared on `newDocument()`.
+
+**Rendering:** Image is drawn after the background colour fill, before all layers:
+- `backgroundDraw = true` (ephemeral): drawn in live `Canvas` body and in `umRenderComposited` (PNG/video export).
+- `backgroundDraw = false` (accumulation): baked into `AccumulationSnapshot` on the first frame (when `previousBuffer == nil`); propagates through subsequent accumulated frames automatically.
+
+**Persistence:** On save, image is copied to `backgroundImage/<filename>` inside the `.umproj` package. `ProjectConfig` v7 gains `backgroundImageRelPath: String?` (optional, backward-compatible). On load, path is resolved and `CGImage` is restored via `CGImageSourceCreateWithURL`.
+
+**UI:** "Bg Image" row in the CANVAS section of Quick Adjust — photo icon + filename + clear (×) button when set; "Choose…" button otherwise. File picker restricts to image UTTypes.
 
 ---
 
@@ -2321,7 +2329,7 @@ MOTION section remains and works identically — when a sprite is selected and i
 | **Path editor** | Bezier tangent handles | — |
 | **Geometry** | In-app geometry editor (LoomEditorKit) | Loom stabilisation |
 | **Overlays** | Phase heat-map overlay | — |
-| **Overlays** | Background image | — |
+| **Overlays** | Background image | ✓ Built 2026-06-20 |
 | **Layers** | Camera system (pan, zoom, rotation) | ✓ Built 2026-06-19 |
 | **Layers** | Parallax (per-layer depth factor) | ✓ Built 2026-06-19 |
 | **Layers** | Per-layer blend modes | — |
