@@ -76,6 +76,7 @@ struct QuickAdjustView: View {
                     exportSection
                     if activeLayerMode == .sprite {
                         spritesSection
+                        motionSection
                     } else {
                         gridScrollSection
                         placeTimeSection
@@ -84,6 +85,7 @@ struct QuickAdjustView: View {
                         shapeSection
                         pathSection
                         advancedSection
+                        nothingActiveHint
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -209,6 +211,15 @@ struct QuickAdjustView: View {
                 ))
                 .toggleStyle(.checkbox)
                 .font(.system(size: 11))
+            }
+            InspectorField("Phase map") {
+                Toggle("Phase heatmap", isOn: Binding(
+                    get: { controller.showPhaseHeatmap },
+                    set: { controller.showPhaseHeatmap = $0 }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.system(size: 11))
+                .help("Colour each cell by its phase offset: blue = 0, red = max")
             }
             InspectorField("Grid color") {
                 ColorWell(color: canvasColorBinding(\.gridColor), supportsOpacity: true)
@@ -1120,7 +1131,7 @@ struct QuickAdjustView: View {
 
     @ViewBuilder
     private var motionSection: some View {
-        if let ms = controller.activeMotionSet {
+        if let ms = effectiveMotionSet {
             InspectorSection("MOTION — \(ms.name)", isCollapsed: $motionCollapsed) {
                 InspectorField("Preset") {
                     Picker("", selection: motionPresetBinding) {
@@ -1929,6 +1940,29 @@ struct QuickAdjustView: View {
         .padding(.bottom, 4)
     }
 
+    // MARK: - Nothing active hint
+
+    @ViewBuilder
+    private var nothingActiveHint: some View {
+        let hasKF     = controller.selectedTimelineKF != nil || controller.selectedCameraKF != nil
+        let hasMotion = effectiveMotionSet != nil
+        let hasCells  = !controller.selectedIndices.isEmpty
+        let hasShape  = controller.activeShapeID != nil
+        if !hasKF && !hasMotion && !hasCells && !hasShape {
+            VStack(spacing: 4) {
+                Text("Nothing active")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Text("Select cells, or click a STYLE,\nMOTION, or SHAPE in the palette.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.quaternary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+        }
+    }
+
     // MARK: - Shape section
 
     @ViewBuilder
@@ -1959,6 +1993,19 @@ struct QuickAdjustView: View {
     private var layerDriversSection: some View {
         let ls = controller.layerStates[safe: controller.activeLayerIndex]
         InspectorSection("LAYER DRIVERS", isCollapsed: $layerDriversCollapsed) {
+
+            // ── Blend mode ───────────────────────────────────────
+            InspectorField("Blend") {
+                Picker("", selection: Binding(
+                    get: { ls?.blendMode ?? .normal },
+                    set: { ls?.blendMode = $0 }
+                )) {
+                    ForEach(UMBlendMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── Opacity ──────────────────────────────────────────
             Text("OPACITY")
@@ -2196,84 +2243,102 @@ struct QuickAdjustView: View {
 
     // MARK: - Motion bindings
 
+    // In sprite mode, derive motion context from the selected sprite's motionID;
+    // otherwise fall back to the palette activeMotionID.
+    private var effectiveMotionID: UUID? {
+        if controller.layerStates[safe: controller.activeLayerIndex]?.layerMode == .sprite,
+           let spriteID = controller.activeSpriteID,
+           let ls = controller.layerStates[safe: controller.activeLayerIndex],
+           let sprite = ls.sprites.first(where: { $0.id == spriteID }),
+           let mid = sprite.motionID {
+            return mid
+        }
+        return controller.activeMotionID
+    }
+
+    private var effectiveMotionSet: UMMotionSet? {
+        guard let id = effectiveMotionID else { return nil }
+        return controller.projectMotionSets.first { $0.id == id }
+    }
+
     private var activeMotionIndex: Int? {
-        guard let id = controller.activeMotionID else { return nil }
+        guard let id = effectiveMotionID else { return nil }
         return controller.projectMotionSets.firstIndex { $0.id == id }
     }
 
     private var motionPresetBinding: Binding<MotionPreset> {
         Binding(
-            get: { controller.activeMotionSet?.motionPreset ?? .static },
+            get: { effectiveMotionSet?.motionPreset ?? .static },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionPreset = $0 } }
         )
     }
 
     private var motionSpeedBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.motionSpeed ?? 1 },
+            get: { effectiveMotionSet?.motionSpeed ?? 1 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionSpeed = $0 } }
         )
     }
 
     private var motionAmountBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.motionAmount ?? 0.5 },
+            get: { effectiveMotionSet?.motionAmount ?? 0.5 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionAmount = $0 } }
         )
     }
 
     private var motionPhaseBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.motionPhase ?? 0 },
+            get: { effectiveMotionSet?.motionPhase ?? 0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].motionPhase = $0 } }
         )
     }
 
     private var motionOrderChaosBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.orderChaos ?? 0 },
+            get: { effectiveMotionSet?.orderChaos ?? 0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].orderChaos = $0 } }
         )
     }
 
     private var axisXBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.axisX ?? 1.0 },
+            get: { effectiveMotionSet?.axisX ?? 1.0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisX = $0 } }
         )
     }
 
     private var axisYBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.axisY ?? 1.0 },
+            get: { effectiveMotionSet?.axisY ?? 1.0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisY = $0 } }
         )
     }
 
     private var axisRotationBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.axisRotation ?? 1.0 },
+            get: { effectiveMotionSet?.axisRotation ?? 1.0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisRotation = $0 } }
         )
     }
 
     private var axisScaleBinding: Binding<Double> {
         Binding(
-            get: { controller.activeMotionSet?.axisScale ?? 1.0 },
+            get: { effectiveMotionSet?.axisScale ?? 1.0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisScale = $0 } }
         )
     }
 
     private var sequenceModeBinding: Binding<SequenceMode> {
         Binding(
-            get: { controller.activeMotionSet?.sequenceMode ?? .off },
+            get: { effectiveMotionSet?.sequenceMode ?? .off },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].sequenceMode = $0 } }
         )
     }
 
     private var framesPerStepBinding: Binding<Int> {
         Binding(
-            get: { controller.activeMotionSet?.framesPerStep ?? 4 },
+            get: { effectiveMotionSet?.framesPerStep ?? 4 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].framesPerStep = max(1, $0) } }
         )
     }
@@ -2281,7 +2346,7 @@ struct QuickAdjustView: View {
     private func sequenceShapeBinding(at idx: Int) -> Binding<UUID?> {
         Binding(
             get: {
-                guard let ms = controller.activeMotionSet, idx < ms.shapeIDs.count else { return nil }
+                guard let ms = self.effectiveMotionSet, idx < ms.shapeIDs.count else { return nil }
                 return ms.shapeIDs[idx]
             },
             set: { newID in

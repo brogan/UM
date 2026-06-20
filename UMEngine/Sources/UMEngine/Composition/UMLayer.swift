@@ -36,9 +36,11 @@ public struct UMLayer: Codable, Identifiable, Sendable {
     public var document:  UMGridDocument
 
     /// Whether this layer renders as a grid or free-placed sprites.
-    public var layerMode: LayerMode
+    public var layerMode:  LayerMode
     /// Free-placed sprites (only meaningful when layerMode == .sprite).
-    public var sprites:   [UMSprite]
+    public var sprites:    [UMSprite]
+    /// How this layer composites with layers below it.
+    public var blendMode:  UMBlendMode
 
     public init(
         id:              UUID            = UUID(),
@@ -52,7 +54,8 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         gridScrollMode:  GridScrollMode  = .wrap,
         document:        UMGridDocument  = UMGridDocument.makeDefault(),
         layerMode:       LayerMode       = .grid,
-        sprites:         [UMSprite]      = []
+        sprites:         [UMSprite]      = [],
+        blendMode:       UMBlendMode     = .normal
     ) {
         self.id               = id
         self.name             = name
@@ -66,6 +69,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         self.document         = document
         self.layerMode        = layerMode
         self.sprites          = sprites
+        self.blendMode        = blendMode
     }
 
     // MARK: - Codable (backward-compatible: new fields use decodeIfPresent)
@@ -73,7 +77,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, isVisible, opacity, document
         case parallaxFactor, layerOffset, opacityDriver
-        case gridScrollDriver, gridScrollMode
+        case gridScrollDriver, gridScrollMode, blendMode
         case layerMode, sprites
     }
 
@@ -88,8 +92,9 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         layerOffset       = try c.decodeIfPresent(UMVectorDriver.self, forKey: .layerOffset)      ?? .zero
         gridScrollDriver  = try c.decodeIfPresent(UMVectorDriver.self, forKey: .gridScrollDriver) ?? .zero
         gridScrollMode    = try c.decodeIfPresent(GridScrollMode.self, forKey: .gridScrollMode)   ?? .wrap
-        layerMode         = try c.decodeIfPresent(LayerMode.self,  forKey: .layerMode) ?? .grid
-        sprites           = try c.decodeIfPresent([UMSprite].self, forKey: .sprites)   ?? []
+        layerMode         = try c.decodeIfPresent(LayerMode.self,    forKey: .layerMode)  ?? .grid
+        sprites           = try c.decodeIfPresent([UMSprite].self,  forKey: .sprites)    ?? []
+        blendMode         = try c.decodeIfPresent(UMBlendMode.self, forKey: .blendMode)  ?? .normal
         // Backward compat: existing files have no opacityDriver; seed from opacity
         if let od = try c.decodeIfPresent(UMDoubleDriver.self, forKey: .opacityDriver) {
             opacityDriver = od
@@ -110,7 +115,40 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         try c.encode(opacityDriver,    forKey: .opacityDriver)
         try c.encode(gridScrollDriver, forKey: .gridScrollDriver)
         try c.encode(gridScrollMode,   forKey: .gridScrollMode)
-        if layerMode != .grid  { try c.encode(layerMode, forKey: .layerMode) }
-        if !sprites.isEmpty    { try c.encode(sprites,   forKey: .sprites) }
+        if layerMode != .grid   { try c.encode(layerMode,  forKey: .layerMode) }
+        if !sprites.isEmpty     { try c.encode(sprites,    forKey: .sprites) }
+        if blendMode != .normal { try c.encode(blendMode,  forKey: .blendMode) }
+    }
+}
+
+// MARK: - Blend mode
+
+public enum UMBlendMode: String, Codable, CaseIterable, Sendable {
+    case normal
+    case multiply
+    case screen
+    case overlay
+    case dodge
+    case burn
+    case softLight
+    case hardLight
+    case difference
+    case exclusion
+    case add
+
+    public var displayName: String {
+        switch self {
+        case .normal:     return "Normal"
+        case .multiply:   return "Multiply"
+        case .screen:     return "Screen"
+        case .overlay:    return "Overlay"
+        case .dodge:      return "Dodge"
+        case .burn:       return "Burn"
+        case .softLight:  return "Soft Light"
+        case .hardLight:  return "Hard Light"
+        case .difference: return "Difference"
+        case .exclusion:  return "Exclusion"
+        case .add:        return "Add"
+        }
     }
 }

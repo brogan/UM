@@ -231,6 +231,42 @@ struct ToolStripView: View {
     }
 }
 
+// MARK: - UMBlendMode rendering bridges
+
+extension UMBlendMode {
+    var cgBlendMode: CGBlendMode {
+        switch self {
+        case .normal:     return .normal
+        case .multiply:   return .multiply
+        case .screen:     return .screen
+        case .overlay:    return .overlay
+        case .dodge:      return .colorDodge
+        case .burn:       return .colorBurn
+        case .softLight:  return .softLight
+        case .hardLight:  return .hardLight
+        case .difference: return .difference
+        case .exclusion:  return .exclusion
+        case .add:        return .plusLighter
+        }
+    }
+
+    var swiftUIBlendMode: GraphicsContext.BlendMode {
+        switch self {
+        case .normal:     return .normal
+        case .multiply:   return .multiply
+        case .screen:     return .screen
+        case .overlay:    return .overlay
+        case .dodge:      return .colorDodge
+        case .burn:       return .colorBurn
+        case .softLight:  return .softLight
+        case .hardLight:  return .hardLight
+        case .difference: return .difference
+        case .exclusion:  return .exclusion
+        case .add:        return .plusLighter
+        }
+    }
+}
+
 // MARK: - Accumulation buffer — background CG rendering
 
 private struct LayerAccumulationData: @unchecked Sendable {
@@ -254,6 +290,7 @@ private struct LayerAccumulationData: @unchecked Sendable {
     let sprites: [UMSprite]
     let gridW: Double  // canvas width in SwiftUI points (needed for sprite position scaling)
     let gridH: Double
+    let blendMode: UMBlendMode
 }
 
 private struct AccumulationSnapshot: @unchecked Sendable {
@@ -294,9 +331,11 @@ private nonisolated func renderAccumulationCG(_ snap: AccumulationSnapshot) -> C
 
     for layer in snap.layers {
         guard let layerImage = renderLayerCG(layer, snap: snap) else { continue }
+        mainCtx.setBlendMode(layer.blendMode.cgBlendMode)
         mainCtx.setAlpha(layer.opacity)
         mainCtx.draw(layerImage, in: frame)
         mainCtx.setAlpha(1.0)
+        mainCtx.setBlendMode(.normal)
     }
     return mainCtx.makeImage()
 }
@@ -539,6 +578,25 @@ struct GridCanvasPlaceholder: View {
                                    lineWidth: controller.gridLineWidth)
                     }
 
+                    // Phase heat-map overlay (active grid layer only, raw canvas space)
+                    if controller.showPhaseHeatmap,
+                       controller.layerStates[safe: controller.activeLayerIndex]?.layerMode == .grid {
+                        let hmCells  = controller.engine.document.cells
+                        let maxPhase = hmCells.map { $0.phaseOffset }.max() ?? 0
+                        if maxPhase > 0 {
+                            for cell in hmCells where cell.styleID != nil {
+                                let row = cell.gridIndex / config.cols
+                                let col = cell.gridIndex % config.cols
+                                let t   = Double(cell.phaseOffset) / Double(maxPhase)
+                                let hue = (1.0 - t) * 0.667  // blue (t=0) → red (t=1)
+                                let rect = CGRect(x: Double(col) * cellW, y: Double(row) * cellH,
+                                                  width: cellW, height: cellH)
+                                ctx.fill(Path(rect),
+                                         with: .color(Color(hue: hue, saturation: 0.85, brightness: 0.9, opacity: 0.5)))
+                            }
+                        }
+                    }
+
                     // Drawn cells — render each layer into an isolated compositing group.
                     let shapePolyMap  = controller.shapePolygonMap
                     let fallbackPolys = controller.shapePolygons
@@ -555,7 +613,9 @@ struct GridCanvasPlaceholder: View {
                                                                parallaxFactor: ls.parallaxFactor,
                                                                layerOffset: lLayerOff,
                                                                canvasW: gridW, canvasH: gridH)
-                            ctx.drawLayer { layerCtx in
+                            var spriteCompositeCtx = ctx
+                            spriteCompositeCtx.blendMode = ls.blendMode.swiftUIBlendMode
+                            spriteCompositeCtx.drawLayer { layerCtx in
                                 layerCtx.opacity = lOpacity
                                 if !lLayerXF.isIdentity { layerCtx.concatenate(lLayerXF) }
                                 let styleMap  = Dictionary(uniqueKeysWithValues: controller.projectStyles.map { ($0.id, $0) })
@@ -660,7 +720,9 @@ struct GridCanvasPlaceholder: View {
                             cells: ls.engine.document.cells, scroll: lScroll,
                             mode: ls.gridScrollMode,
                             rows: lConfig.rows, cols: lConfig.cols)
-                        ctx.drawLayer { layerCtx in
+                        var gridCompositeCtx = ctx
+                        gridCompositeCtx.blendMode = ls.blendMode.swiftUIBlendMode
+                        gridCompositeCtx.drawLayer { layerCtx in
                             layerCtx.opacity = lOpacity
                             if !lLayerXF.isIdentity { layerCtx.concatenate(lLayerXF) }
                             for spec in lSpecs {
@@ -1028,7 +1090,8 @@ struct GridCanvasPlaceholder: View {
                                 layerMode: ls.layerMode,
                                 sprites:   ls.sprites,
                                 gridW:     gridW,
-                                gridH:     gridH
+                                gridH:     gridH,
+                                blendMode: ls.blendMode
                             )
                         },
                         previousBuffer:    controller.frameBuffer,
@@ -1760,9 +1823,11 @@ func umRenderComposited(
             ))
             renderer.scale = 1.0
             if let img = renderer.cgImage {
+                ctx.setBlendMode(ls.blendMode.cgBlendMode)
                 ctx.setAlpha(opacity)
                 ctx.draw(img, in: destRect)
                 ctx.setAlpha(1.0)
+                ctx.setBlendMode(.normal)
             }
             continue
         }
@@ -1801,9 +1866,11 @@ func umRenderComposited(
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {
+            ctx.setBlendMode(ls.blendMode.cgBlendMode)
             ctx.setAlpha(opacity)
             ctx.draw(img, in: destRect)
             ctx.setAlpha(1.0)
+            ctx.setBlendMode(.normal)
         }
     }
 

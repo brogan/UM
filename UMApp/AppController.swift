@@ -27,6 +27,7 @@ final class UMLayerState: Identifiable {
     var activeStyleID: UUID?
     var layerMode: LayerMode
     var sprites: [UMSprite]
+    var blendMode: UMBlendMode
 
     init(layer: UMLayer) {
         self.id               = layer.id
@@ -42,6 +43,7 @@ final class UMLayerState: Identifiable {
         self.activeStyleID    = layer.document.styles.first?.id
         self.layerMode        = layer.layerMode
         self.sprites          = layer.sprites
+        self.blendMode        = layer.blendMode
     }
 
     func toUMLayer() -> UMLayer {
@@ -50,7 +52,8 @@ final class UMLayerState: Identifiable {
                 opacityDriver: opacityDriver,
                 gridScrollDriver: gridScrollDriver, gridScrollMode: gridScrollMode,
                 document: engine.document,
-                layerMode: layerMode, sprites: sprites)
+                layerMode: layerMode, sprites: sprites,
+                blendMode: blendMode)
     }
 }
 
@@ -226,6 +229,7 @@ final class AppController {
     var stampPhaseOffset: Int        = 0
     var stretchSpritesToCell: Bool   = true
     var showGrid: Bool               = false
+    var showPhaseHeatmap: Bool       = false
     var gridColor: UMColor           = UMColor(r: 0.5, g: 0.5, b: 0.5, a: 1)
     var gridLineWidth: Double        = 0.5
     var backgroundColor: UMColor     = UMColor(r: 1, g: 1, b: 1, a: 1)
