@@ -55,6 +55,7 @@ struct QuickAdjustView: View {
     @State private var kfInspectorCollapsed = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
+    @State private var spritesCollapsed     = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -63,17 +64,22 @@ struct QuickAdjustView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    let activeLayerMode = controller.layerStates[controller.activeLayerIndex].layerMode
                     kfInspectorSection
                     projectSection
                     canvasSection
                     cameraSection
-                    gridScrollSection
                     exportSection
-                    placeTimeSection
-                    renderSection
-                    motionSection
-                    pathSection
-                    advancedSection
+                    if activeLayerMode == .sprite {
+                        spritesSection
+                    } else {
+                        gridScrollSection
+                        placeTimeSection
+                        renderSection
+                        motionSection
+                        pathSection
+                        advancedSection
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -1542,6 +1548,171 @@ struct QuickAdjustView: View {
             get: { focusedCell?.pathID },
             set: { controller.assignPathToSelection($0) }
         )
+    }
+
+    // MARK: - Sprite layer section
+
+    private var spritesSection: some View {
+        let ls = controller.layerStates[controller.activeLayerIndex]
+        return InspectorSection("SPRITES", isCollapsed: $spritesCollapsed) {
+            // Sprite list
+            if ls.sprites.isEmpty {
+                Text("Click canvas to place sprites")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+            } else {
+                ForEach(ls.sprites) { sprite in
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkle")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 12)
+                        Text(sprite.name)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                            .foregroundStyle(controller.activeSpriteID == sprite.id
+                                             ? Color.accentColor : Color.primary)
+                        Spacer()
+                        Button {
+                            controller.removeSprite(id: sprite.id)
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { controller.activeSpriteID = sprite.id }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                }
+            }
+
+            Divider().padding(.vertical, 2)
+
+            // Add sprite button
+            Button("+ Place at Centre") {
+                controller.addSprite(at: CGPoint(x: 0.5, y: 0.5))
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+
+            // Per-sprite inspector
+            if let sid = controller.activeSpriteID,
+               let idx = ls.sprites.firstIndex(where: { $0.id == sid }) {
+                Divider().padding(.vertical, 2)
+                spriteInspector(sprite: Binding(
+                    get: { ls.sprites[idx] },
+                    set: { ls.sprites[idx] = $0 }
+                ))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func spriteInspector(sprite: Binding<UMSprite>) -> some View {
+        let s = sprite.wrappedValue
+        VStack(alignment: .leading, spacing: 0) {
+            // Name
+            InspectorField("Name") {
+                TextField("", text: Binding(get: { s.name }, set: { sprite.wrappedValue.name = $0 }))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+            }
+            // Position
+            InspectorField("Position X") {
+                FloatEntryField(value: Binding(
+                    get: { s.x * 100 },
+                    set: { sprite.wrappedValue.x = $0 / 100.0 }
+                ), width: 52, fractionDigits: 1)
+                Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            InspectorField("Position Y") {
+                FloatEntryField(value: Binding(
+                    get: { s.y * 100 },
+                    set: { sprite.wrappedValue.y = $0 / 100.0 }
+                ), width: 52, fractionDigits: 1)
+                Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            // Rotation
+            InspectorField("Rotation") {
+                FloatEntryField(value: Binding(
+                    get: { s.rotation },
+                    set: { sprite.wrappedValue.rotation = $0 }
+                ), width: 52, fractionDigits: 1)
+                Text("°").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            // Scale
+            InspectorField("Scale X") {
+                FloatEntryField(value: Binding(
+                    get: { s.scaleX },
+                    set: { sprite.wrappedValue.scaleX = max(0.01, $0) }
+                ), width: 52, fractionDigits: 2)
+            }
+            InspectorField("Scale Y") {
+                FloatEntryField(value: Binding(
+                    get: { s.scaleY },
+                    set: { sprite.wrappedValue.scaleY = max(0.01, $0) }
+                ), width: 52, fractionDigits: 2)
+            }
+            // Style picker
+            InspectorField("Style") {
+                Picker("", selection: Binding(
+                    get: { s.styleID },
+                    set: { sprite.wrappedValue.styleID = $0 }
+                )) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(controller.projectStyles) { st in
+                        Text(st.name).tag(Optional(st.id))
+                    }
+                }
+                .labelsHidden()
+                .font(.system(size: 11))
+            }
+            // Shape picker
+            InspectorField("Shape") {
+                Picker("", selection: Binding(
+                    get: { s.shapeID },
+                    set: { sprite.wrappedValue.shapeID = $0 }
+                )) {
+                    Text("Default").tag(UUID?.none)
+                    ForEach(controller.projectShapes) { sh in
+                        Text(sh.name).tag(Optional(sh.id))
+                    }
+                }
+                .labelsHidden()
+                .font(.system(size: 11))
+            }
+            // Motion picker
+            InspectorField("Motion") {
+                Picker("", selection: Binding(
+                    get: { s.motionID },
+                    set: { sprite.wrappedValue.motionID = $0 }
+                )) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(controller.projectMotionSets) { ms in
+                        Text(ms.name).tag(Optional(ms.id))
+                    }
+                }
+                .labelsHidden()
+                .font(.system(size: 11))
+            }
+            // Phase offset
+            InspectorField("Phase") {
+                FloatEntryField(value: Binding(
+                    get: { Double(s.phaseOffset) },
+                    set: { sprite.wrappedValue.phaseOffset = Int($0) }
+                ), width: 52, fractionDigits: 0)
+                Text("frames").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.bottom, 4)
     }
 
     // MARK: - Sequence section

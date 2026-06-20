@@ -249,6 +249,11 @@ private struct LayerAccumulationData: @unchecked Sendable {
     // Grid scroll
     let gridScrollDriver: UMVectorDriver
     let gridScrollMode: GridScrollMode
+    // Sprite layer fields
+    let layerMode: LayerMode
+    let sprites: [UMSprite]
+    let gridW: Double  // canvas width in SwiftUI points (needed for sprite position scaling)
+    let gridH: Double
 }
 
 private struct AccumulationSnapshot: @unchecked Sendable {
@@ -314,11 +319,63 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     ctx.scaleBy(x: 1, y: -1)
 
     let dsf       = Double(snap.displayScale)
+    let styleMap  = Dictionary(uniqueKeysWithValues: layer.styles.map  { ($0.id, $0) })
+    let motionMap = Dictionary(uniqueKeysWithValues: snap.projectMotionSets.map { ($0.id, $0) })
+
+    // Sprite layer path
+    if layer.layerMode == .sprite {
+        let spriteRef = min(layer.gridW, layer.gridH) / 8.0
+        for (idx, sprite) in layer.sprites.enumerated() {
+            let style     = sprite.styleID.flatMap { styleMap[$0] }
+            let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+            let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+                                          frame: snap.frame, phaseOffset: sprite.phaseOffset,
+                                          cellIndex: idx,
+                                          cellW: spriteRef * sprite.scaleX,
+                                          cellH: spriteRef * sprite.scaleY)
+            let mx = (sprite.x * layer.gridW + motion.dx) * dsf
+            let my = (sprite.y * layer.gridH + motion.dy) * dsf
+            let polygons = resolvePolygons(shapeID: sprite.shapeID,
+                                           shapeMap: snap.shapePolygonMap,
+                                           fallback: snap.fallbackPolygons)
+            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * dsf
+            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * dsf
+            let rot   = sprite.rotation + motion.rotation
+            let fillC   = style?.fillColor   ?? .defaultFill
+            let strokeC = style?.strokeColor ?? .defaultStroke
+            let strokeW = (style?.strokeWidth ?? 1.5) * dsf
+            let mode    = style?.renderMode  ?? .filledStroked
+            if polygons.isEmpty {
+                let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                let cgp  = CGPath(roundedRect: rect, cornerWidth: 3 * dsf, cornerHeight: 3 * dsf, transform: nil)
+                ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a))
+                ctx.addPath(cgp); ctx.fillPath()
+            } else {
+                for (polyIdx, polygon) in polygons.filter(\.visible).enumerated() {
+                    let ovr = sprite.polygonOverrides[polyIdx]
+                    let fC  = ovr?.fill   ?? fillC
+                    let sC  = ovr?.stroke ?? strokeC
+                    let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                               zoomX: zoomX, zoomY: zoomY,
+                                               scaleX: 1.0, scaleY: 1.0, rotation: rot)
+                    if mode == .filled || mode == .filledStroked {
+                        ctx.setFillColor(CGColor(red: fC.r, green: fC.g, blue: fC.b, alpha: fC.a))
+                        ctx.addPath(cgp); ctx.fillPath()
+                    }
+                    if mode == .stroked || mode == .filledStroked {
+                        ctx.setStrokeColor(CGColor(red: sC.r, green: sC.g, blue: sC.b, alpha: sC.a))
+                        ctx.setLineWidth(CGFloat(strokeW))
+                        ctx.addPath(cgp); ctx.strokePath()
+                    }
+                }
+            }
+        }
+        return ctx.makeImage()
+    }
+
     let cellW     = layer.cellW, cellH = layer.cellH
     let half      = min(cellW, cellH)
-    let styleMap  = Dictionary(uniqueKeysWithValues: layer.styles.map  { ($0.id, $0) })
     let pathMap   = Dictionary(uniqueKeysWithValues: layer.paths.map   { ($0.id, $0) })
-    let motionMap = Dictionary(uniqueKeysWithValues: snap.projectMotionSets.map { ($0.id, $0) })
 
     let cgScroll = DriverEvaluator.evaluate(layer.gridScrollDriver, frame: snap.frame)
     let cgFracX  = cgScroll.x - floor(cgScroll.x)
@@ -401,6 +458,11 @@ struct GridCanvasPlaceholder: View {
     // Cached layout — needed in onEnded where geo is out of scope
     @State private var cachedCellW: Double = 1
     @State private var cachedCellH: Double = 1
+    @State private var cachedGridW: Double = 400
+    @State private var cachedGridH: Double = 400
+    // Sprite drag state
+    @State private var spriteDragID:     UUID?    = nil
+    @State private var spriteDragOffset: CGPoint  = .zero
     // Zoom/pan state
     @State private var baseZoom: Double = 1.0
     @State private var scrollMonitor: Any? = nil
@@ -481,6 +543,87 @@ struct GridCanvasPlaceholder: View {
                     let cameraFrame   = controller.camera.evaluate(frame: currentFrame)
 
                     for ls in controller.layerStates where ls.isVisible {
+                        // --- Sprite layer branch ---
+                        if ls.layerMode == .sprite {
+                            let lOpacity   = DriverEvaluator.evaluate(ls.opacityDriver, frame: currentFrame)
+                            let lMotionMap = Dictionary(uniqueKeysWithValues: controller.projectMotionSets.map { ($0.id, $0) })
+                            let lLayerOff  = DriverEvaluator.evaluate(ls.layerOffset, frame: currentFrame)
+                            let lLayerXF   = umLayerTransform(cameraFrame: cameraFrame,
+                                                               parallaxFactor: ls.parallaxFactor,
+                                                               layerOffset: lLayerOff,
+                                                               canvasW: gridW, canvasH: gridH)
+                            ctx.drawLayer { layerCtx in
+                                layerCtx.opacity = lOpacity
+                                if !lLayerXF.isIdentity { layerCtx.concatenate(lLayerXF) }
+                                let styleMap  = Dictionary(uniqueKeysWithValues: controller.projectStyles.map { ($0.id, $0) })
+                                let spriteRef = min(gridW, gridH) / 8.0
+                                for (idx, sprite) in ls.sprites.enumerated() {
+                                    let style     = sprite.styleID.flatMap { styleMap[$0] }
+                                    let motionSet = sprite.motionID.flatMap { lMotionMap[$0] }
+                                    let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+                                                                  frame: currentFrame,
+                                                                  phaseOffset: sprite.phaseOffset,
+                                                                  cellIndex: idx,
+                                                                  cellW: spriteRef * sprite.scaleX,
+                                                                  cellH: spriteRef * sprite.scaleY)
+                                    let mx  = sprite.x * gridW + motion.dx
+                                    let my  = sprite.y * gridH + motion.dy
+                                    let rot = sprite.rotation + motion.rotation
+                                    let polygons = resolvePolygons(shapeID: sprite.shapeID,
+                                                                   shapeMap: shapePolyMap,
+                                                                   fallback: fallbackPolys)
+                                    let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
+                                    let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+                                    let isSelected = sprite.id == controller.activeSpriteID
+
+                                    if polygons.isEmpty {
+                                        let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                                        let fc   = style?.fillColor ?? .defaultFill
+                                        layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                                                      with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a)))
+                                        if isSelected {
+                                            layerCtx.stroke(Path(roundedRect: rect, cornerRadius: 3),
+                                                            with: .color(.accentColor), lineWidth: 1.5)
+                                        }
+                                    } else {
+                                        let fillC   = style?.fillColor   ?? .defaultFill
+                                        let strokeC = style?.strokeColor ?? .defaultStroke
+                                        let strokeW = style?.strokeWidth ?? 1.5
+                                        let mode    = style?.renderMode  ?? .filledStroked
+                                        let paths   = polygons.filter(\.visible).enumerated().map { (polyIdx, polygon) -> CGPath in
+                                            buildPolygonPath(polygon, cx: mx, cy: my,
+                                                             zoomX: zoomX, zoomY: zoomY,
+                                                             scaleX: 1.0, scaleY: 1.0,
+                                                             rotation: rot)
+                                        }
+                                        for (polyIdx, cgp) in paths.enumerated() {
+                                            let ovr   = sprite.polygonOverrides[polyIdx]
+                                            let fC    = ovr?.fill   ?? fillC
+                                            let sC    = ovr?.stroke ?? strokeC
+                                            if mode == .filled || mode == .filledStroked {
+                                                layerCtx.fill(Path(cgp),
+                                                              with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
+                                            }
+                                            if mode == .stroked || mode == .filledStroked {
+                                                layerCtx.stroke(Path(cgp),
+                                                                with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
+                                                                lineWidth: strokeW)
+                                            }
+                                        }
+                                        if isSelected {
+                                            for cgp in paths {
+                                                layerCtx.stroke(Path(cgp),
+                                                                with: .color(.accentColor.opacity(0.9)),
+                                                                lineWidth: 2.5)
+                                            }
+                                        }
+                                    }
+                                }
+                            } // drawLayer sprite
+                            continue
+                        }
+
+                        // --- Grid layer (existing) ---
                         let isActiveLayer = ls.engine === controller.engine
                         let lConfig   = ls.engine.document.gridConfig
                         let lCellW    = gridW / Double(lConfig.cols)
@@ -596,9 +739,10 @@ struct GridCanvasPlaceholder: View {
                         } // ctx.drawLayer
                     } // for ls in layerStates
 
-                    // Hover preview: ghost sprite on undrawn cells in Draw/Fill mode
+                    // Hover preview: ghost sprite on undrawn cells in Draw/Fill mode (grid layers only)
                     if controller.canvasIsHovered,
                        controller.activeTool == .draw || controller.activeTool == .fill,
+                       controller.layerStates[controller.activeLayerIndex].layerMode == .grid,
                        let vp = hoverViewPoint {
                         let cp  = canvasPoint(vp, viewSize: size, gridW: gridW, gridH: gridH)
                         let col = Int(cp.x / cellW)
@@ -743,9 +887,35 @@ struct GridCanvasPlaceholder: View {
                         .onChanged { value in
                             cachedCellW = cellW
                             cachedCellH = cellH
+                            cachedGridW = gridW
+                            cachedGridH = gridH
                             let pt = canvasPoint(value.location,
                                                  viewSize: geo.size,
                                                  gridW: gridW, gridH: gridH)
+                            // Sprite layer intercept
+                            let activeLS = controller.layerStates[controller.activeLayerIndex]
+                            if activeLS.layerMode == .sprite {
+                                if spriteDragID == nil {
+                                    let startPt = canvasPoint(value.startLocation,
+                                                              viewSize: geo.size,
+                                                              gridW: gridW, gridH: gridH)
+                                    if let hit = spriteHitTest(at: startPt, in: activeLS,
+                                                               gridW: gridW, gridH: gridH) {
+                                        controller.activeSpriteID = hit.id
+                                        spriteDragID     = hit.id
+                                        // offset = display position of sprite - click position (display)
+                                        spriteDragOffset = CGPoint(x: hit.x * gridW - startPt.x,
+                                                                   y: hit.y * gridH - startPt.y)
+                                    }
+                                }
+                                if let dragID = spriteDragID {
+                                    let newX = (pt.x + spriteDragOffset.x) / gridW
+                                    let newY = (pt.y + spriteDragOffset.y) / gridH
+                                    controller.moveSprite(id: dragID,
+                                                         to: CGPoint(x: newX, y: newY))
+                                }
+                                return
+                            }
                             switch controller.activeTool {
                             case .select:
                                 if rubberBandStart == nil {
@@ -766,6 +936,32 @@ struct GridCanvasPlaceholder: View {
                             }
                         }
                         .onEnded { value in
+                            let activeLS = controller.layerStates[controller.activeLayerIndex]
+                            if activeLS.layerMode == .sprite {
+                                if spriteDragID != nil {
+                                    spriteDragID     = nil
+                                    spriteDragOffset = .zero
+                                } else {
+                                    let dist = hypot(value.translation.width, value.translation.height)
+                                    if dist < 8 {
+                                        let startPt = canvasPoint(value.startLocation,
+                                                                  viewSize: geo.size,
+                                                                  gridW: cachedGridW, gridH: cachedGridH)
+                                        if spriteHitTest(at: startPt, in: activeLS,
+                                                         gridW: cachedGridW, gridH: cachedGridH) == nil {
+                                            let tap = canvasPoint(value.location,
+                                                                  viewSize: geo.size,
+                                                                  gridW: cachedGridW, gridH: cachedGridH)
+                                            controller.addSprite(at: CGPoint(
+                                                x: tap.x / cachedGridW,
+                                                y: tap.y / cachedGridH))
+                                        }
+                                    }
+                                }
+                                lastDragIndex     = nil
+                                lastNudgeLocation = nil
+                                return
+                            }
                             if controller.activeTool == .select {
                                 let pt = canvasPoint(value.location,
                                                      viewSize: geo.size,
@@ -822,7 +1018,11 @@ struct GridCanvasPlaceholder: View {
                                 scaleX: lCellW / lConfig.cellWidth,
                                 scaleY: lCellH / lConfig.cellHeight,
                                 gridScrollDriver: ls.gridScrollDriver,
-                                gridScrollMode:   ls.gridScrollMode
+                                gridScrollMode:   ls.gridScrollMode,
+                                layerMode: ls.layerMode,
+                                sprites:   ls.sprites,
+                                gridW:     gridW,
+                                gridH:     gridH
                             )
                         },
                         previousBuffer:    controller.frameBuffer,
@@ -862,6 +1062,13 @@ struct GridCanvasPlaceholder: View {
                         baseZoom = controller.canvasZoom
                     }
                     .keyboardShortcut("-", modifiers: .command)
+                    // Delete selected sprite
+                    Button("") {
+                        if let id = controller.activeSpriteID {
+                            controller.removeSprite(id: id)
+                        }
+                    }
+                    .keyboardShortcut(.delete, modifiers: [])
                 }
                 .hidden()
             }
@@ -896,6 +1103,18 @@ struct GridCanvasPlaceholder: View {
         let tx   = (viewSize.width  - gridW * zoom) / 2 + pan.width
         let ty   = (viewSize.height - gridH * zoom) / 2 + pan.height
         return CGPoint(x: (viewPt.x - tx) / zoom, y: (viewPt.y - ty) / zoom)
+    }
+
+    private func spriteHitTest(at pt: CGPoint, in ls: UMLayerState,
+                               gridW: Double, gridH: Double) -> UMSprite? {
+        let ref = min(gridW, gridH) / 8.0
+        return ls.sprites.last { sprite in
+            let sx = sprite.x * gridW
+            let sy = sprite.y * gridH
+            let hw = (ref / 2) * sprite.scaleX
+            let hh = (ref / 2) * sprite.scaleY
+            return abs(pt.x - sx) < hw && abs(pt.y - sy) < hh
+        }
     }
 
     private func handleDrag(at pt: CGPoint,
@@ -1327,6 +1546,78 @@ struct FrameCapture: View {
     }
 }
 
+// MARK: - Sprite layer capture (ImageRenderer helper, parallel to FrameCapture)
+
+struct SpriteCapture: View {
+    let sprites: [UMSprite]
+    let projectStyles: [CellStyle]
+    let projectMotionSets: [UMMotionSet]
+    let shapePolygonMap: [UUID: [Polygon2D]]
+    let fallbackPolygons: [Polygon2D]
+    let currentFrame: Int
+    let gridW: Double
+    let gridH: Double
+    var strokeScale: Double = 1.0
+    var layerTransform: CGAffineTransform = .identity
+
+    var body: some View {
+        Canvas { ctx, _ in
+            if !layerTransform.isIdentity { ctx.concatenate(layerTransform) }
+            let styleMap  = Dictionary(uniqueKeysWithValues: projectStyles.map { ($0.id, $0) })
+            let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
+            let spriteRef = min(gridW, gridH) / 8.0
+            for (idx, sprite) in sprites.enumerated() {
+                let style     = sprite.styleID.flatMap { styleMap[$0] }
+                let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+                let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+                                              frame: currentFrame, phaseOffset: sprite.phaseOffset,
+                                              cellIndex: idx,
+                                              cellW: spriteRef * sprite.scaleX,
+                                              cellH: spriteRef * sprite.scaleY)
+                let mx  = sprite.x * gridW + motion.dx
+                let my  = sprite.y * gridH + motion.dy
+                let rot = sprite.rotation + motion.rotation
+                let polygons = resolvePolygons(shapeID: sprite.shapeID,
+                                               shapeMap: shapePolygonMap,
+                                               fallback: fallbackPolygons)
+                let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
+                let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+
+                if polygons.isEmpty {
+                    let fc = style?.fillColor ?? .defaultFill
+                    ctx.fill(Path(roundedRect: CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2),
+                                  cornerRadius: 3),
+                             with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a)))
+                } else {
+                    let fillC   = style?.fillColor   ?? .defaultFill
+                    let strokeC = style?.strokeColor ?? .defaultStroke
+                    let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
+                    let mode    = style?.renderMode  ?? .filledStroked
+                    for (polyIdx, polygon) in polygons.filter(\.visible).enumerated() {
+                        let ovr = sprite.polygonOverrides[polyIdx]
+                        let fC  = ovr?.fill   ?? fillC
+                        let sC  = ovr?.stroke ?? strokeC
+                        let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                                   zoomX: zoomX, zoomY: zoomY,
+                                                   scaleX: 1.0, scaleY: 1.0,
+                                                   rotation: rot)
+                        if mode == .filled || mode == .filledStroked {
+                            ctx.fill(Path(cgp),
+                                     with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
+                        }
+                        if mode == .stroked || mode == .filledStroked {
+                            ctx.stroke(Path(cgp),
+                                       with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
+                                       lineWidth: strokeW)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(width: gridW, height: gridH)
+    }
+}
+
 // MARK: - Export render helper (module-internal; used by UMVideoExporter)
 
 @MainActor
@@ -1439,6 +1730,34 @@ func umRenderComposited(
 
     let cameraFrame = camera.evaluate(frame: frame)
     for ls in layerStates where ls.isVisible {
+        let layerOff = DriverEvaluator.evaluate(ls.layerOffset, frame: frame)
+        let layerXF  = umLayerTransform(cameraFrame: cameraFrame,
+                                         parallaxFactor: ls.parallaxFactor,
+                                         layerOffset: layerOff,
+                                         canvasW: exportW, canvasH: exportH)
+        let opacity  = DriverEvaluator.evaluate(ls.opacityDriver, frame: frame)
+
+        if ls.layerMode == .sprite {
+            let renderer = ImageRenderer(content: SpriteCapture(
+                sprites:           ls.sprites,
+                projectStyles:     ls.engine.document.styles,
+                projectMotionSets: projectMotionSets,
+                shapePolygonMap:   shapePolygonMap,
+                fallbackPolygons:  fallbackPolygons,
+                currentFrame:      frame,
+                gridW: exportW, gridH: exportH,
+                strokeScale:       strokeScale,
+                layerTransform:    layerXF
+            ))
+            renderer.scale = 1.0
+            if let img = renderer.cgImage {
+                ctx.setAlpha(opacity)
+                ctx.draw(img, in: destRect)
+                ctx.setAlpha(1.0)
+            }
+            continue
+        }
+
         let lConfig = ls.engine.document.gridConfig
         let lCellW  = exportW / Double(lConfig.cols)
         let lCellH  = exportH / Double(lConfig.rows)
@@ -1446,13 +1765,7 @@ func umRenderComposited(
         let lSY     = lCellH / lConfig.cellHeight
         let loopMode  = ls.engine.document.colorSource?.videoLoopMode ?? .loop
         let colorGrid = colorMapEngines[ls.id]?.currentGrid(animationFrame: frame, loopMode: loopMode)
-        let layerOff  = DriverEvaluator.evaluate(ls.layerOffset, frame: frame)
-        let layerXF   = umLayerTransform(cameraFrame: cameraFrame,
-                                          parallaxFactor: ls.parallaxFactor,
-                                          layerOffset: layerOff,
-                                          canvasW: exportW, canvasH: exportH)
 
-        // Render layer cells on transparent background (drawBackground: false)
         let renderer = ImageRenderer(content: FrameCapture(
             existingBuffer:    nil,
             backgroundColor:   backgroundColor,
@@ -1479,7 +1792,7 @@ func umRenderComposited(
         ))
         renderer.scale = 1.0
         if let img = renderer.cgImage {
-            ctx.setAlpha(DriverEvaluator.evaluate(ls.opacityDriver, frame: frame))
+            ctx.setAlpha(opacity)
             ctx.draw(img, in: destRect)
             ctx.setAlpha(1.0)
         }

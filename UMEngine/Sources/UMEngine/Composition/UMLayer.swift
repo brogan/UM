@@ -7,7 +7,7 @@ public enum GridScrollMode: String, Codable, CaseIterable, Sendable {
     case clamp   // scroll stops at the boundary; edge cells pin in place
 }
 
-/// One sprite layer in a composition. Each layer owns an independent grid document
+/// One layer in a composition. Each layer owns an independent grid document
 /// (its own rows/cols, cells, styles, paths, shapes) and renders into the shared canvas
 /// area at a given opacity. Layers are composited bottom-to-top.
 public struct UMLayer: Codable, Identifiable, Sendable {
@@ -35,6 +35,11 @@ public struct UMLayer: Codable, Identifiable, Sendable {
 
     public var document:  UMGridDocument
 
+    /// Whether this layer renders as a grid or free-placed sprites.
+    public var layerMode: LayerMode
+    /// Free-placed sprites (only meaningful when layerMode == .sprite).
+    public var sprites:   [UMSprite]
+
     public init(
         id:              UUID            = UUID(),
         name:            String          = "Layer",
@@ -45,7 +50,9 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         opacityDriver:   UMDoubleDriver  = .one,
         gridScrollDriver: UMVectorDriver = .zero,
         gridScrollMode:  GridScrollMode  = .wrap,
-        document:        UMGridDocument  = UMGridDocument.makeDefault()
+        document:        UMGridDocument  = UMGridDocument.makeDefault(),
+        layerMode:       LayerMode       = .grid,
+        sprites:         [UMSprite]      = []
     ) {
         self.id               = id
         self.name             = name
@@ -57,6 +64,8 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         self.gridScrollDriver = gridScrollDriver
         self.gridScrollMode   = gridScrollMode
         self.document         = document
+        self.layerMode        = layerMode
+        self.sprites          = sprites
     }
 
     // MARK: - Codable (backward-compatible: new fields use decodeIfPresent)
@@ -65,6 +74,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         case id, name, isVisible, opacity, document
         case parallaxFactor, layerOffset, opacityDriver
         case gridScrollDriver, gridScrollMode
+        case layerMode, sprites
     }
 
     public init(from decoder: Decoder) throws {
@@ -78,6 +88,8 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         layerOffset       = try c.decodeIfPresent(UMVectorDriver.self, forKey: .layerOffset)      ?? .zero
         gridScrollDriver  = try c.decodeIfPresent(UMVectorDriver.self, forKey: .gridScrollDriver) ?? .zero
         gridScrollMode    = try c.decodeIfPresent(GridScrollMode.self, forKey: .gridScrollMode)   ?? .wrap
+        layerMode         = try c.decodeIfPresent(LayerMode.self,  forKey: .layerMode) ?? .grid
+        sprites           = try c.decodeIfPresent([UMSprite].self, forKey: .sprites)   ?? []
         // Backward compat: existing files have no opacityDriver; seed from opacity
         if let od = try c.decodeIfPresent(UMDoubleDriver.self, forKey: .opacityDriver) {
             opacityDriver = od
@@ -98,5 +110,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         try c.encode(opacityDriver,    forKey: .opacityDriver)
         try c.encode(gridScrollDriver, forKey: .gridScrollDriver)
         try c.encode(gridScrollMode,   forKey: .gridScrollMode)
+        if layerMode != .grid  { try c.encode(layerMode, forKey: .layerMode) }
+        if !sprites.isEmpty    { try c.encode(sprites,   forKey: .sprites) }
     }
 }

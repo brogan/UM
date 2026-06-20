@@ -25,6 +25,8 @@ final class UMLayerState: Identifiable {
     var gridScrollMode: GridScrollMode
     var engine: UMGridEngine
     var activeStyleID: UUID?
+    var layerMode: LayerMode
+    var sprites: [UMSprite]
 
     init(layer: UMLayer) {
         self.id               = layer.id
@@ -38,6 +40,8 @@ final class UMLayerState: Identifiable {
         self.gridScrollMode   = layer.gridScrollMode
         self.engine           = UMGridEngine(document: layer.document)
         self.activeStyleID    = layer.document.styles.first?.id
+        self.layerMode        = layer.layerMode
+        self.sprites          = layer.sprites
     }
 
     func toUMLayer() -> UMLayer {
@@ -45,7 +49,8 @@ final class UMLayerState: Identifiable {
                 parallaxFactor: parallaxFactor, layerOffset: layerOffset,
                 opacityDriver: opacityDriver,
                 gridScrollDriver: gridScrollDriver, gridScrollMode: gridScrollMode,
-                document: engine.document)
+                document: engine.document,
+                layerMode: layerMode, sprites: sprites)
     }
 }
 
@@ -82,6 +87,7 @@ final class AppController {
         let layer = layerStates[index]
         engine          = layer.engine
         activeStyleID   = layer.activeStyleID
+        activeSpriteID  = nil
         selectedIndices = []
         colorMapEngine  = layerColorMapEngines[layer.id] ?? {
             let e = UMColorMapEngine(); layerColorMapEngines[layer.id] = e; return e
@@ -111,6 +117,7 @@ final class AppController {
         activePathID     = nil
         engine          = layerStates[newIndex].engine
         activeStyleID   = layerStates[newIndex].activeStyleID
+        activeSpriteID  = nil
         selectedIndices = []
         colorMapEngine  = layerColorMapEngines[layerStates[newIndex].id] ?? UMColorMapEngine()
         rebuildShapePolygonMap()
@@ -127,7 +134,9 @@ final class AppController {
                                               opacityDriver: src.opacityDriver,
                                               gridScrollDriver: src.gridScrollDriver,
                                               gridScrollMode: src.gridScrollMode,
-                                              document: src.engine.document))
+                                              document: src.engine.document,
+                                              layerMode: src.layerMode,
+                                              sprites: src.sprites))
         // Give the duplicate its own engine; reload the same color source if present.
         let dupEngine = UMColorMapEngine()
         if let cs = src.engine.document.colorSource {
@@ -152,6 +161,59 @@ final class AppController {
         if isActive { activeLayerIndex = dest }
     }
 
+    // MARK: Sprite layer
+
+    func addSpriteLayer(name: String? = nil) {
+        let config = engine.document.gridConfig
+        var doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        doc.styles = projectStyles
+        let label  = name ?? "Sprites \(layerStates.count + 1)"
+        let ls     = UMLayerState(layer: UMLayer(name: label, document: doc, layerMode: .sprite))
+        UMLogger.shared.log("addSpriteLayer '\(label)' total layers→\(layerStates.count + 1)")
+        layerColorMapEngines[ls.id] = UMColorMapEngine()
+        layerStates.append(ls)
+        selectLayer(layerStates.count - 1)
+    }
+
+    func addSprite(at point: CGPoint) {
+        guard activeLayerIndex < layerStates.count else { return }
+        let ls     = layerStates[activeLayerIndex]
+        guard ls.layerMode == .sprite else { return }
+        let count  = ls.sprites.count + 1
+        let sprite = UMSprite(
+            name:     "Sprite \(count)",
+            x:        Double(point.x),
+            y:        Double(point.y),
+            styleID:  activeStyleID,
+            shapeID:  activeShapeID,
+            motionID: activeMotionID
+        )
+        ls.sprites.append(sprite)
+        activeSpriteID = sprite.id
+    }
+
+    func removeSprite(id: UUID) {
+        guard activeLayerIndex < layerStates.count else { return }
+        let ls = layerStates[activeLayerIndex]
+        ls.sprites.removeAll { $0.id == id }
+        if activeSpriteID == id { activeSpriteID = nil }
+    }
+
+    func moveSprite(id: UUID, to point: CGPoint) {
+        guard activeLayerIndex < layerStates.count else { return }
+        let ls = layerStates[activeLayerIndex]
+        guard let i = ls.sprites.firstIndex(where: { $0.id == id }) else { return }
+        ls.sprites[i].x = Double(point.x)
+        ls.sprites[i].y = Double(point.y)
+    }
+
+    func updateSprite(id: UUID, _ body: (inout UMSprite) -> Void) {
+        guard activeLayerIndex < layerStates.count else { return }
+        let ls = layerStates[activeLayerIndex]
+        guard let i = ls.sprites.firstIndex(where: { $0.id == id }) else { return }
+        body(&ls.sprites[i])
+    }
+
     // MARK: Polygons
 
     var shapePolygons: [Polygon2D] = []        // bundled default
@@ -174,6 +236,7 @@ final class AppController {
     var activeStyleID:      UUID?    = nil
     var activeMotionID:     UUID?    = nil
     var activeShapeID:      UUID?    = nil
+    var activeSpriteID:     UUID?    = nil
 
     var currentFileURL:             URL?      = nil
     var globalLibrary:              UMLibrary = .empty
@@ -480,6 +543,7 @@ final class AppController {
         layerColorMapEngines[ls.id] = freshEngine
         colorMapEngine            = freshEngine
         activeShapeID             = nil
+        activeSpriteID            = nil
         selectedIndices           = []
         currentFileURL            = nil
         camera            = .identity
@@ -558,6 +622,9 @@ final class AppController {
             // Added in v6; optional for backward compat
             var gridScrollDriver: UMVectorDriver?
             var gridScrollMode:   GridScrollMode?
+            // Added in v8; optional for backward compat
+            var layerMode:        LayerMode?
+            var sprites:          [UMSprite]?
         }
         var version: Int
         var activeLayerIndex: Int
@@ -746,7 +813,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 7,
+            version: 8,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -771,7 +838,9 @@ final class AppController {
                     layerOffset:      ls.layerOffset,
                     opacityDriver:    ls.opacityDriver,
                     gridScrollDriver: ls.gridScrollDriver,
-                    gridScrollMode:   ls.gridScrollMode
+                    gridScrollMode:   ls.gridScrollMode,
+                    layerMode:        ls.layerMode == .sprite ? ls.layerMode : nil,
+                    sprites:          ls.sprites.isEmpty ? nil : ls.sprites
                 )
             },
             camera: camera,
@@ -839,7 +908,9 @@ final class AppController {
                 opacityDriver:    record.opacityDriver   ?? UMDoubleDriver(mode: .constant, base: record.opacity),
                 gridScrollDriver: record.gridScrollDriver ?? .zero,
                 gridScrollMode:   record.gridScrollMode   ?? .wrap,
-                document:         doc
+                document:         doc,
+                layerMode:        record.layerMode        ?? .grid,
+                sprites:          record.sprites          ?? []
             )
             let ls = UMLayerState(layer: layer)
             ls.activeStyleID = record.activeStyleID ?? styles.first?.id

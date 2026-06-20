@@ -50,10 +50,11 @@ struct StylePaletteView: View {
                     layerRow(ls, index: idx)
                 }
 
-                Button("+ New Layer") {
-                    controller.addLayer()
+                Menu("+ New Layer") {
+                    Button("Grid Layer")   { controller.addLayer() }
+                    Button("Sprite Layer") { controller.addSpriteLayer() }
                 }
-                .buttonStyle(.plain)
+                .menuStyle(.borderlessButton)
                 .font(.system(size: 12))
                 .foregroundStyle(Color.accentColor)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -279,6 +280,12 @@ struct StylePaletteView: View {
                 Circle()
                     .fill(active ? Color.accentColor : Color.secondary.opacity(0.25))
                     .frame(width: 6, height: 6)
+
+                if ls.layerMode == .sprite {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                }
 
                 if renamingLayerID == ls.id {
                     TextField("Layer name", text: Binding(

@@ -205,6 +205,28 @@ enum UMVideoExporter {
         strokeScale: Double,
         cameraFrame: UMCameraFrame = .identity
     ) -> CGImage? {
+        let layerOff = DriverEvaluator.evaluate(layer.layerOffset, frame: frame)
+        let layerXF  = umLayerTransform(cameraFrame: cameraFrame,
+                                         parallaxFactor: layer.parallaxFactor,
+                                         layerOffset: layerOff,
+                                         canvasW: exportW, canvasH: exportH)
+
+        if layer.layerMode == .sprite {
+            let renderer = ImageRenderer(content: SpriteCapture(
+                sprites:           layer.sprites,
+                projectStyles:     layer.document.styles,
+                projectMotionSets: projectMotionSets,
+                shapePolygonMap:   shapePolygonMap,
+                fallbackPolygons:  fallbackPolygons,
+                currentFrame:      frame,
+                gridW: exportW, gridH: exportH,
+                strokeScale:       strokeScale,
+                layerTransform:    layerXF
+            ))
+            renderer.scale = 1.0
+            return renderer.cgImage
+        }
+
         let config = layer.document.gridConfig
         let cellW  = exportW / Double(config.cols)
         let cellH  = exportH / Double(config.rows)
@@ -212,11 +234,6 @@ enum UMVideoExporter {
         let sy     = cellH / config.cellHeight
         let loopMode  = layer.document.colorSource?.videoLoopMode ?? .loop
         let colorGrid = colorMapEngine?.currentGrid(animationFrame: frame, loopMode: loopMode)
-        let layerOff  = DriverEvaluator.evaluate(layer.layerOffset, frame: frame)
-        let layerXF   = umLayerTransform(cameraFrame: cameraFrame,
-                                          parallaxFactor: layer.parallaxFactor,
-                                          layerOffset: layerOff,
-                                          canvasW: exportW, canvasH: exportH)
 
         let renderer = ImageRenderer(content: FrameCapture(
             existingBuffer:    nil,
