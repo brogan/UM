@@ -1258,12 +1258,17 @@ struct QuickAdjustView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
-            if let pi = activePathIndex, pi < controller.engine.document.paths.count {
+            if let path = activePath {
                 // Path name field
                 InspectorField("Name") {
                     TextField("Name", text: Binding(
-                        get: { pi < controller.engine.document.paths.count ? controller.engine.document.paths[pi].name : "" },
-                        set: { if pi < controller.engine.document.paths.count { controller.engine.document.paths[pi].name = $0 } }
+                        get: { path.name },
+                        set: {
+                            guard let id = controller.activePathID,
+                                  let i  = controller.engine.document.paths.firstIndex(where: { $0.id == id })
+                            else { return }
+                            controller.engine.document.paths[i].name = $0
+                        }
                     ))
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
@@ -1272,14 +1277,19 @@ struct QuickAdjustView: View {
                 // Loop toggle + duration read-out
                 HStack(spacing: 0) {
                     Toggle("Loop", isOn: Binding(
-                        get: { pi < controller.engine.document.paths.count && controller.engine.document.paths[pi].loops },
-                        set: { if pi < controller.engine.document.paths.count { controller.engine.document.paths[pi].loops = $0 } }
+                        get: { path.loops },
+                        set: {
+                            guard let id = controller.activePathID,
+                                  let i  = controller.engine.document.paths.firstIndex(where: { $0.id == id })
+                            else { return }
+                            controller.engine.document.paths[i].loops = $0
+                        }
                     ))
                     .toggleStyle(.checkbox)
                     .font(.system(size: 12))
                     .padding(.leading, 12)
                     Spacer()
-                    Text("\(controller.engine.document.paths[pi].duration) fr")
+                    Text("\(path.duration) fr")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.quaternary)
                         .padding(.trailing, 12)
@@ -1290,8 +1300,8 @@ struct QuickAdjustView: View {
 
                 // Keyframe list
                 VStack(spacing: 0) {
-                    ForEach(controller.engine.document.paths[pi].keyframes) { kf in
-                        keyframeRow(kf, pathIndex: pi)
+                    ForEach(path.keyframes) { kf in
+                        keyframeRow(kf)
                     }
                 }
 
@@ -1304,10 +1314,10 @@ struct QuickAdjustView: View {
                             value: $newKeyframeFrame, in: 0...9999, step: 1)
                         .font(.system(size: 11))
                     Button {
-                        controller.addKeyframe(frame: newKeyframeFrame,
-                                               to: controller.engine.document.paths[pi].id)
-                        // Select the newly added keyframe
-                        selectedKeyframeID = controller.engine.document.paths[pi]
+                        guard let activeID = controller.activePathID else { return }
+                        controller.addKeyframe(frame: newKeyframeFrame, to: activeID)
+                        selectedKeyframeID = controller.engine.document.paths
+                            .first(where: { $0.id == activeID })?
                             .keyframes.first(where: { $0.frame == newKeyframeFrame })?.id
                     } label: {
                         Image(systemName: "plus.circle.fill")
@@ -1319,9 +1329,9 @@ struct QuickAdjustView: View {
                 .padding(.vertical, 6)
 
                 // Keyframe property editor (shown when one is selected)
-                if let ki = selectedKeyframeIndex {
+                if let kf = activeKeyframe {
                     Divider().padding(.horizontal, 12)
-                    keyframeEditor(pathIndex: pi, keyframeIndex: ki)
+                    keyframeEditor(keyframe: kf)
                 }
             } else {
                 Text("Select or create a path above to edit its keyframes.")
@@ -1336,7 +1346,7 @@ struct QuickAdjustView: View {
     }
 
     @ViewBuilder
-    private func keyframeRow(_ kf: PathKeyframe, pathIndex pi: Int) -> some View {
+    private func keyframeRow(_ kf: PathKeyframe) -> some View {
         let selected = kf.id == selectedKeyframeID
         HStack(spacing: 4) {
             Text("\(kf.frame)")
@@ -1355,8 +1365,7 @@ struct QuickAdjustView: View {
             }
             // Only allow delete if the path still has > 2 keyframes
             Button {
-                guard pi < controller.engine.document.paths.count else { return }
-                let pathID = controller.engine.document.paths[pi].id
+                guard let pathID = controller.activePathID else { return }
                 controller.removeKeyframe(id: kf.id, from: pathID)
                 if selectedKeyframeID == kf.id { selectedKeyframeID = nil }
             } label: {
@@ -1365,8 +1374,7 @@ struct QuickAdjustView: View {
                     .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
-            .disabled(pi >= controller.engine.document.paths.count
-                      || controller.engine.document.paths[pi].keyframes.count <= 2)
+            .disabled((activePath?.keyframes.count ?? 0) <= 2)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -1378,141 +1386,74 @@ struct QuickAdjustView: View {
     }
 
     @ViewBuilder
-    private func keyframeEditor(pathIndex pi: Int, keyframeIndex ki: Int) -> some View {
-        let kf = controller.engine.document.paths[pi].keyframes[ki]
-
+    private func keyframeEditor(keyframe kf: PathKeyframe) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Frame stepper
             InspectorField("Frame") {
-                Stepper("\(kf.frame) fr",
+                Stepper("\(activeKeyframe?.frame ?? kf.frame) fr",
                         value: Binding(
-                            get: {
-                                guard pi < controller.engine.document.paths.count,
-                                      ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
-                                return controller.engine.document.paths[pi].keyframes[ki].frame
-                            },
+                            get: { self.activeKeyframe?.frame ?? kf.frame },
                             set: { val in
-                                guard pi < controller.engine.document.paths.count,
-                                      ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                                controller.engine.document.paths[pi].keyframes[ki].frame = max(0, val)
-                                controller.engine.document.paths[pi].keyframes.sort { $0.frame < $1.frame }
+                                guard let pathID = self.controller.activePathID,
+                                      let kfID   = self.selectedKeyframeID,
+                                      let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                                      let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+                                else { return }
+                                self.controller.engine.document.paths[pi].keyframes[ki].frame = max(0, val)
+                                self.controller.engine.document.paths[pi].keyframes.sort { $0.frame < $1.frame }
                             }
                         ),
                         in: 0...9999, step: 1)
                     .font(.system(size: 11))
             }
-
             InspectorField("Offset X") {
-                ResettableSlider(
-                    value: Binding(
-                        get: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
-                            return controller.engine.document.paths[pi].keyframes[ki].dx
-                        },
-                        set: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                            controller.engine.document.paths[pi].keyframes[ki].dx = $0
-                        }
-                    ),
-                    range: -3...3,
-                    defaultValue: 0
-                )
-                valueLabel(kf.dx, digits: 2)
+                ResettableSlider(value: kfBinding(\.dx, default: 0), range: -3...3, defaultValue: 0)
+                valueLabel(activeKeyframe?.dx ?? kf.dx, digits: 2)
                 unitLabel("c")
             }
             InspectorField("Offset Y") {
-                ResettableSlider(
-                    value: Binding(
-                        get: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
-                            return controller.engine.document.paths[pi].keyframes[ki].dy
-                        },
-                        set: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                            controller.engine.document.paths[pi].keyframes[ki].dy = $0
-                        }
-                    ),
-                    range: -3...3,
-                    defaultValue: 0
-                )
-                valueLabel(kf.dy, digits: 2)
+                ResettableSlider(value: kfBinding(\.dy, default: 0), range: -3...3, defaultValue: 0)
+                valueLabel(activeKeyframe?.dy ?? kf.dy, digits: 2)
                 unitLabel("c")
             }
             InspectorField("Rotation") {
-                ResettableSlider(
-                    value: Binding(
-                        get: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 0 }
-                            return controller.engine.document.paths[pi].keyframes[ki].rotation
-                        },
-                        set: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                            controller.engine.document.paths[pi].keyframes[ki].rotation = $0
-                        }
-                    ),
-                    range: -360...360,
-                    defaultValue: 0
-                )
-                valueLabel(kf.rotation, digits: 1)
+                ResettableSlider(value: kfBinding(\.rotation, default: 0), range: -360...360, defaultValue: 0)
+                valueLabel(activeKeyframe?.rotation ?? kf.rotation, digits: 1)
                 unitLabel("°")
             }
             InspectorField("Scale X") {
                 ResettableSlider(
                     value: Binding(
-                        get: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 1 }
-                            return controller.engine.document.paths[pi].keyframes[ki].scaleX
-                        },
+                        get: { self.activeKeyframe?.scaleX ?? kf.scaleX },
                         set: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                            controller.engine.document.paths[pi].keyframes[ki].scaleX = max(0.01, $0)
+                            guard let pathID = self.controller.activePathID,
+                                  let kfID   = self.selectedKeyframeID,
+                                  let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                                  let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+                            else { return }
+                            self.controller.engine.document.paths[pi].keyframes[ki].scaleX = max(0.01, $0)
                         }
                     ),
-                    range: 0.1...3,
-                    defaultValue: 1
-                )
-                valueLabel(kf.scaleX, digits: 2)
+                    range: 0.1...3, defaultValue: 1)
+                valueLabel(activeKeyframe?.scaleX ?? kf.scaleX, digits: 2)
             }
             InspectorField("Scale Y") {
                 ResettableSlider(
                     value: Binding(
-                        get: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return 1 }
-                            return controller.engine.document.paths[pi].keyframes[ki].scaleY
-                        },
+                        get: { self.activeKeyframe?.scaleY ?? kf.scaleY },
                         set: {
-                            guard pi < controller.engine.document.paths.count,
-                                  ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                            controller.engine.document.paths[pi].keyframes[ki].scaleY = max(0.01, $0)
+                            guard let pathID = self.controller.activePathID,
+                                  let kfID   = self.selectedKeyframeID,
+                                  let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                                  let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+                            else { return }
+                            self.controller.engine.document.paths[pi].keyframes[ki].scaleY = max(0.01, $0)
                         }
                     ),
-                    range: 0.1...3,
-                    defaultValue: 1
-                )
-                valueLabel(kf.scaleY, digits: 2)
+                    range: 0.1...3, defaultValue: 1)
+                valueLabel(activeKeyframe?.scaleY ?? kf.scaleY, digits: 2)
             }
             InspectorField("Easing") {
-                Picker("", selection: Binding(
-                    get: {
-                        guard pi < controller.engine.document.paths.count,
-                              ki < controller.engine.document.paths[pi].keyframes.count else { return PathEasing.easeInOut }
-                        return controller.engine.document.paths[pi].keyframes[ki].easing
-                    },
-                    set: {
-                        guard pi < controller.engine.document.paths.count,
-                              ki < controller.engine.document.paths[pi].keyframes.count else { return }
-                        controller.engine.document.paths[pi].keyframes[ki].easing = $0
-                    }
-                )) {
+                Picker("", selection: kfBinding(\.easing, default: .easeInOut)) {
                     ForEach(PathEasing.allCases, id: \.self) { e in
                         Text(e.displayName).tag(e)
                     }
@@ -1524,17 +1465,32 @@ struct QuickAdjustView: View {
         }
     }
 
-    // MARK: - Path helper bindings/indices
+    // MARK: - Path helper properties
 
-    private var activePathIndex: Int? {
+    private var activePath: UMMotionPath? {
         guard let id = controller.activePathID else { return nil }
-        return controller.engine.document.paths.firstIndex { $0.id == id }
+        return controller.engine.document.paths.first { $0.id == id }
     }
 
-    private var selectedKeyframeIndex: Int? {
-        guard let pi = activePathIndex, let kfID = selectedKeyframeID,
-              pi < controller.engine.document.paths.count else { return nil }
-        return controller.engine.document.paths[pi].keyframes.firstIndex { $0.id == kfID }
+    private var activeKeyframe: PathKeyframe? {
+        guard let kfID = selectedKeyframeID else { return nil }
+        return activePath?.keyframes.first { $0.id == kfID }
+    }
+
+    /// Generic keyframe field binding. Finds path and keyframe by stable ID at write time
+    /// so a stale integer index can never cause an out-of-range crash.
+    private func kfBinding<V>(_ kp: WritableKeyPath<PathKeyframe, V>, default def: V) -> Binding<V> {
+        Binding(
+            get: { self.activeKeyframe?[keyPath: kp] ?? def },
+            set: { val in
+                guard let pathID = self.controller.activePathID,
+                      let kfID   = self.selectedKeyframeID,
+                      let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                      let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+                else { return }
+                self.controller.engine.document.paths[pi].keyframes[ki][keyPath: kp] = val
+            }
+        )
     }
 
     private var selectionPathBinding: Binding<UUID?> {
