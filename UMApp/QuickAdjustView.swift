@@ -1211,7 +1211,7 @@ struct QuickAdjustView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
 
-            if let pi = activePathIndex {
+            if let pi = activePathIndex, pi < controller.engine.document.paths.count {
                 // Path name field
                 InspectorField("Name") {
                     TextField("Name", text: Binding(
@@ -1308,6 +1308,7 @@ struct QuickAdjustView: View {
             }
             // Only allow delete if the path still has > 2 keyframes
             Button {
+                guard pi < controller.engine.document.paths.count else { return }
                 let pathID = controller.engine.document.paths[pi].id
                 controller.removeKeyframe(id: kf.id, from: pathID)
                 if selectedKeyframeID == kf.id { selectedKeyframeID = nil }
@@ -1317,7 +1318,8 @@ struct QuickAdjustView: View {
                     .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
-            .disabled(controller.engine.document.paths[pi].keyframes.count <= 2)
+            .disabled(pi >= controller.engine.document.paths.count
+                      || controller.engine.document.paths[pi].keyframes.count <= 2)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 4)
@@ -1483,7 +1485,8 @@ struct QuickAdjustView: View {
     }
 
     private var selectedKeyframeIndex: Int? {
-        guard let pi = activePathIndex, let kfID = selectedKeyframeID else { return nil }
+        guard let pi = activePathIndex, let kfID = selectedKeyframeID,
+              pi < controller.engine.document.paths.count else { return nil }
         return controller.engine.document.paths[pi].keyframes.firstIndex { $0.id == kfID }
     }
 

@@ -186,6 +186,11 @@ final class AppController {
     // MARK: Camera
     var camera: UMCamera = .identity
 
+    // MARK: Canvas view state
+    var canvasZoom: Double = 1.0
+    var canvasPan:  CGSize = .zero
+    var canvasIsHovered: Bool = false
+
     // MARK: Timeline panel state
     var isTimelineCollapsed: Bool  = true
     var showScrubBar: Bool         = false

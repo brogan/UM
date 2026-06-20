@@ -295,6 +295,7 @@ private let layoutBody = #"""
 <h2>Grid Canvas</h2>
 <p>The live, always-animated centre panel. This is where you paint. The canvas is letterboxed to maintain the output aspect ratio set in the PROJECT section — the neutral border outside the canvas area is not part of the output.</p>
 <p>All painting tools operate directly on the canvas. The motion path overlay appears here when a path is active.</p>
+<p><strong>Zoom and pan:</strong> Pinch to zoom, scroll (two-finger trackpad) to pan, <kbd>⌥</kbd>+scroll to zoom. <kbd>⌘0</kbd> resets to fit. <kbd>⌘=</kbd> / <kbd>⌘−</kbd> step zoom. Zoom and pan are view-only — they do not affect export or the project file.</p>
 
 <h2>Quick Adjust</h2>
 <p>The right panel. A stack of collapsible sections — click any section header to expand or collapse it. The upper three sections (PROJECT, EXPORT, CANVAS) are project-wide. All sections below them operate on the currently active style or selected cells.</p>
@@ -381,6 +382,40 @@ private let layersBody = #"""
 <div class="tip"><strong>Layered depth example</strong> — three layers: sky (factor 0.0), mid-ground (factor 0.3), foreground (factor 1.0). Pan the camera left — the sky stays still, the mid-ground drifts slowly, and the foreground moves fastest, producing natural depth.</div>
 
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
+
+<h2>Grid Scroll</h2>
+<p>The <strong>GRID SCROLL</strong> section in Quick Adjust (below CAMERA) slides the active layer's cells across the canvas by remapping which source cell appears at each display position. Unlike nudging individual cells, grid scroll moves the entire layer's content as a unit — and wraps, clamps, or consumes cells at the edges.</p>
+
+<h3>Edge Mode</h3>
+<table>
+  <tr><th>Mode</th><th>Effect</th></tr>
+  <tr><td><strong>Wrap</strong></td><td>Cells that scroll off one edge reappear at the opposite edge. The layer tiles seamlessly.</td></tr>
+  <tr><td><strong>Clamp</strong></td><td>Edge cells stretch to fill the gap — the last column or row repeats rather than wrapping.</td></tr>
+  <tr><td><strong>Consume</strong></td><td>Cells that scroll off the edge simply vanish — no wrapping or repeating.</td></tr>
+</table>
+
+<h3>Driver Mode</h3>
+<p>The <strong>Mode</strong> picker controls how the scroll offset is generated over time:</p>
+<table>
+  <tr><th>Mode</th><th>Controls</th><th>Result</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Scroll X, Scroll Y (cells)</td><td>A fixed offset, set in cell units. Useful for repositioning a layer or creating a static tiled repeat.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Amp X/Y (cells), Period (s), Phase (0–1), Offset X/Y (cells)</td><td>Sinusoidal back-and-forth scrolling. Amplitude sets the peak swing, period the cycle length, phase the starting point in the cycle, offset a constant bias added on top.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range X/Y (cells), Duration (frames)</td><td>Random step-change offset that holds for Duration frames then jumps to a new random value within ±Range. Produces staccato, nervous texture.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amp X/Y (cells), Freq (cyc/s)</td><td>Smooth Perlin-style noise scrolling. Amplitude sets the maximum swing; frequency how rapidly it changes. Produces organic, drifting motion.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Offset driven by keyframes set in the timeline's Grid Scroll lane. Edit the curve in the Timeline panel.</td></tr>
+</table>
+
+<h3>Step-by-step: infinite horizontal scroll</h3>
+<ol class="steps">
+  <li>Select the layer you want to scroll.</li>
+  <li>Open <strong>GRID SCROLL</strong> in Quick Adjust. Set <strong>Edge Mode</strong> to <strong>Wrap</strong>.</li>
+  <li>Set <strong>Mode</strong> to <strong>Oscillator</strong>.</li>
+  <li>Set <strong>Amp X</strong> to half the number of columns (e.g. 4 for an 8-column grid). Leave <strong>Amp Y</strong> at 0.</li>
+  <li>Set <strong>Period</strong> to the number of seconds you want for one full back-and-forth cycle.</li>
+  <li>Press <kbd>Space</kbd> to play — the layer's cells scroll left then right, wrapping at the edges.</li>
+</ol>
+<div class="tip">For a continuous scroll in one direction rather than back-and-forth, use <strong>Keyframe</strong> mode and draw a steadily-increasing ramp in the timeline's Grid Scroll lane.</div>
+<p>Click <strong>Reset</strong> to return Scroll X and Y to zero and Edge Mode to Wrap.</p>
 """#
 
 private let paintingBody = #"""
@@ -633,6 +668,19 @@ private let qaProjectBody = #"""
 
 <h3>Accumulation mode</h3>
 <p>Turning <strong>Background draw</strong> off is the primary way to create time-based build-up effects. Earlier frames remain visible as new sprites are drawn on top. Combined with motion paths or the Wander/Wave presets, this traces visible motion trajectories across the canvas. The accumulation persists until you press ⏮ (rewind) or turn Background draw back on.</p>
+
+<h2>Canvas Zoom &amp; Pan</h2>
+<p>The canvas can be zoomed and panned independently of the project's output resolution. Zoom and pan are view-only — they do not affect PNG or video export.</p>
+<table>
+  <tr><th>Gesture / Key</th><th>Action</th></tr>
+  <tr><td>Pinch (trackpad)</td><td>Zoom in or out around the canvas centre.</td></tr>
+  <tr><td>Scroll / two-finger drag</td><td>Pan the canvas.</td></tr>
+  <tr><td><kbd>⌥</kbd> + scroll</td><td>Zoom in or out (scroll-wheel zoom).</td></tr>
+  <tr><td><kbd>⌘0</kbd></td><td>Reset — fit the canvas to the window at 100%, pan centred.</td></tr>
+  <tr><td><kbd>⌘=</kbd></td><td>Zoom in 25%.</td></tr>
+  <tr><td><kbd>⌘−</kbd></td><td>Zoom out 25%.</td></tr>
+</table>
+<p>All painting tools — Draw, Erase, Select, Fill, Sample, Nudge — remain fully functional at any zoom level. Hit-testing is computed in canvas space, so brush strokes always land on the correct cell regardless of view zoom or pan offset.</p>
 
 <h2>Color Map</h2>
 <p>Below a divider at the bottom of the CANVAS section. A color map is an image or video whose pixel colors drive sprite fill and/or stroke colors, overriding the style's explicit colors. The image is never shown on the canvas — it is used purely as a color source.</p>
@@ -1206,6 +1254,17 @@ private let shortcutsBody = #"""
   <tr><td><kbd>⌘⇧Z</kbd></td><td>Redo</td></tr>
 </table>
 
+<h2>Canvas Zoom</h2>
+<table>
+  <tr><th>Key / Gesture</th><th>Action</th></tr>
+  <tr><td>Pinch</td><td>Zoom in / out</td></tr>
+  <tr><td>Scroll (no modifier)</td><td>Pan</td></tr>
+  <tr><td><kbd>⌥</kbd> + scroll</td><td>Zoom in / out</td></tr>
+  <tr><td><kbd>⌘0</kbd></td><td>Reset zoom &amp; pan</td></tr>
+  <tr><td><kbd>⌘=</kbd></td><td>Zoom in 25%</td></tr>
+  <tr><td><kbd>⌘−</kbd></td><td>Zoom out 25%</td></tr>
+</table>
+
 <h2>Help</h2>
 <table>
   <tr><th>Key</th><th>Action</th></tr>
@@ -1226,7 +1285,6 @@ private let pendingBody = #"""
   <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed but not yet wired.</td></tr>
   <tr><td>Rendering</td><td>Full Loom render modes</td><td>Brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of geometry). Current build: Filled, Stroked, Fill &amp; Stroke only.</td></tr>
   <tr><td>Rendering</td><td>Animated style thumbnails</td><td>Style rows in the palette show a static coloured dot. Live animated miniature previews are planned.</td></tr>
-  <tr><td>Canvas</td><td>Zoom and pan</td><td>The canvas fills the panel and resizes with the window. Pinch-to-zoom, two-finger pan, ⌘0 to fit, ⌘= / ⌘− are planned.</td></tr>
   <tr><td>Canvas</td><td>Hover preview</td><td>No visual feedback on undrawn cells before committing a stroke. A faint style preview on hover is planned.</td></tr>
   <tr><td>Export</td><td>SVG export</td><td>The SVG button in the Transport Bar is present but has no action yet.</td></tr>
   <tr><td>Export</td><td>Timeline video export</td><td>The Video button exports live animation (parametric + keyframe motion). A separate mode that renders the recorded timeline states as discrete cuts is planned.</td></tr>

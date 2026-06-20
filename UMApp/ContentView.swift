@@ -399,6 +399,9 @@ struct GridCanvasPlaceholder: View {
     // Cached layout — needed in onEnded where geo is out of scope
     @State private var cachedCellW: Double = 1
     @State private var cachedCellH: Double = 1
+    // Zoom/pan state
+    @State private var baseZoom: Double = 1.0
+    @State private var scrollMonitor: Any? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -415,25 +418,30 @@ struct GridCanvasPlaceholder: View {
             let scaleX = cellW / config.cellWidth
             let scaleY = cellH / config.cellHeight
 
-            let bg = controller.backgroundColor
+            let bg   = controller.backgroundColor
+            let zoom = controller.canvasZoom
+            let pan  = controller.canvasPan
             ZStack {
                 Color(nsColor: .underPageBackgroundColor)
 
-                ZStack {
-                    if controller.backgroundDraw {
-                        Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)
-                    }
+                Canvas { ctx, size in
+                    // Pan/zoom transform — all subsequent drawing is in canvas space (0,0,gridW,gridH)
+                    let tx = (size.width  - gridW * zoom) / 2 + pan.width
+                    let ty = (size.height - gridH * zoom) / 2 + pan.height
+                    ctx.concatenate(CGAffineTransform(translationX: tx, y: ty).scaledBy(x: zoom, y: zoom))
+                    ctx.clip(to: Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))))
 
-                    Canvas { ctx, size in
-                    // Accumulated buffer base (background draw OFF)
-                    if !controller.backgroundDraw {
-                        if let buf = controller.frameBuffer {
-                            let img = ctx.resolve(Image(decorative: buf, scale: displayScale))
-                            ctx.draw(img, in: CGRect(origin: .zero, size: size))
-                        } else {
-                            ctx.fill(Path(CGRect(origin: .zero, size: size)),
-                                     with: .color(Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)))
-                        }
+                    // Background
+                    let bgColor = Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)
+                    if controller.backgroundDraw {
+                        ctx.fill(Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))),
+                                 with: .color(bgColor))
+                    } else if let buf = controller.frameBuffer {
+                        let img = ctx.resolve(Image(decorative: buf, scale: displayScale))
+                        ctx.draw(img, in: CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH)))
+                    } else {
+                        ctx.fill(Path(CGRect(origin: .zero, size: CGSize(width: gridW, height: gridH))),
+                                 with: .color(bgColor))
                     }
 
                     // Grid lines — only when enabled
@@ -647,30 +655,57 @@ struct GridCanvasPlaceholder: View {
                                      with: .color(Color.accentColor))
                         }
                     }
+
+                    // Rubber-band selection (in canvas space, drawn on top)
+                    if controller.activeTool == .select,
+                       let rbStart = rubberBandStart, let rbEnd = rubberBandCurrent {
+                        let rbRect = CGRect(
+                            x: min(rbStart.x, rbEnd.x),
+                            y: min(rbStart.y, rbEnd.y),
+                            width:  max(1, abs(rbEnd.x - rbStart.x)),
+                            height: max(1, abs(rbEnd.y - rbStart.y))
+                        )
+                        ctx.fill(Path(rbRect), with: .color(Color.accentColor.opacity(0.07)))
+                        ctx.stroke(Path(rbRect),
+                                   with: .color(Color.accentColor.opacity(0.75)),
+                                   style: StrokeStyle(lineWidth: 1 / zoom,
+                                                      dash: [4 / zoom, 3 / zoom]))
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { value in
                             cachedCellW = cellW
                             cachedCellH = cellH
+                            let pt = canvasPoint(value.location,
+                                                 viewSize: geo.size,
+                                                 gridW: gridW, gridH: gridH)
                             switch controller.activeTool {
                             case .select:
-                                if rubberBandStart == nil { rubberBandStart = value.startLocation }
-                                rubberBandCurrent = value.location
+                                if rubberBandStart == nil {
+                                    rubberBandStart = canvasPoint(value.startLocation,
+                                                                  viewSize: geo.size,
+                                                                  gridW: gridW, gridH: gridH)
+                                }
+                                rubberBandCurrent = pt
                             case .nudge:
-                                handleNudge(at: value.location,
+                                handleNudge(at: pt,
                                             cellW: cellW, cellH: cellH,
                                             scaleX: scaleX, scaleY: scaleY,
                                             config: config)
                             default:
-                                handleDrag(at: value.location,
+                                handleDrag(at: pt,
                                            cellW: cellW, cellH: cellH,
                                            config: config)
                             }
                         }
                         .onEnded { value in
                             if controller.activeTool == .select {
-                                handleSelectEnd(value: value, config: config)
+                                let pt = canvasPoint(value.location,
+                                                     viewSize: geo.size,
+                                                     gridW: gridW, gridH: gridH)
+                                handleSelectEnd(value: value, clickPt: pt, config: config)
                                 rubberBandStart   = nil
                                 rubberBandCurrent = nil
                             }
@@ -678,28 +713,16 @@ struct GridCanvasPlaceholder: View {
                             lastNudgeLocation = nil
                         }
                 )
-
-                // Rubber-band selection overlay
-                if controller.activeTool == .select,
-                   let start = rubberBandStart, let end = rubberBandCurrent {
-                    let rx = min(start.x, end.x)
-                    let ry = min(start.y, end.y)
-                    let rw = max(1, abs(end.x - start.x))
-                    let rh = max(1, abs(end.y - start.y))
-                    Rectangle()
-                        .fill(Color.accentColor.opacity(0.07))
-                        .overlay(
-                            Rectangle()
-                                .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-                                .foregroundStyle(Color.accentColor.opacity(0.75))
-                        )
-                        .frame(width: rw, height: rh)
-                        .position(x: rx + rw / 2, y: ry + rh / 2)
-                        .allowsHitTesting(false)
-                }
-                }
-                .frame(width: gridW, height: gridH)
-                .clipped()
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            controller.canvasZoom = max(0.1, min(10.0, baseZoom * value))
+                        }
+                        .onEnded { _ in
+                            baseZoom = controller.canvasZoom
+                        }
+                )
+                .onHover { controller.canvasIsHovered = $0 }
                 .onChange(of: controller.engine.currentFrame) {
                     guard !controller.backgroundDraw else { return }
                     let pw = Int((gridW * displayScale).rounded())
@@ -748,10 +771,60 @@ struct GridCanvasPlaceholder: View {
                         await MainActor.run { controller.updateFrameBuffer(image) }
                     }
                 }
+
+                // Keyboard shortcuts — hidden buttons so they receive key events when canvas is active
+                Group {
+                    Button("") {
+                        controller.canvasZoom = 1.0
+                        controller.canvasPan  = .zero
+                        baseZoom = 1.0
+                    }
+                    .keyboardShortcut("0", modifiers: .command)
+                    Button("") {
+                        controller.canvasZoom = min(10.0, controller.canvasZoom * 1.25)
+                        baseZoom = controller.canvasZoom
+                    }
+                    .keyboardShortcut("=", modifiers: .command)
+                    Button("") {
+                        controller.canvasZoom = max(0.1, controller.canvasZoom / 1.25)
+                        baseZoom = controller.canvasZoom
+                    }
+                    .keyboardShortcut("-", modifiers: .command)
+                }
+                .hidden()
+            }
+            .onAppear {
+                let c = controller
+                scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+                    guard c.canvasIsHovered else { return event }
+                    if event.modifierFlags.contains(.option) {
+                        let delta = event.scrollingDeltaY
+                        let factor = exp(-delta * 0.02)
+                        c.canvasZoom = max(0.1, min(10.0, c.canvasZoom * factor))
+                        return nil
+                    } else if !event.modifierFlags.contains(.command) {
+                        c.canvasPan.width  += event.scrollingDeltaX
+                        c.canvasPan.height += event.scrollingDeltaY
+                        return nil
+                    }
+                    return event
+                }
+            }
+            .onDisappear {
+                if let m = scrollMonitor { NSEvent.removeMonitor(m); scrollMonitor = nil }
             }
         }
     }
 
+
+    private func canvasPoint(_ viewPt: CGPoint, viewSize: CGSize,
+                             gridW: Double, gridH: Double) -> CGPoint {
+        let zoom = controller.canvasZoom
+        let pan  = controller.canvasPan
+        let tx   = (viewSize.width  - gridW * zoom) / 2 + pan.width
+        let ty   = (viewSize.height - gridH * zoom) / 2 + pan.height
+        return CGPoint(x: (viewPt.x - tx) / zoom, y: (viewPt.y - ty) / zoom)
+    }
 
     private func handleDrag(at pt: CGPoint,
                             cellW: Double, cellH: Double,
@@ -790,15 +863,15 @@ struct GridCanvasPlaceholder: View {
     }
 
     private func handleSelectEnd(value: DragGesture.Value,
+                                  clickPt: CGPoint,
                                   config: UMGridConfig) {
         let shift = NSEvent.modifierFlags.contains(.shift)
         let t = value.translation
         let isClick = t.width.magnitude < 4 && t.height.magnitude < 4
 
         if isClick {
-            let loc = value.location
-            let col = Int(loc.x / cachedCellW)
-            let row = Int(loc.y / cachedCellH)
+            let col = Int(clickPt.x / cachedCellW)
+            let row = Int(clickPt.y / cachedCellH)
             guard col >= 0, col < config.cols, row >= 0, row < config.rows else {
                 if !shift { controller.selectedIndices = [] }
                 return
