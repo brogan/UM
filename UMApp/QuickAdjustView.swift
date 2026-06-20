@@ -879,11 +879,18 @@ struct QuickAdjustView: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 80)
             }
-            InspectorField("Frames") {
+            InspectorField("From / To") {
                 FloatEntryField(value: Binding(
-                    get: { Double(controller.exportFrameCount) },
-                    set: { controller.exportFrameCount = max(1, Int($0)) }
-                ), width: 52, fractionDigits: 0)
+                    get: { Double(controller.startFrame) },
+                    set: { controller.startFrame = max(0, Int($0)) }
+                ), width: 48, fractionDigits: 0)
+                Text("→")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                FloatEntryField(value: Binding(
+                    get: { Double(controller.endFrame) },
+                    set: { controller.endFrame = max(controller.startFrame + 1, Int($0)) }
+                ), width: 48, fractionDigits: 0)
                 Text(String(format: "%.1f s", controller.exportDurationSeconds))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)

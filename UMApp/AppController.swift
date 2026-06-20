@@ -273,10 +273,10 @@ final class AppController {
     var exportMultiplier: Int    = 1
     var exportScaleDrawing: Bool = true
     var exportFPS: Int           = 24
-    var exportFrameCount: Int    = 96
     var isExporting: Bool        = false
     var exportProgress: Double   = 0.0
 
+    var exportFrameCount: Int { max(1, endFrame - startFrame) }
     var exportDurationSeconds: Double { Double(exportFrameCount) / Double(max(1, exportFPS)) }
 
     // MARK: Recording & timeline (active layer only)
@@ -1599,6 +1599,7 @@ final class AppController {
         let stretch    = stretchSpritesToCell
         let fps        = exportFPS
         let frames     = exportFrameCount
+        let start      = startFrame
         let camSnap    = camera
 
         panel.begin { [weak self] response in
@@ -1618,6 +1619,7 @@ final class AppController {
                         colorMapEngines:   cmEngines,
                         backgroundDraw:    bgDraw,
                         stretchSprites:    stretch,
+                        startFrame:        start,
                         frameCount:        frames,
                         fps:               fps,
                         exportW:           exportW,

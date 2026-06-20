@@ -23,6 +23,7 @@ enum UMVideoExporter {
         colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
+        startFrame: Int = 0,
         frameCount: Int,
         fps: Int,
         exportW: Double,
@@ -68,7 +69,8 @@ enum UMVideoExporter {
         let visibleLayers = layers.filter(\.isVisible)
         var accum: CGImage? = nil
 
-        for frameIndex in 0..<max(1, frameCount) {
+        for outputIndex in 0..<max(1, frameCount) {
+            let animationFrame = startFrame + outputIndex
 
             let cgImage = renderComposited(
                 layers:            visibleLayers,
@@ -80,7 +82,7 @@ enum UMVideoExporter {
                 colorMapEngines:   colorMapEngines,
                 backgroundDraw:    backgroundDraw,
                 stretchSprites:    stretchSprites,
-                frame:             frameIndex,
+                frame:             animationFrame,
                 exportW:           exportW,
                 exportH:           exportH,
                 strokeScale:       strokeScale,
@@ -111,13 +113,13 @@ enum UMVideoExporter {
 
                     while !writerInput.isReadyForMoreMediaData { await Task.yield() }
 
-                    let pts = CMTime(value: CMTimeValue(frameIndex),
+                    let pts = CMTime(value: CMTimeValue(outputIndex),
                                     timescale: CMTimeScale(max(1, fps)))
                     adaptor.append(pb, withPresentationTime: pts)
                 }
             }
 
-            progress(Double(frameIndex + 1) / Double(max(1, frameCount)))
+            progress(Double(outputIndex + 1) / Double(max(1, frameCount)))
             await Task.yield()
         }
 
