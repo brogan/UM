@@ -653,8 +653,9 @@ private let qaProjectBody = #"""
   <tr><td><strong>Scale drawing</strong></td><td>When checked (default), stroke widths scale with the multiplier so lines look identical to screen at any output size.</td></tr>
   <tr><td><strong>Output</strong></td><td>Read-only display of the actual pixel dimensions that will be written.</td></tr>
   <tr><td><strong>FPS</strong></td><td>Frames per second for video export — 24 or 30.</td></tr>
-  <tr><td><strong>Frames</strong></td><td>Total frames to render for video. The duration in seconds is shown alongside.</td></tr>
+  <tr><td><strong>From / To</strong></td><td>Start and end frame of the export range. These are the same values as the <strong>Start / End</strong> fields in the Transport Bar — changing either updates both places. Duration in seconds is shown alongside.</td></tr>
 </table>
+<div class="note"><strong>From / To is shared with the transport bar.</strong> Set your playback range in the timeline and the export range follows automatically — no need to enter the same numbers twice. Non-zero start frames are fully supported: a From of 60, To of 180 exports a 120-frame clip starting at animation frame 60.</div>
 
 <h2>CANVAS</h2>
 <table>
@@ -1113,14 +1114,15 @@ private let exportBody = #"""
 
 <h2>Video export</h2>
 <ol class="steps">
-  <li>Set <strong>Multiplier</strong>, <strong>Scale drawing</strong>, <strong>FPS</strong>, and <strong>Frames</strong> in the EXPORT section.</li>
+  <li>Set the export range using <strong>From / To</strong> in the EXPORT section (or the Start / End fields in the Transport Bar — they are the same values).</li>
+  <li>Set <strong>Multiplier</strong>, <strong>Scale drawing</strong>, and <strong>FPS</strong> as needed.</li>
   <li>Click <strong>Video</strong> in the Transport Bar.</li>
   <li>A save panel opens. Default location: <code>renders/animations/</code> inside your project package.</li>
   <li>Choose a location and click Save. The panel closes and export begins in the background.</li>
   <li>A progress bar replaces the Video button showing <em>N%</em>. The UI remains responsive during export.</li>
   <li>When complete, the Video button returns.</li>
 </ol>
-<p>Format: H.264 in a .mov container. All layers composite per-frame at their configured opacities. In accumulation mode, each exported frame correctly shows the accumulated build-up, exactly as it appears on screen during live playback.</p>
+<p>Format: H.264 in a .mov container. The exported clip spans animation frames <em>From</em> through <em>To − 1</em>, output as a clip starting at time zero. All layers composite per-frame at their configured opacities. In accumulation mode, each exported frame correctly shows the accumulated build-up, exactly as it appears on screen during live playback.</p>
 
 <h2>Render directories</h2>
 <p>Render directories live <strong>inside</strong> the project package and are created automatically when the project is saved:</p>

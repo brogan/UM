@@ -1679,7 +1679,9 @@ Everything in this list is implemented and functional in the current build (`mai
 **Export**
 - PNG still export: NSSavePanel → `renders/stills/`, multiplier (1×/2×/4×/8×), scale-drawing toggle
 - Video export: H.264 `.mov` via `AVAssetWriter`, `renders/animations/`, same multiplier/scale options, in-progress bar in Transport Bar
-- EXPORT section in Quick Adjust: multiplier, scale drawing, FPS (24/30), frame count, computed output size
+- EXPORT section in Quick Adjust: multiplier, scale drawing, FPS (24/30), From/To frame range (shared with transport bar), computed duration, computed output size
+- Non-zero start frame supported: exporter renders `animationFrame = startFrame + outputIndex`, output timestamps run 0→N
+- `exportFrameCount` is computed: `max(1, endFrame - startFrame)` — not a stored field
 - Render directories auto-created alongside saved project file
 
 **Timeline**
@@ -1688,7 +1690,7 @@ Everything in this list is implemented and functional in the current build (`mai
 
 **Quick Adjust**
 - PROJECT section: canvas preset picker, width, height
-- EXPORT section: multiplier, scale drawing, FPS, frames, computed output
+- EXPORT section: multiplier, scale drawing, FPS, From/To frame range (shared with transport bar startFrame/endFrame), computed duration, computed output
 - CANVAS section: background colour, background draw, capture interval, grid lines, Color Map subsection
 - ORDER/CHAOS section: slider wired to `CellStyle.orderChaos`; live jitter visible on canvas
 - PLACE & TIME section: style, path, offset X/Y, phase, scale X/Y (linkable), rotation, Rescatter
