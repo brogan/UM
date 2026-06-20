@@ -427,14 +427,46 @@ private let layersBody = #"""
   <tr><td>Phase offset</td><td>Frame offset into the motion cycle, same as grid cells. Lets sprites animate out of phase with each other.</td></tr>
 </table>
 
+<h3>Animated position (Position Driver)</h3>
+<p>Below the Phase field, the <strong>POSITION DRIVER</strong> section adds an independent animated offset on top of the sprite&apos;s static position. The offset is expressed in canvas pixels and is summed with the motion set&apos;s own position offset.</p>
+<table>
+  <tr><th>Mode</th><th>Controls</th><th>Result</th></tr>
+  <tr><td><strong>Constant</strong> (default)</td><td>Offset X, Offset Y (px)</td><td>A fixed pixel offset. Default is 0, 0 — no extra motion. Useful for nudging a sprite by a precise pixel amount without changing its normalised position.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Amp X/Y (px), Period (s), Phase (0–1)</td><td>Sinusoidal back-and-forth drift. The sprite oscillates symmetrically around its base position.</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Range X/Y (px), Duration (frames)</td><td>Step-change jitter: the offset jumps to a new random value within ±Range every Duration frames, then holds.</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Amp X/Y (px), Frequency (cyc/s)</td><td>Smooth Perlin-style noise drift. Organic, non-repeating position wander.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>—</td><td>Driver mode reserved for future timeline integration.</td></tr>
+</table>
+<div class="tip"><strong>Position Driver + Motion Set</strong> — both contribute independently. The motion set&apos;s oscillation is driven by its preset and speed/amount parameters; the Position Driver runs its own separate waveform. Stacking an Oscillator motion set (slow, large arc) with a Noise Position Driver (fast, small amplitude) gives organic floating motion with a directional bias.</div>
+
+<h3>SEQUENCE shape cycling</h3>
+<p>Sprites honour the <strong>SEQUENCE</strong> setting on their assigned motion set, exactly like grid cells. If the motion set has a sequence mode other than <strong>Off</strong> and a list of shapes, the sprite cycles through those shapes over time at the configured frames-per-step rate.</p>
+<p>To set up shape cycling on a sprite:</p>
+<ol class="steps">
+  <li>Open the motion palette and select (or create) the motion set assigned to the sprite.</li>
+  <li>In the SEQUENCE section of Quick Adjust (visible when a grid layer is active), set <strong>Mode</strong> to <strong>Sequential</strong> or <strong>Random</strong> and add shapes to the list.</li>
+  <li>Switch back to the sprite layer — the sprite will cycle through those shapes at the configured step rate.</li>
+</ol>
+<div class="note">SEQUENCE editing requires a grid layer to be active. Switch to any grid layer that uses the same motion set to edit its sequence settings, then return to the sprite layer to see the effect.</div>
+
+<h3>Per-polygon colour overrides</h3>
+<p>When a sprite has a shape assigned, the <strong>POLYGON OVERRIDES</strong> section appears at the bottom of the inspector. It lists every visible polygon in that shape, numbered from #0.</p>
+<p>For each polygon you can independently override the <strong>fill</strong> colour and the <strong>stroke</strong> colour:</p>
+<ul>
+  <li>Click <strong>set</strong> next to F (fill) or S (stroke) to activate an override and open the colour picker.</li>
+  <li>Click the colour well to change the override colour.</li>
+  <li>Click <strong>&times;</strong> to remove the override and revert that polygon to the style&apos;s colour.</li>
+</ul>
+<div class="note">Polygon indices are positional. If you re-import a shape from Loom with a different polygon ordering, existing overrides will shift to different polygons. Clear all overrides before re-importing if you want a clean slate.</div>
+
 <h3>Sprite layers and export</h3>
-<p>Sprite layers export identically to grid layers — they composite into the PNG or video output at the configured opacity and parallax factor. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution.</p>
+<p>Sprite layers export identically to grid layers — they composite into the PNG or video output at the configured opacity and parallax factor. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution. The Position Driver animation and SEQUENCE shape cycling are both applied at export time.</p>
 
 <h3>Limitations in this version</h3>
 <ul>
   <li><strong>Motion controls</strong> — the standalone MOTION editor in Quick Adjust is hidden while a sprite layer is active. To edit a motion set&apos;s parameters, switch to a grid layer that uses the same motion set.</li>
-  <li><strong>No path animation on sprites</strong> — sprites support a motion set (oscillating offset/rotation) but not keyframe paths.</li>
-  <li><strong>No per-polygon colour overrides in UI</strong> — the underlying data model supports per-polygon fill/stroke overrides, but the colour-picker table is not yet exposed in the inspector.</li>
+  <li><strong>No path animation on sprites</strong> — sprites support a motion set and a Position Driver for animated movement, but not keyframe paths.</li>
+  <li><strong>Position Driver keyframe mode</strong> — the Keyframe mode is selectable but produces no animation until timeline integration is added in a future update.</li>
 </ul>
 
 <h2>Grid Scroll</h2>
