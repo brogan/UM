@@ -402,6 +402,8 @@ struct GridCanvasPlaceholder: View {
     // Zoom/pan state
     @State private var baseZoom: Double = 1.0
     @State private var scrollMonitor: Any? = nil
+    // Hover preview state
+    @State private var hoverViewPoint: CGPoint? = nil
 
     var body: some View {
         GeometryReader { geo in
@@ -585,6 +587,60 @@ struct GridCanvasPlaceholder: View {
                         } // ctx.drawLayer
                     } // for ls in layerStates
 
+                    // Hover preview: ghost sprite on undrawn cells in Draw/Fill mode
+                    if controller.canvasIsHovered,
+                       controller.activeTool == .draw || controller.activeTool == .fill,
+                       let vp = hoverViewPoint {
+                        let cp  = canvasPoint(vp, viewSize: size, gridW: gridW, gridH: gridH)
+                        let col = Int(cp.x / cellW)
+                        let row = Int(cp.y / cellH)
+                        if col >= 0, col < config.cols, row >= 0, row < config.rows {
+                            let idx = row * config.cols + col
+                            if !controller.engine.document.cells[idx].isDrawn {
+                                let mx       = Double(col) * cellW + cellW / 2
+                                let my       = Double(row) * cellH + cellH / 2
+                                let style    = controller.projectStyles.first { $0.id == controller.activeStyleID }
+                                let polygons = resolvePolygons(shapeID: controller.activeShapeID,
+                                                               shapeMap: shapePolyMap,
+                                                               fallback: fallbackPolys)
+                                let halfCell = min(cellW, cellH) / 2
+                                if polygons.isEmpty {
+                                    let rw   = (cellW - 4) / 2
+                                    let rh   = (cellH - 4) / 2
+                                    let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
+                                    let fc   = style?.fillColor ?? .defaultFill
+                                    ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                                             with: .color(Color(red: fc.r, green: fc.g, blue: fc.b).opacity(fc.a * 0.4)))
+                                } else {
+                                    let zoomX   = (stretch ? cellW : halfCell)
+                                    let zoomY   = (stretch ? cellH : halfCell)
+                                    let fillC   = style?.fillColor   ?? .defaultFill
+                                    let strokeC = style?.strokeColor ?? .defaultStroke
+                                    let strokeW = style?.strokeWidth ?? 1.5
+                                    let mode    = style?.renderMode  ?? .filledStroked
+                                    let paths   = polygons.filter(\.visible)
+                                                          .map { buildPolygonPath($0, cx: mx, cy: my,
+                                                                                  zoomX: zoomX, zoomY: zoomY,
+                                                                                  scaleX: 1.0, scaleY: 1.0,
+                                                                                  rotation: 0) }
+                                    for cgp in paths {
+                                        if mode == .filled || mode == .filledStroked {
+                                            ctx.fill(Path(cgp),
+                                                     with: .color(Color(red: fillC.r, green: fillC.g,
+                                                                        blue: fillC.b, opacity: fillC.a * 0.4)))
+                                        }
+                                        if mode == .stroked || mode == .filledStroked {
+                                            ctx.stroke(Path(cgp),
+                                                       with: .color(Color(red: strokeC.r, green: strokeC.g,
+                                                                          blue: strokeC.b, opacity: strokeC.a * 0.4)),
+                                                       lineWidth: strokeW)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Path overlay: trajectory + keyframe dots + animated playhead
                     // Uses active layer's paths (controller.engine is always the active layer).
                     let pathMap = Dictionary(uniqueKeysWithValues:
@@ -723,6 +779,12 @@ struct GridCanvasPlaceholder: View {
                         }
                 )
                 .onHover { controller.canvasIsHovered = $0 }
+                .onContinuousHover { phase in
+                    switch phase {
+                    case .active(let pt): hoverViewPoint = pt
+                    case .ended:          hoverViewPoint = nil
+                    }
+                }
                 .onChange(of: controller.engine.currentFrame) {
                     guard !controller.backgroundDraw else { return }
                     let pw = Int((gridW * displayScale).rounded())
