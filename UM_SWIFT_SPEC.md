@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch). Revised 2026-06-20 (three UI features built: right-panel context-switching — RENDER → STYLE—[name], new SHAPE—[name] section; LAYER DRIVERS section for opacityDriver/layerOffset oscillator/jitter/noise UI; timing-scale % field in timeline header; §6.8, §15.9, §15.11 updated; summary table updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch). Revised 2026-06-20 (three UI features built: right-panel context-switching — RENDER → STYLE—[name], new SHAPE—[name] section; LAYER DRIVERS section for opacityDriver/layerOffset oscillator/jitter/noise UI; timing-scale % field in timeline header; §6.8, §15.9, §15.11 updated; summary table updated). Revised 2026-06-20 (four more features built: sprite MOTION section — effectiveMotionID/effectiveMotionSet derives context from selected sprite; per-layer blend modes — UMBlendMode enum, picker in LAYER DRIVERS, wired into all render paths; phase heat-map overlay — toggle in CANVAS section, blue-to-red per phaseOffset; "nothing active" hint in right panel; §6.8, §15.6, §15.8, §15.9, §15.12 updated; summary table updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -737,11 +737,9 @@ Tap a row to switch the active layer. Drag a row to reorder layers (an accent-co
 
 Camera state (pan, zoom, rotation) lives in `AppController.camera: UMCamera` and is edited via the **CAMERA** section in Quick Adjust — see §15.8.
 
-The right panel exposes per-layer driver UI in the **LAYER DRIVERS** section (collapsed by default). Both `opacityDriver` and `layerOffset` support oscillator, jitter, noise, and keyframe modes — see §15.8. The RENDER section title changes dynamically to **STYLE — [name]** when a style is active. A **SHAPE — [name]** section appears below MOTION when a shape palette item is active, showing polygon counts and cell usage in the active layer.
+The right panel exposes per-layer driver UI in the **LAYER DRIVERS** section (collapsed by default). The section begins with a **Blend** picker (`UMBlendMode`: Normal, Multiply, Screen, Overlay, Dodge, Burn, Soft Light, Hard Light, Difference, Exclusion, Add), then OPACITY and OFFSET driver subsections. Both `opacityDriver` and `layerOffset` support oscillator, jitter, noise, and keyframe modes — see §15.8. The RENDER section title changes dynamically to **STYLE — [name]** when a style is active. A **SHAPE — [name]** section appears below MOTION when a shape palette item is active, showing polygon counts and cell usage in the active layer. A contextual **"Nothing active"** hint appears at the bottom when no KF, motion, cell selection, or shape is active.
 
-#### Current limitations
-
-- No layer blend modes beyond normal (opacity)
+`UMBlendMode` is a `String`-coded enum on `UMLayer` / `UMLayerState`, default `.normal`. Applied via `cgBlendMode` in the CG accumulation and export paths and `swiftUIBlendMode` in the live SwiftUI canvas (set on the outer compositing context before `drawLayer`). Omitted from JSON when `.normal` for file-size efficiency.
 
 ---
 
@@ -1918,9 +1916,9 @@ Rendering mirrors the live cell draw path:
 
 ### 15.6 Canvas Overlays and Visual Aids
 
-**Phase heat-map overlay**
-- No per-cell phase visualisation on the canvas.
-- Required: a toggleable overlay that colours each drawn cell by its `phaseOffset` value (e.g. a heat-map from blue = 0 to red = max), making the temporal structure of the composition visible without playing the animation.
+**Phase heat-map overlay** ✓ Built 2026-06-20
+
+`AppController.showPhaseHeatmap: Bool` toggles the overlay. When on, the live canvas draws a semi-transparent rectangle over each drawn cell of the active grid layer, coloured by `phaseOffset`: blue (t = 0) → red (t = 1), where t = phaseOffset / max(phaseOffset in layer). Opacity 50%. Drawn in raw canvas space (pre-camera-transform) after the grid lines, before layer content. Grid-only; sprite layers are not affected. Toggle exposed as "Phase map" checkbox in the CANVAS section of Quick Adjust.
 
 **Background image** ✓ Built 2026-06-20
 
@@ -1997,9 +1995,7 @@ var camera: UMCamera = .identity  // project-level
 - Parallax slider per layer row (camera icon + compact 0–1 slider).
 
 **Phase 2 (remaining)**
-- Expose oscillator / keyframe modes for camera drivers in UI
-- Wire `opacityDriver` into live canvas + export when mode ≠ constant
-- Layer blend modes
+- Expose oscillator / keyframe modes for camera drivers in UI (camera pan/zoom/rotation currently constant-mode only in the CAMERA section)
 
 ---
 
@@ -2041,7 +2037,6 @@ public var shapeIDs: [UUID]            // shapes to cycle through; omitted from 
 
 **What remains (still pending)**
 
-- **"Nothing active" hint** — a contextual hint row shown when nothing is selected and no palette item is active.
 - **Resolution palette Project/Library tabs** — the preset chips exist in the LAYERS section but there is no separate library tab for saving/loading resolution presets globally. Small scope.
 
 ---
@@ -2359,7 +2354,7 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 
 **Known limitations**
 
-- **MOTION section hidden**: when a sprite layer is active, the standalone MOTION section is not shown. Motion is assigned per-sprite via the picker in the SPRITES inspector. The motion set's parameters cannot be edited from a sprite layer context — switch to any grid layer and edit the shared motion set there.
+- **MOTION section in sprite context**: the MOTION section now appears below SPRITES when a sprite is selected and has a `motionID`. `effectiveMotionID` / `effectiveMotionSet` computed properties in `QuickAdjustView` derive context from `activeSpriteID` → sprite's `motionID`, falling back to `controller.activeMotionID` when no sprite is selected. All binding setters route through `effectiveMotionIndex` so edits go to the correct `projectMotionSets` entry.
 - **No path animation on sprites**: the keyframe path system (`UMMotionPath`) is grid-cell-centric. Sprites have `motionID` but no `pathID`; path-driven motion remains deferred.
 - **Polygon override index stability**: indices are positional — re-importing a shape from Loom with different polygon ordering will misalign overrides.
 - **positionDriver keyframe mode**: the keyframe lane is not wired into the timeline panel for sprites. The mode is selectable but produces no animation until a timeline integration is added.
@@ -2384,15 +2379,17 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 | **Export** | Video export from timeline (cut-based) | — |
 | **Path editor** | Bezier tangent handles | — |
 | **Geometry** | In-app geometry editor (LoomEditorKit) | Loom stabilisation |
-| **Overlays** | Phase heat-map overlay | — |
+| **Overlays** | Phase heat-map overlay | ✓ Built 2026-06-20 |
 | **Overlays** | Background image | ✓ Built 2026-06-20 |
 | **Layers** | Camera system (pan, zoom, rotation) | ✓ Built 2026-06-19 |
 | **Layers** | Parallax (per-layer depth factor) | ✓ Built 2026-06-19 |
-| **Layers** | Per-layer blend modes | — |
+| **Layers** | Per-layer blend modes | ✓ Built 2026-06-20 |
 | **Layers** | Animated layer opacity / parallax drivers (oscillator UI) | ✓ Built 2026-06-20 |
 | **Timeline** | Keyframe timeline panel (camera + per-layer lanes) | ✓ Built 2026-06-20 |
 | **Timeline** | Timing-scale % field (scale selected KF timing from pivot) | ✓ Built 2026-06-20 |
 | **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
 | **Sprite layer** | Free-placed sprites with per-polygon color overrides | ✓ Built 2026-06-20 |
+| **Sprite layer** | MOTION section in sprite context (effectiveMotionID from selected sprite) | ✓ Built 2026-06-20 |
+| **UI** | "Nothing active" hint in right panel | ✓ Built 2026-06-20 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

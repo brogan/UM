@@ -383,8 +383,26 @@ private let layersBody = #"""
 
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
 
-<h2>LAYER DRIVERS — animated opacity and offset</h2>
-<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) gives each layer an animated opacity and a canvas-pixel positional offset, independent of the camera.</p>
+<h2>LAYER DRIVERS — blend mode, animated opacity and offset</h2>
+<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) controls how a layer composites and moves independently of the camera.</p>
+
+<h3>Blend mode</h3>
+<p>The <strong>Blend</strong> picker at the top of LAYER DRIVERS sets how this layer composites with all layers below it:</p>
+<table>
+  <tr><th>Mode</th><th>Effect</th></tr>
+  <tr><td><strong>Normal</strong></td><td>Standard alpha compositing. Default.</td></tr>
+  <tr><td><strong>Multiply</strong></td><td>Darkens by multiplying colours. Black stays black; white is transparent.</td></tr>
+  <tr><td><strong>Screen</strong></td><td>Lightens by inverting, multiplying, and inverting again. Opposite of Multiply.</td></tr>
+  <tr><td><strong>Overlay</strong></td><td>Multiply on darks, Screen on lights. Increases contrast while preserving highlights and shadows.</td></tr>
+  <tr><td><strong>Dodge</strong></td><td>Brightens the result by reducing contrast. Useful for glow effects.</td></tr>
+  <tr><td><strong>Burn</strong></td><td>Darkens by increasing contrast. Deepens shadows.</td></tr>
+  <tr><td><strong>Soft Light</strong></td><td>Gentle Overlay variant. Subtle contrast boost.</td></tr>
+  <tr><td><strong>Hard Light</strong></td><td>Strong contrast, similar to Overlay with layer roles reversed.</td></tr>
+  <tr><td><strong>Difference</strong></td><td>Subtracts darker from lighter. Creates inversion-like effects.</td></tr>
+  <tr><td><strong>Exclusion</strong></td><td>Lower-contrast version of Difference.</td></tr>
+  <tr><td><strong>Add</strong></td><td>Additive compositing (Plus Lighter). Values above 1 clip to white. Good for light, fire, or energy overlays.</td></tr>
+</table>
+<div class="tip">Put a dark, textured grid layer in <strong>Multiply</strong> over a bright background to darken only where cells are drawn, leaving empty cells transparent.</div>
 
 <h3>Opacity driver</h3>
 <p>Animates the layer's opacity over time, overriding the layer-row slider when any non-constant mode is active.</p>
@@ -481,7 +499,7 @@ private let layersBody = #"""
   <li>In the SEQUENCE section of Quick Adjust (visible when a grid layer is active), set <strong>Mode</strong> to <strong>Sequential</strong> or <strong>Random</strong> and add shapes to the list.</li>
   <li>Switch back to the sprite layer — the sprite will cycle through those shapes at the configured step rate.</li>
 </ol>
-<div class="note">SEQUENCE editing requires a grid layer to be active. Switch to any grid layer that uses the same motion set to edit its sequence settings, then return to the sprite layer to see the effect.</div>
+<div class="note">SEQUENCE settings appear in the MOTION section in Quick Adjust. Select the sprite to bring up its motion set, then scroll down to the Sequence row.</div>
 
 <h3>Per-polygon colour overrides</h3>
 <p>When a sprite has a shape assigned, the <strong>POLYGON OVERRIDES</strong> section appears at the bottom of the inspector. It lists every visible polygon in that shape, numbered from #0.</p>
@@ -498,7 +516,7 @@ private let layersBody = #"""
 
 <h3>Limitations in this version</h3>
 <ul>
-  <li><strong>Motion controls</strong> — the standalone MOTION editor in Quick Adjust is hidden while a sprite layer is active. To edit a motion set&apos;s parameters, switch to a grid layer that uses the same motion set.</li>
+  <li><strong>Motion controls</strong> — when a sprite is selected and has a motion set assigned, the <strong>MOTION — [name]</strong> section appears below SPRITES in Quick Adjust, showing all motion parameters for that motion set. If no sprite is selected, the section shows the palette&apos;s active motion set (if any).</li>
   <li><strong>No path animation on sprites</strong> — sprites support a motion set and a Position Driver for animated movement, but not keyframe paths.</li>
   <li><strong>Position Driver keyframe mode</strong> — the Keyframe mode is selectable but produces no animation until timeline integration is added in a future update.</li>
 </ul>
@@ -838,6 +856,16 @@ private let qaProjectBody = #"""
 
 <h3>Accumulation mode</h3>
 <p>Turning <strong>Background draw</strong> off is the primary way to create time-based build-up effects. Earlier frames remain visible as new sprites are drawn on top. Combined with motion paths or the Wander/Wave presets, this traces visible motion trajectories across the canvas. The accumulation persists until you press ⏮ (rewind) or turn Background draw back on.</p>
+
+<h3>Phase heat-map overlay</h3>
+<p>The <strong>Phase map</strong> checkbox (below the Grid row in the CANVAS section) overlays a colour tint on each drawn cell of the <em>active grid layer</em>, colouring it by its <code>phaseOffset</code> value:</p>
+<ul>
+  <li><strong>Blue</strong> — phaseOffset = 0 (earliest-starting cells)</li>
+  <li><strong>Red</strong> — phaseOffset = max in the layer (latest-starting cells)</li>
+  <li>Intermediate offsets are linearly interpolated through the hue spectrum.</li>
+</ul>
+<p>The overlay is drawn at 50% opacity and is view-only — it does not appear in PNG or video export. Use it to verify that your phase policy produced the expected timing structure, or to diagnose unexpected clusters of cells that are in sync.</p>
+<div class="note">The phase heat-map only draws when the active layer is a <strong>grid</strong> layer. Switching to a sprite layer hides the overlay automatically.</div>
 
 <h2>Canvas Zoom &amp; Pan</h2>
 <p>The canvas can be zoomed and panned independently of the project's output resolution. Zoom and pan are view-only — they do not affect PNG or video export.</p>
@@ -1474,10 +1502,10 @@ private let pendingBody = #"""
   <tr><td>Export</td><td>Timeline video export</td><td>The Video button exports live animation (parametric + keyframe motion). A separate mode that renders the recorded timeline states as discrete cuts is planned.</td></tr>
   <tr><td>Path Editor</td><td>Bezier tangent handles</td><td>The PATH EDITOR uses per-segment easing (Linear, Ease In/Out, Step). Cubic bezier tangent handles (in/out per keyframe, drawn on the canvas as draggable circles) are designed but not yet built.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
-  <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>A toggleable overlay colouring each cell by its phaseOffset value (blue = 0, red = max) to make temporal structure visible without playing the animation.</td></tr>
+  <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>✓ Built — <strong>Phase map</strong> checkbox in the CANVAS section of Quick Adjust. Colours each drawn cell in the active grid layer by phaseOffset: blue (0) → red (max), 50% opacity. See <a href="um-help://help/layers">Layers</a>.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
   <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>✓ Built — <strong>LAYER DRIVERS</strong> section in Quick Adjust exposes oscillator, jitter, and noise modes for layer opacity and layer offset. See <a href="um-help://help/layers">Layers</a> for details.</td></tr>
-  <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
+  <tr><td>Layers</td><td>Blend modes</td><td>✓ Built — <strong>Blend</strong> picker at the top of the <strong>LAYER DRIVERS</strong> section: Normal, Multiply, Screen, Overlay, Dodge, Burn, Soft Light, Hard Light, Difference, Exclusion, Add. Applied in all render paths.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
 </table>
