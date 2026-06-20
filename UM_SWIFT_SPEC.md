@@ -2161,7 +2161,7 @@ Appears when any KF is selected. Shows: lane label (read-only), Frame stepper, V
 
 ---
 
-### 15.12 Sprite Layer
+### 15.12 Sprite Layer ✓ Built 2026-06-20
 
 **Motivation**
 
@@ -2175,16 +2175,18 @@ Subdivision and complex Loom rendering modes (brushed, stamped, perturbation) ar
 
 | | Grid layer | Sprite layer |
 |---|---|---|
-| Placement | Grid cells at fixed positions | Free canvas-space positions |
+| Placement | Grid cells at fixed positions | Free canvas positions (normalized) |
 | Quantity | All cells (composition by density) | Individual named sprites |
 | Fine detail | Grid resolution | Loom geometry (imported) |
 | Subdivision | Not needed — grid IS the resolution | Not included |
 | Rendering | Fill + stroke + render mode | Same, plus per-polygon overrides |
-| Animation | Phase, motion set, path, sequence | Same |
+| Animation | Phase, motion set, path, sequence | Phase + motion set (V1) |
 
 ---
 
 **Data model (`UMEngine`)**
+
+`UMEngine/Sources/UMEngine/Composition/UMSprite.swift`:
 
 ```swift
 // Per-polygon color overrides — keyed by polygon index within the shape's polygon array.
@@ -2197,16 +2199,16 @@ public struct UMPolygonOverride: Codable, Sendable {
 public struct UMSprite: Codable, Identifiable, Sendable {
     public var id:               UUID
     public var name:             String
-    public var x:                Double          // canvas-space (0,0) = top-left; units match gridW/gridH
-    public var y:                Double
-    public var rotation:         Double          // degrees
-    public var scaleX:           Double          // default 1.0
-    public var scaleY:           Double          // default 1.0
+    public var x:                Double   // normalized 0–1 fraction of canvas width
+    public var y:                Double   // normalized 0–1 fraction of canvas height
+    public var rotation:         Double   // degrees
+    public var scaleX:           Double   // default 1.0
+    public var scaleY:           Double   // default 1.0
     public var styleID:          UUID?
     public var shapeID:          UUID?
     public var motionID:         UUID?
-    public var phaseOffset:      Int             // same semantics as UMGridCell.phaseOffset
-    public var polygonOverrides: [Int: UMPolygonOverride]  // polygon index → fill/stroke override
+    public var phaseOffset:      Int      // same semantics as UMGridCell.phaseOffset
+    public var polygonOverrides: [Int: UMPolygonOverride]  // polygon index → override
 }
 
 public enum LayerMode: String, Codable, Sendable {
@@ -2215,48 +2217,83 @@ public enum LayerMode: String, Codable, Sendable {
 }
 ```
 
+**Coordinate system**: `sprite.x` and `sprite.y` are normalized fractions `[0, 1]` of the canvas dimensions. At render time: `displayX = sprite.x * gridW`, `displayY = sprite.y * gridH`. This makes positions resolution-independent as the window scales.
+
+**Codable note**: `[Int: UMPolygonOverride]` cannot be encoded as a JSON object directly (Swift requires string keys). `UMSprite` uses a custom `encode/decode` that round-trips through `[String: UMPolygonOverride]`.
+
 `UMLayer` additions (all `decodeIfPresent`, backward-compatible):
 ```swift
-public var layerMode: LayerMode   // default .grid
-public var sprites:   [UMSprite]  // default []
+public var layerMode: LayerMode   // default .grid; omitted from JSON when .grid
+public var sprites:   [UMSprite]  // default []; omitted from JSON when empty
 ```
 
-`UMLayerState` exposes `layerMode` and `sprites` as pass-through to the underlying `UMLayer`.
+`UMLayerState` stores `layerMode: LayerMode` and `sprites: [UMSprite]` as `@Observable` stored properties (not pass-throughs). `toUMLayer()` includes them in the reconstructed `UMLayer`.
+
+`ProjectConfig` bumped to **v8**; `LayerRecord` gains `layerMode: LayerMode?` and `sprites: [UMSprite]?` (both optional for backward compat).
 
 ---
 
-**Rendering**
+**Reference size for motion**
 
-In `GridCanvasPlaceholder.Canvas`, the per-layer loop checks `ls.layerMode`:
+Sprites have no natural "cell size". A fixed reference `spriteRef = min(gridW, gridH) / 8.0` is passed to `computeMotion` as `cellW/cellH`:
 
-- `.grid` — existing path unchanged.
-- `.sprite` — iterate `ls.sprites`; for each sprite:
-  1. Call `computeMotion(motionSet:style:path:frame:phaseOffset:cellIndex:cellW:cellH:)` with `cellW = gridW * sprite.scaleX`, `cellH = gridH * sprite.scaleY` — or a fixed reference size (TBD at implementation).
-  2. Position: `(sprite.x + motion.dx, sprite.y + motion.dy)`.
-  3. Rotation: `sprite.rotation + motion.rotation`.
-  4. Scale: `sprite.scaleX * motion.scaleX`, `sprite.scaleY * motion.scaleY`.
-  5. Resolve polygons via `resolvePolygons(shapeID: sprite.shapeID, ...)`.
-  6. For each polygon at index `idx`: check `sprite.polygonOverrides[idx]`; use override fill/stroke if present, otherwise fall back to style fill/stroke.
-  7. Draw via `buildPolygonPath` + `ctx.fill` / `ctx.stroke` — identical to grid cell path.
-  8. Camera transform applied at the `ctx.drawLayer` level, same as grid layers.
+```
+cellW = spriteRef * sprite.scaleX
+cellH = spriteRef * sprite.scaleY
+```
 
-Per-polygon color overrides are the **only** rendering difference from grid cells. No new rendering modes, no subdivision.
+This makes motion amplitudes proportional to the sprite's visual size, which scales uniformly with the canvas. The zoom used for `buildPolygonPath` is:
+
+```
+zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
+zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+```
+
+---
+
+**Rendering — four paths**
+
+All four rendering paths were updated to branch on `layer.layerMode`:
+
+1. **Live canvas** (`GridCanvasPlaceholder.Canvas`): sprite branch added before the existing grid loop. Uses `ctx.drawLayer { }` with the same camera/parallax transform. For each sprite:
+   - `mx = sprite.x * gridW + motion.dx`
+   - `my = sprite.y * gridH + motion.dy`
+   - Per-polygon overrides applied via `sprite.polygonOverrides[polyIdx]`.
+   - Selected sprite gets an accent outline (same as grid cell selection).
+   - Hover preview is suppressed for sprite layers.
+
+2. **PNG export / overlay accumulation** (`umRenderComposited` in `ContentView.swift`): sprite layers use a `SpriteCapture` view (new struct, parallel to `FrameCapture`) via `ImageRenderer`.
+
+3. **Background-thread CG accumulation** (`renderLayerCG`): the `nonisolated` CG render path adds a sprite branch. `LayerAccumulationData` gains `layerMode`, `sprites`, `gridW`, `gridH`.
+
+4. **Video export** (`UMVideoExporter.renderLayerCells`): same `SpriteCapture` / `ImageRenderer` path as #2.
+
+`SpriteCapture` is a SwiftUI `Canvas`-based `View` defined in `ContentView.swift` (same file as `FrameCapture`), giving it access to the private `buildPolygonPath`, `computeMotion`, and `resolvePolygons` helpers.
 
 ---
 
 **Canvas interaction — sprite layer mode**
 
-When the active layer is a sprite layer, the canvas drag handler switches to a sprite-placement / selection / move mode (replacing the grid draw/erase behaviour):
+`GridCanvasPlaceholder` intercepts all gestures when the active layer is a sprite layer, replacing the grid draw/erase behaviour:
 
 | Gesture | Effect |
 |---|---|
-| Click on empty canvas | Place new sprite at that position (assigned active style/shape/motion) |
-| Click on existing sprite | Select it (`activeSpriteID`) |
-| Drag selected sprite | Move it (live position update) |
-| Delete key | Remove selected sprite |
-| Click on empty canvas while a sprite is selected | Deselect |
+| Tap empty canvas | Place new sprite at that position (normalized coords; assigns active style/shape/motion) |
+| Tap existing sprite | Select it (`activeSpriteID = sprite.id`) |
+| Drag selected sprite | Move it live; position stored as normalized [0,1] |
+| Delete key | Remove selected sprite (`activeSpriteID`) |
 
-Hit-testing: a sprite is hit if the click point is within a bounding box centred on `(sprite.x, sprite.y)` with half-size `gridW / config.cols * sprite.scaleX` (approximate; refined at implementation).
+State added to `GridCanvasPlaceholder`:
+```swift
+@State private var spriteDragID:     UUID?   = nil
+@State private var spriteDragOffset: CGPoint = .zero  // display-space offset (sprite centre − click point)
+@State private var cachedGridW: Double = 400           // cached for onEnded where geo is out of scope
+@State private var cachedGridH: Double = 400
+```
+
+**Hit-test**: bounding box half-size = `(spriteRef / 2) * sprite.scaleX` × `(spriteRef / 2) * sprite.scaleY` centred on `(sprite.x * gridW, sprite.y * gridH)`. `sprites.last(where:)` is used so the topmost sprite wins.
+
+**Delete key**: added as a hidden `.keyboardShortcut(.delete, modifiers: [])` button in the existing keyboard shortcut group.
 
 ---
 
@@ -2265,13 +2302,14 @@ Hit-testing: a sprite is hit if the click point is within a bounding box centred
 ```swift
 var activeSpriteID: UUID? = nil   // selected sprite in active sprite layer
 
-func addSprite(at point: CGPoint)      // creates UMSprite at canvas point, assigns active style/shape/motion
+func addSpriteLayer(name: String? = nil)       // adds a LayerMode.sprite layer and selects it
+func addSprite(at point: CGPoint)              // point in normalized [0,1]; assigns active style/shape/motion
 func removeSprite(id: UUID)
-func moveSprite(id: UUID, to: CGPoint)
+func moveSprite(id: UUID, to: CGPoint)         // to in normalized [0,1]
 func updateSprite(id: UUID, _ body: (inout UMSprite) -> Void)
 ```
 
-All sprite mutations go through `updateSprite` so undo snapshots can be taken at the right granularity.
+`selectLayer` and `removeLayer` reset `activeSpriteID = nil` on layer switch.
 
 ---
 
@@ -2279,36 +2317,35 @@ All sprite mutations go through `updateSprite` so undo snapshots can be taken at
 
 **StylePaletteView — LAYERS section**
 
-- The `+` add-layer button gains a menu: **Grid Layer** / **Sprite Layer**.
-- Sprite layer rows display a distinct icon (e.g. `sparkles`) to distinguish from grid layers.
-- All existing layer controls (visibility, opacity, parallax, rename, reorder) apply unchanged.
+- `+ New Layer` button replaced by a `Menu` with two items: **Grid Layer** and **Sprite Layer**.
+- Sprite layer rows show a `sparkles` icon between the accent dot and the name to distinguish them from grid layers.
+- All existing layer controls (visibility, opacity, parallax, rename, reorder, context menu) are unchanged.
 
 **QuickAdjustView — sprite layer mode**
 
-When the active layer is `.sprite`, the right panel replaces PLACE & TIME, PATH EDITOR, SEQUENCE, and ORDER/CHAOS with a **SPRITES section**:
+When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & TIME, RENDER, MOTION, PATH EDITOR, and ADVANCED, replacing them with a single **SPRITES section**:
 
-- List of sprites (name, style colour swatch, shape badge, motion badge).
-- `+` Add Sprite button (places at canvas centre if no canvas click pending).
-- `−` Remove selected sprite button.
-- Per-sprite inspector (shown when `activeSpriteID` is set):
+- Sprite list: each sprite as a tap-to-select row with its name and an ✕ remove button. If empty, shows "Click canvas to place sprites".
+- **+ Place at Centre** button: calls `controller.addSprite(at: CGPoint(x: 0.5, y: 0.5))`.
+- **Per-sprite inspector** (shown when `activeSpriteID` is set):
   - Name text field
-  - Position X / Y steppers (canvas units)
-  - Rotation stepper
-  - Scale X / Y sliders (linked toggle)
+  - Position X / Y as **percentage of canvas** (0–100%); stored internally as [0,1]
+  - Rotation (degrees)
+  - Scale X / Y (multiplier; 1.0 = reference size)
   - Style / Shape / Motion pickers (same pattern as PLACE & TIME for grid cells)
-  - Phase offset stepper
-  - **Polygon overrides table**: lists each polygon in the resolved shape by index; fill swatch + stroke swatch per row; click swatch to set override color; `×` to clear override.
-
-MOTION section remains and works identically — when a sprite is selected and it has a `motionID`, MOTION shows the motion set detail.
+  - Phase offset (frames)
+  - *(Polygon overrides table deferred to Phase 2 — see Known Limitations)*
 
 ---
 
 **Known limitations (V1)**
 
-- Polygon override indices are positional — re-importing a shape from Loom with different polygon ordering will misalign overrides. Document in UI tooltip.
-- No driver-animated sprite position in V1 (position is static + motion set offset). Full `UMVectorDriver` per-sprite position is a Phase 2 addition.
-- No path animation on sprites in V1 (path system is grid-cell-centric; adapting it to sprites is deferred).
-- No SEQUENCE shape cycling on sprites in V1.
+- **Polygon override UI**: the `polygonOverrides` field is stored and serialized correctly, but there is no colour-picker table in V1. Overrides can only be set programmatically. Phase 2 will add the table UI.
+- **MOTION section hidden**: when a sprite layer is active, the standalone MOTION section is not shown. Motion is assigned per-sprite via the picker in the SPRITES inspector. The motion set's parameters cannot be edited from a sprite layer context — switch to any grid layer and edit the shared motion set there.
+- **No path animation on sprites**: the keyframe path system (`UMMotionPath`) is grid-cell-centric. Sprites have `motionID` but no `pathID`; path-driven motion is deferred.
+- **No SEQUENCE shape cycling**: sprite `shapeID` is a single UUID; multi-shape cycling deferred.
+- **No driver-animated sprite position**: `sprite.x` / `sprite.y` are static (plus the motion set's `dx/dy` offset). Full `UMVectorDriver` per-sprite position is a Phase 2 addition.
+- **Polygon override index stability**: indices are positional — re-importing a shape from Loom with different polygon ordering will misalign overrides.
 
 ---
 
@@ -2339,6 +2376,6 @@ MOTION section remains and works identically — when a sprite is selected and i
 | **Timeline** | Keyframe timeline panel (camera + per-layer lanes) | ✓ Built 2026-06-20 |
 | **Timeline** | Timing-scale % field (scale selected KF timing from pivot) | — |
 | **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
-| **Sprite layer** | Free-placed sprites with per-polygon color overrides | See §15.12 |
+| **Sprite layer** | Free-placed sprites with per-polygon color overrides | ✓ Built 2026-06-20 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

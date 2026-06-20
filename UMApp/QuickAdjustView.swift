@@ -1,5 +1,6 @@
 import SwiftUI
 import UMEngine
+import LoomEngine
 import AppKit
 import UniformTypeIdentifiers
 
@@ -1710,6 +1711,214 @@ struct QuickAdjustView: View {
                     set: { sprite.wrappedValue.phaseOffset = Int($0) }
                 ), width: 52, fractionDigits: 0)
                 Text("frames").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+
+            // MARK: Position driver
+            Divider().padding(.vertical, 4)
+            Text("POSITION DRIVER")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.quaternary)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: Binding(
+                    get: { s.positionDriver.mode },
+                    set: { sprite.wrappedValue.positionDriver.mode = $0 }
+                )) {
+                    ForEach(UMVectorDriverMode.allCases, id: \.self) {
+                        Text($0.displayName).tag($0)
+                    }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            switch s.positionDriver.mode {
+            case .constant:
+                InspectorField("Offset X") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.base.x },
+                        set: { sprite.wrappedValue.positionDriver.base.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Offset Y") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.base.y },
+                        set: { sprite.wrappedValue.positionDriver.base.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .oscillator:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.oscillatorAmplitude.x },
+                        set: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.oscillatorAmplitude.y },
+                        set: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.oscillatorPeriod },
+                        set: { sprite.wrappedValue.positionDriver.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: Binding(
+                        get: { s.positionDriver.oscillatorPhase },
+                        set: { sprite.wrappedValue.positionDriver.oscillatorPhase = $0 }
+                    ), in: 0...1).frame(maxWidth: 90)
+                }
+            case .jitter:
+                InspectorField("Range X") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.jitterRange.x },
+                        set: { sprite.wrappedValue.positionDriver.jitterRange.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Range Y") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.jitterRange.y },
+                        set: { sprite.wrappedValue.positionDriver.jitterRange.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.jitterDuration },
+                        set: { sprite.wrappedValue.positionDriver.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.noiseAmplitude.x },
+                        set: { sprite.wrappedValue.positionDriver.noiseAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.noiseAmplitude.y },
+                        set: { sprite.wrappedValue.positionDriver.noiseAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { s.positionDriver.noiseFrequency },
+                        set: { sprite.wrappedValue.positionDriver.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline to set position keyframes.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
+            }
+
+            // MARK: Polygon overrides
+            let polygons = (s.shapeID.flatMap { controller.shapePolygonMap[$0] } ?? controller.shapePolygons)
+                .filter(\.visible)
+            if !polygons.isEmpty {
+                Divider().padding(.vertical, 4)
+                Text("POLYGON OVERRIDES")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 2)
+                ForEach(Array(polygons.indices), id: \.self) { polyIdx in
+                    HStack(spacing: 6) {
+                        Text("#\(polyIdx)")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 22, alignment: .leading)
+                        Text("F")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        if let fillOvr = s.polygonOverrides[polyIdx]?.fill {
+                            ColorWell(color: Binding(
+                                get: { fillOvr.swiftUIColor },
+                                set: { newC in
+                                    var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                    ovr.fill = UMColor(newC)
+                                    sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                }
+                            ), supportsOpacity: true)
+                            .frame(width: 28, height: 18)
+                            Button {
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx]
+                                ovr?.fill = nil
+                                if ovr?.stroke == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyIdx) }
+                                else { sprite.wrappedValue.polygonOverrides[polyIdx] = ovr }
+                            } label: {
+                                Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
+                            }.buttonStyle(.plain)
+                        } else {
+                            Button {
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                ovr.fill = UMColor(r: 1, g: 1, b: 1, a: 1)
+                                sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                            } label: {
+                                Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                            }.buttonStyle(.plain)
+                        }
+                        Spacer()
+                        Text("S")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                        if let strokeOvr = s.polygonOverrides[polyIdx]?.stroke {
+                            ColorWell(color: Binding(
+                                get: { strokeOvr.swiftUIColor },
+                                set: { newC in
+                                    var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                    ovr.stroke = UMColor(newC)
+                                    sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                                }
+                            ), supportsOpacity: true)
+                            .frame(width: 28, height: 18)
+                            Button {
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx]
+                                ovr?.stroke = nil
+                                if ovr?.fill == nil { sprite.wrappedValue.polygonOverrides.removeValue(forKey: polyIdx) }
+                                else { sprite.wrappedValue.polygonOverrides[polyIdx] = ovr }
+                            } label: {
+                                Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
+                            }.buttonStyle(.plain)
+                        } else {
+                            Button {
+                                var ovr = sprite.wrappedValue.polygonOverrides[polyIdx] ?? UMPolygonOverride()
+                                ovr.stroke = UMColor(r: 0, g: 0, b: 0, a: 1)
+                                sprite.wrappedValue.polygonOverrides[polyIdx] = ovr
+                            } label: {
+                                Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
+                            }.buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 2)
+                }
             }
         }
         .padding(.bottom, 4)

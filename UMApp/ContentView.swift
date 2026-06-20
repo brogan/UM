@@ -333,9 +333,12 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                                           cellIndex: idx,
                                           cellW: spriteRef * sprite.scaleX,
                                           cellH: spriteRef * sprite.scaleY)
-            let mx = (sprite.x * layer.gridW + motion.dx) * dsf
-            let my = (sprite.y * layer.gridH + motion.dy) * dsf
-            let polygons = resolvePolygons(shapeID: sprite.shapeID,
+            let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: snap.frame, spriteIndex: idx)
+            let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x) * dsf
+            let my = (sprite.y * layer.gridH + motion.dy + driverPos.y) * dsf
+            let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                                          frame: snap.frame, phaseOffset: sprite.phaseOffset)
+            let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                            shapeMap: snap.shapePolygonMap,
                                            fallback: snap.fallbackPolygons)
             let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * dsf
@@ -566,10 +569,13 @@ struct GridCanvasPlaceholder: View {
                                                                   cellIndex: idx,
                                                                   cellW: spriteRef * sprite.scaleX,
                                                                   cellH: spriteRef * sprite.scaleY)
-                                    let mx  = sprite.x * gridW + motion.dx
-                                    let my  = sprite.y * gridH + motion.dy
+                                    let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
+                                    let mx  = sprite.x * gridW + motion.dx + driverPos.x
+                                    let my  = sprite.y * gridH + motion.dy + driverPos.y
                                     let rot = sprite.rotation + motion.rotation
-                                    let polygons = resolvePolygons(shapeID: sprite.shapeID,
+                                    let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                                                                  frame: currentFrame, phaseOffset: sprite.phaseOffset)
+                                    let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                                                    shapeMap: shapePolyMap,
                                                                    fallback: fallbackPolys)
                                     let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
@@ -1574,10 +1580,13 @@ struct SpriteCapture: View {
                                               cellIndex: idx,
                                               cellW: spriteRef * sprite.scaleX,
                                               cellH: spriteRef * sprite.scaleY)
-                let mx  = sprite.x * gridW + motion.dx
-                let my  = sprite.y * gridH + motion.dy
+                let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
+                let mx  = sprite.x * gridW + motion.dx + driverPos.x
+                let my  = sprite.y * gridH + motion.dy + driverPos.y
                 let rot = sprite.rotation + motion.rotation
-                let polygons = resolvePolygons(shapeID: sprite.shapeID,
+                let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                                              frame: currentFrame, phaseOffset: sprite.phaseOffset)
+                let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                                shapeMap: shapePolygonMap,
                                                fallback: fallbackPolygons)
                 let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX

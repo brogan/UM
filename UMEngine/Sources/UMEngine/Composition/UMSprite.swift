@@ -24,13 +24,13 @@ public struct UMPolygonOverride: Codable, Sendable {
 
 // MARK: - UMSprite
 
-/// A free-placed sprite in a sprite layer. Position is in canvas-space units
-/// matching the gridW × gridH coordinate system used throughout UM.
+/// A free-placed sprite in a sprite layer. Position is stored as normalized [0,1]
+/// fractions of canvas dimensions. At render time: displayX = x * gridW.
 public struct UMSprite: Codable, Identifiable, Sendable {
     public var id:               UUID
     public var name:             String
-    public var x:                Double      // canvas-space; (0,0) = top-left
-    public var y:                Double
+    public var x:                Double      // normalized 0–1 fraction of canvas width
+    public var y:                Double      // normalized 0–1 fraction of canvas height
     public var rotation:         Double      // degrees
     public var scaleX:           Double      // 1.0 = reference size
     public var scaleY:           Double
@@ -39,20 +39,23 @@ public struct UMSprite: Codable, Identifiable, Sendable {
     public var motionID:         UUID?
     public var phaseOffset:      Int
     public var polygonOverrides: [Int: UMPolygonOverride]
+    /// Animated position offset added on top of (x*gridW + motion.dx). Output units are canvas pixels.
+    public var positionDriver:   UMVectorDriver
 
     public init(
-        id:               UUID                    = UUID(),
-        name:             String                  = "Sprite",
-        x:                Double                  = 0,
-        y:                Double                  = 0,
-        rotation:         Double                  = 0,
-        scaleX:           Double                  = 1.0,
-        scaleY:           Double                  = 1.0,
-        styleID:          UUID?                   = nil,
-        shapeID:          UUID?                   = nil,
-        motionID:         UUID?                   = nil,
-        phaseOffset:      Int                     = 0,
-        polygonOverrides: [Int: UMPolygonOverride] = [:]
+        id:               UUID                     = UUID(),
+        name:             String                   = "Sprite",
+        x:                Double                   = 0,
+        y:                Double                   = 0,
+        rotation:         Double                   = 0,
+        scaleX:           Double                   = 1.0,
+        scaleY:           Double                   = 1.0,
+        styleID:          UUID?                    = nil,
+        shapeID:          UUID?                    = nil,
+        motionID:         UUID?                    = nil,
+        phaseOffset:      Int                      = 0,
+        polygonOverrides: [Int: UMPolygonOverride] = [:],
+        positionDriver:   UMVectorDriver            = .zero
     ) {
         self.id               = id
         self.name             = name
@@ -66,6 +69,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         self.motionID         = motionID
         self.phaseOffset      = phaseOffset
         self.polygonOverrides = polygonOverrides
+        self.positionDriver   = positionDriver
     }
 
     // MARK: Codable — [Int: T] keys need String bridging
@@ -73,6 +77,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, x, y, rotation, scaleX, scaleY
         case styleID, shapeID, motionID, phaseOffset, polygonOverrides
+        case positionDriver
     }
 
     public init(from decoder: Decoder) throws {
@@ -87,7 +92,8 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         styleID       = try? c.decodeIfPresent(UUID.self, forKey: .styleID)
         shapeID       = try? c.decodeIfPresent(UUID.self, forKey: .shapeID)
         motionID      = try? c.decodeIfPresent(UUID.self, forKey: .motionID)
-        phaseOffset   = (try? c.decodeIfPresent(Int.self, forKey: .phaseOffset)) ?? 0
+        phaseOffset   = (try? c.decodeIfPresent(Int.self,              forKey: .phaseOffset))    ?? 0
+        positionDriver = (try? c.decodeIfPresent(UMVectorDriver.self,  forKey: .positionDriver)) ?? .zero
         // [Int: UMPolygonOverride] — JSON keys are strings; decode via [String: T] then rekey
         let rawOvr    = (try? c.decodeIfPresent([String: UMPolygonOverride].self, forKey: .polygonOverrides)) ?? [:]
         polygonOverrides = Dictionary(uniqueKeysWithValues: rawOvr.compactMap { k, v in
@@ -109,6 +115,7 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         if let v = shapeID   { try c.encode(v, forKey: .shapeID) }
         if let v = motionID  { try c.encode(v, forKey: .motionID) }
         if phaseOffset != 0  { try c.encode(phaseOffset, forKey: .phaseOffset) }
+        if positionDriver != .zero { try c.encode(positionDriver, forKey: .positionDriver) }
         if !polygonOverrides.isEmpty {
             let strKeyed = Dictionary(uniqueKeysWithValues: polygonOverrides.map { (String($0.key), $0.value) })
             try c.encode(strKeyed, forKey: .polygonOverrides)

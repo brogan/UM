@@ -348,7 +348,7 @@ private let layersBody = #"""
 
 <h2>Adding and removing layers</h2>
 <ul>
-  <li>Click <strong>+ New Layer</strong> below the layer list to add a new layer. It inherits the active layer's grid resolution and becomes the active layer.</li>
+  <li>Click <strong>+ New Layer</strong> below the layer list — a small menu appears. Choose <strong>Grid Layer</strong> for a standard grid layer or <strong>Sprite Layer</strong> for free-placement (see Sprite Layers below). The new layer becomes active.</li>
   <li>Right-click a layer row → <strong>Duplicate</strong> to copy the layer including all its cells, styles, and paths.</li>
   <li>Right-click → <strong>Delete Layer</strong> to remove it. Disabled when only one layer remains.</li>
 </ul>
@@ -382,6 +382,60 @@ private let layersBody = #"""
 <div class="tip"><strong>Layered depth example</strong> — three layers: sky (factor 0.0), mid-ground (factor 0.3), foreground (factor 1.0). Pan the camera left — the sky stays still, the mid-ground drifts slowly, and the foreground moves fastest, producing natural depth.</div>
 
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
+
+<h2>Sprite Layers</h2>
+<p>A <strong>sprite layer</strong> is a special layer type where you freely place individual shapes anywhere on the canvas, rather than filling a grid. Use sprite layers for accent elements, floating logos, or any shape that shouldn't follow a regular grid rhythm.</p>
+
+<h3>Creating a sprite layer</h3>
+<ol class="steps">
+  <li>Click the <strong>+ New Layer</strong> button below the layer list — it opens a small menu.</li>
+  <li>Choose <strong>Sprite Layer</strong>. The new layer appears in the list with a <strong>✦</strong> icon to distinguish it from grid layers.</li>
+  <li>Click the sprite layer row to make it active.</li>
+</ol>
+
+<h3>Placing sprites</h3>
+<ol class="steps">
+  <li>With a sprite layer active, click anywhere on the canvas. A new sprite appears at that position, using the currently selected style, shape, and motion.</li>
+  <li>Alternatively, open <strong>Quick Adjust</strong> and click <strong>+ Place at Centre</strong> in the SPRITES section to place a sprite at the canvas midpoint.</li>
+</ol>
+<div class="note">To control which style, shape, and motion a new sprite gets, select those items in the left palette before clicking to place.</div>
+
+<h3>Selecting a sprite</h3>
+<p>Click any existing sprite on the canvas to select it. The selected sprite gets an accent outline. Its properties appear in the <strong>SPRITES</strong> inspector in Quick Adjust.</p>
+
+<h3>Moving a sprite</h3>
+<p>Drag any sprite to reposition it. The sprite moves in real time. Alternatively, edit the <strong>Position X</strong> and <strong>Position Y</strong> fields in the SPRITES inspector (values shown as a percentage of canvas width/height).</p>
+
+<h3>Deleting a sprite</h3>
+<ul>
+  <li>Select the sprite (click it on the canvas), then press <kbd>Delete</kbd>.</li>
+  <li>Or click the <strong>&times;</strong> button next to the sprite&apos;s name in the SPRITES list in Quick Adjust.</li>
+</ul>
+
+<h3>The SPRITES inspector (Quick Adjust)</h3>
+<p>When a sprite layer is active, Quick Adjust shows the <strong>SPRITES section</strong> in place of the usual grid controls. At the top is a list of all sprites on that layer. Click a row to select a sprite; click <strong>&times;</strong> to remove it.</p>
+<p>When a sprite is selected, the inspector below the list shows:</p>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td>Name</td><td>Editable label for the sprite. Shown in the sprite list.</td></tr>
+  <tr><td>Position X / Y</td><td>Canvas position as a percentage (0% = left/top edge, 100% = right/bottom edge).</td></tr>
+  <tr><td>Rotation</td><td>Rotation in degrees.</td></tr>
+  <tr><td>Scale X / Y</td><td>Size multiplier relative to the default sprite reference size (one-eighth of the shorter canvas dimension).</td></tr>
+  <tr><td>Style</td><td>Fill and stroke style. Picks from the project&apos;s style palette.</td></tr>
+  <tr><td>Shape</td><td>Loom shape. Picks from the project&apos;s shape library.</td></tr>
+  <tr><td>Motion</td><td>Motion set driving animated offset, rotation, and scale. Picks from the project&apos;s motion palette.</td></tr>
+  <tr><td>Phase offset</td><td>Frame offset into the motion cycle, same as grid cells. Lets sprites animate out of phase with each other.</td></tr>
+</table>
+
+<h3>Sprite layers and export</h3>
+<p>Sprite layers export identically to grid layers — they composite into the PNG or video output at the configured opacity and parallax factor. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution.</p>
+
+<h3>Limitations in this version</h3>
+<ul>
+  <li><strong>Motion controls</strong> — the standalone MOTION editor in Quick Adjust is hidden while a sprite layer is active. To edit a motion set&apos;s parameters, switch to a grid layer that uses the same motion set.</li>
+  <li><strong>No path animation on sprites</strong> — sprites support a motion set (oscillating offset/rotation) but not keyframe paths.</li>
+  <li><strong>No per-polygon colour overrides in UI</strong> — the underlying data model supports per-polygon fill/stroke overrides, but the colour-picker table is not yet exposed in the inspector.</li>
+</ul>
 
 <h2>Grid Scroll</h2>
 <p>The <strong>GRID SCROLL</strong> section in Quick Adjust (below CAMERA) slides the active layer's cells across the canvas by remapping which source cell appears at each display position. Unlike nudging individual cells, grid scroll moves the entire layer's content as a unit — and wraps, clamps, or consumes cells at the edges.</p>
