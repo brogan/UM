@@ -720,6 +720,52 @@ private let layersBody = #"""
 </ol>
 <div class="tip">For a continuous scroll in one direction rather than back-and-forth, use <strong>Keyframe</strong> mode and draw a steadily-increasing ramp in the timeline's Grid Scroll lane.</div>
 <p>Click <strong>Reset</strong> to return Scroll X and Y to zero and Edge Mode to Wrap.</p>
+
+<h2>Grid Distortion</h2>
+<p>The <strong>DISTORTION</strong> subsection inside <strong>LAYER DRIVERS</strong> applies a geometric warp to the active grid layer at render time. The underlying cell data is unchanged — distortion is purely a display and export transform.</p>
+<p>Open <strong>LAYER DRIVERS</strong> in Quick Adjust and use the <strong>Mode</strong> picker to choose a distortion type.</p>
+
+<h3>None</h3>
+<p>Default. Cells are positioned on a uniform rectangular grid. No distortion applied.</p>
+
+<h3>Perspective</h3>
+<p>Simulates a receding surface by varying row heights and column widths exponentially. Use it to make a grid appear to tilt away from the viewer — rows becoming smaller toward one edge — or to create a floor, ceiling, or sidewall perspective.</p>
+<table>
+  <tr><th>Control</th><th>Range</th><th>Effect</th></tr>
+  <tr><td><strong>Vertical</strong></td><td>−1 to +1</td><td>+1: top rows compressed, bottom rows expanded (floor receding away at top). −1: the reverse (floor receding toward bottom, or ceiling effect).</td></tr>
+  <tr><td><strong>Horizontal</strong></td><td>−1 to +1</td><td>+1: left columns compressed, right columns expanded. −1: the reverse. Set both to zero for a uniform grid.</td></tr>
+</table>
+<p>When perspective is active, the grid lines in the canvas redraw at the correct variable-pitch positions so they match the distorted cell boundaries.</p>
+<div class="tip">Set Vertical to 0.6 and Horizontal to 0 for a classic isometric-style floor. Combine with a Grid Scroll oscillator to animate tiles across the receding surface.</div>
+<div class="note">Click-to-draw accuracy is reduced when perspective is strong, because the hit-test still uses the uniform grid to find which cell was clicked. For detailed painting, reduce the distortion while drawing and restore it for playback.</div>
+
+<h3>Barrel / Cone</h3>
+<p>A radial size modulation centred on the canvas. Cell <em>positions</em> remain at their uniform grid locations; only the drawn size of each cell's content changes.</p>
+<table>
+  <tr><th>Amount</th><th>Effect</th></tr>
+  <tr><td><strong>&gt; 0 (Barrel / Spherical)</strong></td><td>Centre cells drawn larger than normal; corner cells drawn at normal size. The composition appears to bulge outward from the centre — a lens or balloon effect. Maximum at +1.</td></tr>
+  <tr><td><strong>0</strong></td><td>Uniform — no distortion.</td></tr>
+  <tr><td><strong>&lt; 0 (Cone / Pincushion)</strong></td><td>Centre cells drawn smaller than normal; corner cells drawn at normal size. The composition appears to pinch inward — a spotlight or cone effect. Maximum at −1.</td></tr>
+</table>
+<p>The scale formula is <em>s = 1 + amount × (1 − r²)</em> where r is the normalised radial distance from the canvas centre (0 at centre, 1 at corners). The drawn size scales smoothly from the midpoint outward.</p>
+<div class="tip">A high positive amount on a dense grid of circles creates an organic bubble or soap-foam texture where inner cells appear larger and more prominent.</div>
+
+<h3>Fractured</h3>
+<p>Each cell's drawn position is shifted by a stable random offset in X and Y. Cell sizes remain uniform; only centres move. The randomisation is deterministic — the same <strong>Seed</strong> always produces the same jitter pattern — so the result is stable across frames and exports.</p>
+<table>
+  <tr><th>Control</th><th>Description</th></tr>
+  <tr><td><strong>Amount</strong></td><td>Maximum jitter as a fraction of cell size. 0 = no jitter. 1 = each cell can shift by up to ±50% of its width and height in each axis. At high values cells overlap neighbours.</td></tr>
+  <tr><td><strong>Seed</strong></td><td>Integer that selects the random stream. Different seeds give completely different patterns at the same amount. Click <strong>↺</strong> to randomise to a new seed instantly.</td></tr>
+</table>
+<div class="tip">Use Fractured at a low amount (0.1–0.2) on a dense grid to break the mechanical regularity of the layout without visually displacing cells far from their natural positions. At higher amounts it produces a scattered mosaic effect.</div>
+<div class="note">Fractured distortion is most effective on grid layers with shapes assigned. On plain rectangle cells, the shifted positions may create visible gaps between cells at the edges of the canvas.</div>
+
+<h3>Combining distortion with other layer features</h3>
+<ul>
+  <li><strong>Grid Scroll + Perspective</strong>: As cells scroll across the layer, each one is placed at the distorted position of its current display slot, so cells visually grow or shrink as they travel across the receding surface.</li>
+  <li><strong>Blend modes + Barrel</strong>: A Screen or Add barrel layer over a uniform base can create a natural vignette where the composition emphasises the centre.</li>
+  <li><strong>Multiple layers with different distortions</strong>: Distortion is per-layer, so you can stack a Perspective grid below a Fractured grid for complex spatial arrangements.</li>
+</ul>
 """#
 
 private let paintingBody = #"""
