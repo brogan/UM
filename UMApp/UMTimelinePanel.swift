@@ -25,7 +25,7 @@ private enum TLSelection: Hashable {
     case sprite(layerIndex: Int, spriteID: UUID, keyframeIdx: Int)
 }
 
-private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, spriteKF, rubberBand, markerStrip }
+private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, spriteKF, rubberBand, markerStrip, startHandle, endHandle }
 
 private struct LayerKFHit: Equatable {
     var layerIndex: Int; var lane: UMTimelineLane; var keyframeIdx: Int
@@ -386,6 +386,13 @@ struct UMTimelinePanel: View {
                 .onChanged { v in onDragChanged(v, canvasWidth: size.width, rows: buildRows()) }
                 .onEnded   { v in onDragEnded(v,   canvasWidth: size.width, rows: buildRows()) }
         )
+        .onContinuousHover { phase in
+            if case .active(let loc) = phase, hitTestRulerHandle(at: loc) != nil {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
     }
 
     // MARK: Drawing
@@ -502,6 +509,46 @@ struct UMTimelinePanel: View {
         ctx.stroke(Path {
             $0.move(to: CGPoint(x: 0, y: totalRulerH)); $0.addLine(to: CGPoint(x: size.width, y: totalRulerH))
         }, with: .color(Color.secondary.opacity(0.18)), lineWidth: 0.5)
+
+        // Start/end frame handle triangles (pointing up, sitting at bottom of ruler)
+        let handleY = CGFloat(markerH) + CGFloat(rulerH)
+        let hSz: CGFloat = 6
+
+        let sx = CGFloat(controller.startFrame) * px - CGFloat(hOffset)
+        if sx > -hSz && sx < size.width + hSz {
+            // Shaded region left of start
+            if sx > 0 {
+                ctx.fill(Path(CGRect(x: 0, y: markerH, width: sx, height: rulerH)),
+                         with: .color(Color.secondary.opacity(0.08)))
+            }
+            ctx.fill(Path {
+                $0.move(to: CGPoint(x: sx,      y: handleY))
+                $0.addLine(to: CGPoint(x: sx - hSz, y: handleY - hSz * 1.5))
+                $0.addLine(to: CGPoint(x: sx + hSz, y: handleY - hSz * 1.5))
+                $0.closeSubpath()
+            }, with: .color(Color.orange.opacity(0.85)))
+            ctx.stroke(Path {
+                $0.move(to: CGPoint(x: sx, y: markerH)); $0.addLine(to: CGPoint(x: sx, y: handleY))
+            }, with: .color(Color.orange.opacity(0.55)), lineWidth: 1)
+        }
+
+        let ex = CGFloat(controller.endFrame) * px - CGFloat(hOffset)
+        if ex > -hSz && ex < size.width + hSz {
+            // Shaded region right of end
+            if ex < size.width {
+                ctx.fill(Path(CGRect(x: ex, y: markerH, width: size.width - ex, height: rulerH)),
+                         with: .color(Color.secondary.opacity(0.08)))
+            }
+            ctx.fill(Path {
+                $0.move(to: CGPoint(x: ex,      y: handleY))
+                $0.addLine(to: CGPoint(x: ex - hSz, y: handleY - hSz * 1.5))
+                $0.addLine(to: CGPoint(x: ex + hSz, y: handleY - hSz * 1.5))
+                $0.closeSubpath()
+            }, with: .color(Color.red.opacity(0.75)))
+            ctx.stroke(Path {
+                $0.move(to: CGPoint(x: ex, y: markerH)); $0.addLine(to: CGPoint(x: ex, y: handleY))
+            }, with: .color(Color.red.opacity(0.45)), lineWidth: 1)
+        }
     }
 
     private func drawKeyframes(_ ctx: inout GraphicsContext, size: CGSize, rows: [TLRow]) {
@@ -645,6 +692,17 @@ struct UMTimelinePanel: View {
         return CameraKFHit(lane: lane, keyframeIdx: idx)
     }
 
+    private func hitTestRulerHandle(at point: CGPoint) -> TLDragKind? {
+        guard point.y >= markerH && point.y <= totalRulerH else { return nil }
+        let px = CGFloat(zoom)
+        let tol = max(CGFloat(hitTol), 8)
+        let sx = CGFloat(controller.startFrame) * px - CGFloat(hOffset)
+        let ex = CGFloat(controller.endFrame)   * px - CGFloat(hOffset)
+        if abs(point.x - sx) <= tol { return .startHandle }
+        if abs(point.x - ex) <= tol { return .endHandle }
+        return nil
+    }
+
     private func hitTestSpriteKF(at point: CGPoint, rows: [TLRow]) -> SpriteKFHit? {
         guard let row = rowAt(point, in: rows), case .spriteLane(let i, let spriteID) = row.kind else { return nil }
         guard let ls = controller.layerStates[safe: i],
@@ -667,6 +725,8 @@ struct UMTimelinePanel: View {
             prevDragTX = 0
             if v.startLocation.y < markerH {
                 dragKind = .markerStrip
+            } else if let handleKind = hitTestRulerHandle(at: v.startLocation) {
+                dragKind = handleKind
             } else if v.startLocation.y < totalRulerH {
                 dragKind  = .seek
                 wasPlaying = controller.isPlaying
@@ -705,6 +765,14 @@ struct UMTimelinePanel: View {
         case .spriteKF:
             let f = max(0, Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
             if let s = spriteKFDrag { spriteKFDrag = (s.hit, f) }
+        case .startHandle:
+            let f = max(0, min(controller.endFrame - 1,
+                               Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded())))
+            controller.startFrame = f
+        case .endHandle:
+            let f = max(controller.startFrame + 1,
+                        Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            controller.endFrame = f
         case .pan:
             let delta = v.translation.width - prevDragTX
             hOffset   = max(0, hOffset - Double(delta))
@@ -736,6 +804,10 @@ struct UMTimelinePanel: View {
             if !isTap, let s = spriteKFDrag { commitSpriteKFDrag(s) }
             if isTap { seekToKF(spriteKFDrag?.previewFrame) }
             spriteKFDrag = nil
+        case .startHandle:
+            if isTap { controller.seekToFrame(controller.startFrame) }
+        case .endHandle:
+            if isTap { controller.seekToFrame(controller.endFrame) }
         case .pan:
             if isTap { handleTap(at: v.startLocation, rows: rows) }
         case .rubberBand:
