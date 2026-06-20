@@ -230,7 +230,7 @@ private let introBody = #"""
 <p>Every drawn cell carries four independent axis assignments that are combined at render time:</p>
 <ul>
   <li><strong>Style</strong> — the visual character: fill colour, stroke colour, stroke width, and render mode (filled, stroked, or both). Styles are palette items shared across all layers.</li>
-  <li><strong>Motion</strong> — the animation behaviour: a named <em>motion set</em> that carries a parametric preset (Spin, Wave, Jitter…), speed, amount, phase, and an Order/Chaos value. Motion sets are palette items; changing the active motion set before painting affects newly drawn cells only.</li>
+  <li><strong>Motion</strong> — the animation behaviour: a named <em>motion set</em> that carries a parametric preset (Spin, Wave, Jitter…), speed, amount, phase, Order/Chaos, and per-axis mix controls. Motion sets are palette items; changing the active motion set before painting affects newly drawn cells only.</li>
   <li><strong>Shape</strong> — the geometry: a named Loom polygon file imported into the project. One shape per cell; changing the active shape affects newly drawn cells only.</li>
   <li><strong>Path</strong> — a keyframe motion path: a named, reusable sequence of position/rotation/scale keyframes that loops at a set rate.</li>
 </ul>
@@ -753,7 +753,7 @@ private let qaStyleBody = #"""
 <table>
   <tr><th>Axis</th><th>What it controls</th><th>Palette section</th></tr>
   <tr><td><strong>Style</strong></td><td>Fill colour, stroke colour, stroke width, render mode</td><td>STYLES (left panel)</td></tr>
-  <tr><td><strong>Motion</strong></td><td>Parametric preset, speed, amount, phase, Order/Chaos</td><td>MOTIONS (left panel) — <em>pending UI</em></td></tr>
+  <tr><td><strong>Motion</strong></td><td>Parametric preset, speed, amount, phase, Order/Chaos, axis mix</td><td>MOTIONS (left panel) — <em>pending UI</em></td></tr>
   <tr><td><strong>Shape</strong></td><td>Polygon geometry (imported from Loom)</td><td>SHAPES (left panel)</td></tr>
   <tr><td><strong>Path</strong></td><td>Keyframe motion path</td><td>PATHS (left panel)</td></tr>
 </table>
@@ -808,19 +808,20 @@ private let qaMotionBody = #"""
   <tr><td><strong>Amount</strong></td><td>Amplitude of the effect (0–1, default 0.5).</td></tr>
   <tr><td><strong>Phase</strong></td><td>Starting phase within the oscillation cycle (0–1). Distinct from the per-cell phase offset in PLACE &amp; TIME — this shifts the waveform shape, not when the cell starts animating.</td></tr>
   <tr><td><strong>Order/Chaos</strong></td><td>A 0–1 scalar that adds layered sine-wave jitter on top of the preset. See below.</td></tr>
+  <tr><td><strong>Axis mix</strong></td><td>Per-axis multipliers (0–1) that attenuate or suppress individual channels of the preset's output. Which axes appear depends on the preset — see below.</td></tr>
 </table>
 
 <h2>Motion presets</h2>
 <table>
-  <tr><th>Preset</th><th>What it does</th></tr>
-  <tr><td><strong>Static</strong></td><td>No motion. Default for cells with no motion set assigned.</td></tr>
-  <tr><td><strong>Spin</strong></td><td>Continuous rotation. At Speed 1, Amount 1: roughly one full rotation every 3 seconds.</td></tr>
-  <tr><td><strong>Pulse</strong></td><td>Sine-wave scale oscillation on both axes simultaneously. Sprites breathe in and out.</td></tr>
-  <tr><td><strong>Wave</strong></td><td>Horizontal sine displacement. Sprites swing left and right.</td></tr>
-  <tr><td><strong>Wander</strong></td><td>Slow 2D drift using two sine waves at a golden-ratio frequency ratio. Each cell follows a unique Lissajous figure.</td></tr>
-  <tr><td><strong>Jitter</strong></td><td>High-frequency small-amplitude noise on both axes plus rotation. Fast, twitchy character.</td></tr>
-  <tr><td><strong>Color Cycle</strong></td><td>Continuously rotates fill and stroke hues. Achromatic colours (grey, white, black) are unaffected.</td></tr>
-  <tr><td><strong>Custom</strong></td><td>Reserved — no effect in the current build.</td></tr>
+  <tr><th>Preset</th><th>What it does</th><th>Axis mix controls</th></tr>
+  <tr><td><strong>Static</strong></td><td>No motion. Default for cells with no motion set assigned.</td><td>—</td></tr>
+  <tr><td><strong>Spin</strong></td><td>Continuous rotation. At Speed 1, Amount 1: roughly one full rotation every 3 seconds.</td><td>Rotation</td></tr>
+  <tr><td><strong>Pulse</strong></td><td>Sine-wave scale oscillation on both axes simultaneously. Sprites breathe in and out.</td><td>Scale</td></tr>
+  <tr><td><strong>Wave</strong></td><td>Sine displacement. Default axis: horizontal. Use Axis mix to suppress X, add Y, or blend both.</td><td>X, Y</td></tr>
+  <tr><td><strong>Wander</strong></td><td>Slow 2D drift using two sine waves at a golden-ratio frequency ratio. Each cell follows a unique Lissajous figure.</td><td>X, Y</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>High-frequency small-amplitude noise on both axes plus rotation. Fast, twitchy character.</td><td>X, Y, Rotation</td></tr>
+  <tr><td><strong>Color Cycle</strong></td><td>Continuously rotates fill and stroke hues. Achromatic colours (grey, white, black) are unaffected.</td><td>—</td></tr>
+  <tr><td><strong>Custom</strong></td><td>Reserved — no effect in the current build.</td><td>—</td></tr>
 </table>
 
 <h2>ORDER / CHAOS</h2>
@@ -833,6 +834,18 @@ private let qaMotionBody = #"""
 <p>All jitter is smooth (sinusoidal) — no per-frame random. The chaos feels organic rather than flickery.</p>
 <p>Motion and chaos are <strong>additive with keyframe path motion</strong>: position offsets add, rotations add, scale multiplies.</p>
 <div class="tip"><strong>Order/Chaos around 0.3</strong> gives subtle aliveness — sprites breathe and drift slightly while still reading as a coherent composition. 0.8–1.0 gives maximum turbulence.</div>
+
+<h2>Axis mix</h2>
+<p>Each preset drives a specific set of animation channels. The <strong>Axis mix</strong> sliders (visible in Quick Adjust for the active motion set) let you attenuate or completely suppress individual channels:</p>
+<table>
+  <tr><th>Slider</th><th>Range</th><th>Effect</th></tr>
+  <tr><td><strong>X</strong></td><td>0–1</td><td>Scales the horizontal position displacement. Set to 0 for vertical-only motion on Wave or Wander.</td></tr>
+  <tr><td><strong>Y</strong></td><td>0–1</td><td>Scales the vertical position displacement. Set to 0 to restrict Wander or Jitter to horizontal.</td></tr>
+  <tr><td><strong>Rotation</strong></td><td>0–1</td><td>Scales the rotation output. Set to 0 on Jitter for position-only twitching with no angle change. Set to 0 on Spin to cancel rotation while Order/Chaos can still add some chaos.</td></tr>
+  <tr><td><strong>Scale</strong></td><td>0–1</td><td>Scales the deviation from 1.0 on Pulse. At 0 the sprite stays at its natural size; at 1 it breathes at full Amount.</td></tr>
+</table>
+<p>Only the sliders relevant to the current preset are shown. Axis mix operates on the preset's parametric output only — Order/Chaos jitter and keyframe path offsets are unaffected.</p>
+<div class="tip"><strong>Jitter position-only:</strong> set Rotation to 0. <strong>Y-only wave:</strong> set X to 0 and Y to 1. <strong>X-only wander:</strong> set Y to 0.</div>
 
 <h2>Using motion sets</h2>
 <p>Motion sets work like the other three palette axes:</p>
@@ -1024,7 +1037,7 @@ private let paletteBody = #"""
 </table>
 
 <h3>MOTIONS</h3>
-<p>Motion sets control animation: parametric preset, speed, amount, phase, Order/Chaos, and SEQUENCE shape cycling. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. The <strong>MOTION</strong> section in Quick Adjust (right panel) shows its parameters immediately.</p>
+<p>Motion sets control animation: parametric preset, speed, amount, phase, Order/Chaos, axis mix, and SEQUENCE shape cycling. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. The <strong>MOTION</strong> section in Quick Adjust (right panel) shows its parameters immediately.</p>
 <ul>
   <li><strong>+ New Motion</strong> — adds a blank motion set (Static preset, all defaults).</li>
   <li><strong>↑ button</strong> — saves a copy to the global library.</li>

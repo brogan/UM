@@ -1121,6 +1121,14 @@ private func computeParametric(motionSet: UMMotionSet, style: CellStyle?,
         m.fillOverride   = style?.fillColor.rotatingHue(by: shift)
         m.strokeOverride = style?.strokeColor.rotatingHue(by: shift)
     }
+
+    // Per-axis multipliers: scale deviation from identity, not absolute value
+    m.dx       *= motionSet.axisX
+    m.dy       *= motionSet.axisY
+    m.rotation *= motionSet.axisRotation
+    m.scaleX    = 1.0 + (m.scaleX - 1.0) * motionSet.axisScale
+    m.scaleY    = 1.0 + (m.scaleY - 1.0) * motionSet.axisScale
+
     return m
 }
 

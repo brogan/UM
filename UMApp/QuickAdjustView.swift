@@ -1106,6 +1106,53 @@ struct QuickAdjustView: View {
                         .frame(width: 38, alignment: .trailing)
                 }
 
+                // Axis mix — show only the axes the current preset actually uses
+                let showXY  = ms.motionPreset == .wave || ms.motionPreset == .wander || ms.motionPreset == .jitter
+                let showRot = ms.motionPreset == .spin || ms.motionPreset == .jitter
+                let showSc  = ms.motionPreset == .pulse
+                if showXY || showRot || showSc {
+                    Divider().padding(.horizontal, 12).padding(.vertical, 3)
+                    Text("Axis mix")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 2)
+                    if showXY {
+                        InspectorField("X") {
+                            Slider(value: axisXBinding, in: 0...1)
+                                .frame(maxWidth: 100)
+                            Text(String(format: "%.2f", ms.axisX))
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 38, alignment: .trailing)
+                        }
+                        InspectorField("Y") {
+                            Slider(value: axisYBinding, in: 0...1)
+                                .frame(maxWidth: 100)
+                            Text(String(format: "%.2f", ms.axisY))
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                    if showRot {
+                        InspectorField("Rotation") {
+                            Slider(value: axisRotationBinding, in: 0...1)
+                                .frame(maxWidth: 100)
+                            Text(String(format: "%.2f", ms.axisRotation))
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                    if showSc {
+                        InspectorField("Scale") {
+                            Slider(value: axisScaleBinding, in: 0...1)
+                                .frame(maxWidth: 100)
+                            Text(String(format: "%.2f", ms.axisScale))
+                                .font(.system(size: 11, design: .monospaced))
+                                .frame(width: 38, alignment: .trailing)
+                        }
+                    }
+                }
+
                 Divider().padding(.horizontal, 12).padding(.vertical, 3)
                 InspectorField("Sequence") {
                     Picker("", selection: sequenceModeBinding) {
@@ -1563,6 +1610,34 @@ struct QuickAdjustView: View {
         Binding(
             get: { controller.activeMotionSet?.orderChaos ?? 0 },
             set: { if let i = activeMotionIndex { controller.projectMotionSets[i].orderChaos = $0 } }
+        )
+    }
+
+    private var axisXBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.axisX ?? 1.0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisX = $0 } }
+        )
+    }
+
+    private var axisYBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.axisY ?? 1.0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisY = $0 } }
+        )
+    }
+
+    private var axisRotationBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.axisRotation ?? 1.0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisRotation = $0 } }
+        )
+    }
+
+    private var axisScaleBinding: Binding<Double> {
+        Binding(
+            get: { controller.activeMotionSet?.axisScale ?? 1.0 },
+            set: { if let i = activeMotionIndex { controller.projectMotionSets[i].axisScale = $0 } }
         )
     }
 
