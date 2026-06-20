@@ -58,6 +58,7 @@ struct UMTimelinePanel: View {
     @State private var rubberStart:      CGPoint? = nil
     @State private var rubberEnd:        CGPoint? = nil
     @State private var selectedItems:    Set<TLSelection> = []
+    @State private var timingScalePct:   Double = 100
     @State private var undoStack:        [TLSnapshot] = []
     @State private var selectedMarkerID: UUID?    = nil
     @State private var markerRenameText: String   = ""
@@ -218,6 +219,26 @@ struct UMTimelinePanel: View {
                 }
             }
             .frame(height: markerH).padding(.horizontal, 6)
+
+            // Timing-scale row (shown when ≥2 KFs selected)
+            if selectedItems.count >= 2 {
+                HStack(spacing: 3) {
+                    Text("Scale").font(.system(size: 9)).foregroundStyle(.secondary)
+                    TextField("", value: $timingScalePct,
+                              format: .number.precision(.fractionLength(0)))
+                        .textFieldStyle(.squareBorder)
+                        .font(.system(size: 10, design: .monospaced))
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 36)
+                    Text("%").font(.system(size: 9)).foregroundStyle(.secondary)
+                    Button("↔") { applyTimingScale() }
+                        .font(.system(size: 10)).buttonStyle(.plain)
+                        .foregroundStyle(Color.accentColor)
+                        .help("Scale selected KF timing from earliest-frame pivot")
+                }
+                .frame(height: markerH).padding(.horizontal, 6)
+                .background(Color.accentColor.opacity(0.06))
+            }
 
             // Marker rename row (shown below bookmark button row when marker selected)
             if let mid = selectedMarkerID,
@@ -998,6 +1019,89 @@ struct UMTimelinePanel: View {
                     controller.camera.rotation.keyframes.remove(at: ki)
                     if controller.camera.rotation.keyframes.isEmpty { controller.camera.rotation.mode = .constant }
                 }
+            }
+        }
+        clearSelection()
+    }
+
+    private func applyTimingScale() {
+        guard selectedItems.count >= 2, timingScalePct != 100 else { return }
+        recordUndo()
+
+        // Find pivot = earliest frame among selected KFs
+        var pivotFrame = Int.max
+        for item in selectedItems {
+            let f: Int
+            switch item {
+            case .layer(let i, let lane, let ki):
+                guard let ls = controller.layerStates[safe: i],
+                      let frame = lane.keyframeFrames(from: ls)[safe: ki] else { continue }
+                f = frame
+            case .camera(let lane, let ki):
+                guard let frame = lane.keyframeFrames(from: controller.camera)[safe: ki] else { continue }
+                f = frame
+            }
+            pivotFrame = min(pivotFrame, f)
+        }
+        guard pivotFrame < Int.max else { return }
+
+        let scale = timingScalePct / 100.0
+
+        // Move each selected KF's frame — modify before re-sorting
+        for item in selectedItems {
+            switch item {
+            case .layer(let i, let lane, let ki):
+                guard let ls = controller.layerStates[safe: i] else { continue }
+                switch lane {
+                case .opacity:
+                    guard ki < ls.opacityDriver.keyframes.count else { continue }
+                    let old = ls.opacityDriver.keyframes[ki].frame
+                    ls.opacityDriver.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                case .offset:
+                    guard ki < ls.layerOffset.keyframes.count else { continue }
+                    let old = ls.layerOffset.keyframes[ki].frame
+                    ls.layerOffset.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                case .gridScroll:
+                    guard ki < ls.gridScrollDriver.keyframes.count else { continue }
+                    let old = ls.gridScrollDriver.keyframes[ki].frame
+                    ls.gridScrollDriver.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                }
+            case .camera(let lane, let ki):
+                switch lane {
+                case .pan:
+                    guard ki < controller.camera.pan.keyframes.count else { continue }
+                    let old = controller.camera.pan.keyframes[ki].frame
+                    controller.camera.pan.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                case .zoom:
+                    guard ki < controller.camera.zoom.keyframes.count else { continue }
+                    let old = controller.camera.zoom.keyframes[ki].frame
+                    controller.camera.zoom.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                case .rotation:
+                    guard ki < controller.camera.rotation.keyframes.count else { continue }
+                    let old = controller.camera.rotation.keyframes[ki].frame
+                    controller.camera.rotation.keyframes[ki].frame = pivotFrame + max(0, Int((Double(old - pivotFrame) * scale).rounded()))
+                }
+            }
+        }
+
+        // Re-sort affected driver arrays
+        let affectedLayers = Set(selectedItems.compactMap {
+            if case .layer(let i, _, _) = $0 { i } else { nil }
+        })
+        let affectedCamLanes = Set(selectedItems.compactMap {
+            if case .camera(let lane, _) = $0 { lane } else { nil }
+        })
+        for i in affectedLayers {
+            guard let ls = controller.layerStates[safe: i] else { continue }
+            ls.opacityDriver.keyframes.sort     { $0.frame < $1.frame }
+            ls.layerOffset.keyframes.sort       { $0.frame < $1.frame }
+            ls.gridScrollDriver.keyframes.sort  { $0.frame < $1.frame }
+        }
+        for lane in affectedCamLanes {
+            switch lane {
+            case .pan:      controller.camera.pan.keyframes.sort      { $0.frame < $1.frame }
+            case .zoom:     controller.camera.zoom.keyframes.sort     { $0.frame < $1.frame }
+            case .rotation: controller.camera.rotation.keyframes.sort { $0.frame < $1.frame }
             }
         }
         clearSelection()

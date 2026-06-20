@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch). Revised 2026-06-20 (three UI features built: right-panel context-switching — RENDER → STYLE—[name], new SHAPE—[name] section; LAYER DRIVERS section for opacityDriver/layerOffset oscillator/jitter/noise UI; timing-scale % field in timeline header; §6.8, §15.9, §15.11 updated; summary table updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -737,10 +737,11 @@ Tap a row to switch the active layer. Drag a row to reorder layers (an accent-co
 
 Camera state (pan, zoom, rotation) lives in `AppController.camera: UMCamera` and is edited via the **CAMERA** section in Quick Adjust — see §15.8.
 
+The right panel exposes per-layer driver UI in the **LAYER DRIVERS** section (collapsed by default). Both `opacityDriver` and `layerOffset` support oscillator, jitter, noise, and keyframe modes — see §15.8. The RENDER section title changes dynamically to **STYLE — [name]** when a style is active. A **SHAPE — [name]** section appears below MOTION when a shape palette item is active, showing polygon counts and cell usage in the active layer.
+
 #### Current limitations
 
 - No layer blend modes beyond normal (opacity)
-- No animated layer opacity or parallax drivers (opacityDriver / layerOffset oscillator/keyframe UI is Phase 2 of §15.8)
 
 ---
 
@@ -2040,7 +2041,6 @@ public var shapeIDs: [UUID]            // shapes to cycle through; omitted from 
 
 **What remains (still pending)**
 
-- **Full right-panel context-switching** — when a STYLE or SHAPE palette item is active and no cell is selected, the right panel could show a dedicated detail section for that item (currently only MOTION does this). Medium scope.
 - **"Nothing active" hint** — a contextual hint row shown when nothing is selected and no palette item is active.
 - **Resolution palette Project/Library tabs** — the preset chips exist in the LAYERS section but there is no separate library tab for saving/loading resolution presets globally. Small scope.
 
@@ -2077,7 +2077,7 @@ public var shapeIDs: [UUID]            // shapes to cycle through; omitted from 
 
 **What was built**
 
-The full keyframe timeline is implemented. Every item in the original phased plan was delivered except the timing-scale % field (item 13 below).
+The full keyframe timeline is implemented. Every item in the original phased plan has been delivered.
 
 **Model (`UMTimelineTypes.swift`, `UMEngine/Scene/UMCamera.swift`)**
 
@@ -2121,7 +2121,7 @@ enum UMCameraLane: Int, CaseIterable, Hashable {
 ```
 
 - Resize handle: drag to set panel height; tap to collapse/expand (`isTimelineCollapsed` on `AppController`).
-- Header column: zoom −/+ buttons, named-marker jump menu, trash button (when selection non-empty).
+- Header column: zoom −/+ buttons, named-marker jump menu, trash button (when selection non-empty), timing-scale row ("Scale [n]% ↔") shown when ≥ 2 KFs are selected.
 - Camera and layer blocks: chevron expand/collapse; lane rows show a coloured KF-present dot and enable checkbox.
 - Canvas drawn with SwiftUI `Canvas`. `zoom: Double` (px/frame, default 4.0), `hOffset: Double` (scroll offset in px). Option+scroll zooms; drag pans.
 - Playhead: red vertical line + downward triangle cap.
@@ -2143,6 +2143,7 @@ enum UMCameraLane: Int, CaseIterable, Hashable {
 | Cmd+Z / Cmd+Shift+Z | Timeline undo / redo (50-state stack) |
 | Delete | Delete selected KFs; driver reverts to `.constant` when last KF removed |
 | Cmd+A | Select all KFs on all visible lanes |
+| Timing-scale field + ↔ | With ≥ 2 KFs selected: type a % (default 100) and click ↔ to scale all selected KF frames from the earliest-frame pivot. E.g. 200% doubles the spacing; 50% halves it. Clears selection after apply; supports undo. |
 
 **Keyframe inspector (Quick Adjust → KEYFRAME section)**
 
@@ -2156,7 +2157,6 @@ Appears when any KF is selected. Shows: lane label (read-only), Frame stepper, V
 
 **Not built from the original plan**
 
-- **Timing-scale % field** — select ≥ 2 KFs, type a percentage, and scale their timing from the earliest-frame pivot. This was item 13 of the phased plan and was not implemented. Everything else was delivered.
 - **Start/end drag handles on the ruler** — the spec described draggable orange/red triangles on the ruler for the start/end frame region. Start and end frames are editable via the transport bar fields instead; ruler handles were not added.
 
 ---
@@ -2373,7 +2373,7 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 | **UI** | Motion palette UI (MOTIONS section in left panel) | ✓ Built 2026-06-20 |
 | **UI** | 4-axis cell inspector in PLACE & TIME (Style, Motion, Shape, Path pickers) | ✓ Built 2026-06-20 |
 | **UI** | SEQUENCE cycling (motion set shapeIDs + mode + step) | ✓ Built 2026-06-20 |
-| **UI** | Full right-panel context-switching (Style/Shape detail when those palette items active) | 4-axis model ✓ |
+| **UI** | Full right-panel context-switching (STYLE—[name] header, SHAPE—[name] section, LAYER DRIVERS section) | ✓ Built 2026-06-20 |
 | **UI** | Resolution palette Project/Library tabs (global presets) | — |
 | **Rendering** | Subdivision integration (polygon-level warp) | — |
 | **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | — |
@@ -2389,9 +2389,9 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 | **Layers** | Camera system (pan, zoom, rotation) | ✓ Built 2026-06-19 |
 | **Layers** | Parallax (per-layer depth factor) | ✓ Built 2026-06-19 |
 | **Layers** | Per-layer blend modes | — |
-| **Layers** | Animated layer opacity / parallax drivers (oscillator UI) | Phase 2 of §15.8 |
+| **Layers** | Animated layer opacity / parallax drivers (oscillator UI) | ✓ Built 2026-06-20 |
 | **Timeline** | Keyframe timeline panel (camera + per-layer lanes) | ✓ Built 2026-06-20 |
-| **Timeline** | Timing-scale % field (scale selected KF timing from pivot) | — |
+| **Timeline** | Timing-scale % field (scale selected KF timing from pivot) | ✓ Built 2026-06-20 |
 | **Layers** | Per-layer color maps | ✓ Built 2026-06-19 |
 | **Sprite layer** | Free-placed sprites with per-polygon color overrides | ✓ Built 2026-06-20 |
 | **Compat** | Legacy UM XML import | — |

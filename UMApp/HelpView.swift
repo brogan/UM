@@ -383,6 +383,40 @@ private let layersBody = #"""
 
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
 
+<h2>LAYER DRIVERS — animated opacity and offset</h2>
+<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) gives each layer an animated opacity and a canvas-pixel positional offset, independent of the camera.</p>
+
+<h3>Opacity driver</h3>
+<p>Animates the layer's opacity over time, overriding the layer-row slider when any non-constant mode is active.</p>
+<table>
+  <tr><th>Mode</th><th>Description</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Static opacity. Controlled by the layer-row slider.</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Sinusoidal pulse between (centre − amplitude) and (centre + amplitude). Set Centre (the midpoint, 0–1), Amplitude (deviation amount), Period (seconds per cycle), and Phase (starting offset, 0–1).</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Random step changes on a fixed interval. Set Range (±maximum jump) and Duration (frames between steps).</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Smooth Perlin-style drift. Set Amplitude (±range) and Frequency (cycles/s).</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>Driven by keyframes in the timeline's <strong>Opacity</strong> lane. Set keyframes directly on the timeline.</td></tr>
+</table>
+
+<h3>Offset driver</h3>
+<p>Adds a canvas-pixel positional shift to the entire layer, independent of the parallax camera pan.</p>
+<table>
+  <tr><th>Mode</th><th>Description</th></tr>
+  <tr><td><strong>Constant</strong></td><td>Fixed X/Y offset in canvas pixels (default 0, 0).</td></tr>
+  <tr><td><strong>Oscillator</strong></td><td>Sinusoidal back-and-forth. Set Amp X / Amp Y (peak displacement in px), Period (s), and Phase (0–1).</td></tr>
+  <tr><td><strong>Jitter</strong></td><td>Random step jumps. Set Range X / Range Y (px) and Duration (frames).</td></tr>
+  <tr><td><strong>Noise</strong></td><td>Smooth drift. Set Amp X / Amp Y (px) and Frequency (cyc/s).</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>Driven by keyframes in the timeline's <strong>Offset</strong> lane.</td></tr>
+</table>
+<div class="tip">Use oscillator offset on a background layer to create a subtle breathing or drifting effect without touching the camera.</div>
+
+<h2>Right-panel context sections</h2>
+<p>The Quick Adjust right panel shows context sections that reflect the active palette item:</p>
+<ul>
+  <li>When a <strong>style</strong> is active, the section header reads <strong>STYLE — [name]</strong> instead of the generic RENDER label.</li>
+  <li>When a <strong>shape</strong> is active, a <strong>SHAPE — [name]</strong> section appears below MOTION, showing the shape's polygon counts (visible and total) and how many cells in the active layer use it.</li>
+  <li>When a <strong>motion set</strong> is active, the <strong>MOTION — [name]</strong> section appears as before.</li>
+</ul>
+
 <h2>Sprite Layers</h2>
 <p>A <strong>sprite layer</strong> is a special layer type where you freely place individual shapes anywhere on the canvas, rather than filling a grid. Use sprite layers for accent elements, floating logos, or any shape that shouldn't follow a regular grid rhythm.</p>
 
@@ -709,6 +743,53 @@ private let playbackBody = #"""
   <tr><td>×</td><td>Delete this state from the timeline.</td></tr>
 </table>
 <p><strong>Clear All</strong> removes all states and closes the editor. States are saved in the .umproj file.</p>
+
+<h2>Keyframe Timeline panel</h2>
+<p>The <strong>Keyframe Timeline</strong> panel sits below the canvas (drag the handle at the top edge to resize; tap it to collapse). It controls <em>driver-based</em> animation — smooth interpolated motion that uses the same frame clock as parametric animation, distinct from the cut-based recording timeline above.</p>
+
+<h3>Lanes</h3>
+<p>Each layer has three driver lanes; the camera has three additional lanes:</p>
+<table>
+  <tr><th>Lane</th><th>Colour</th><th>Controls</th></tr>
+  <tr><td>Opacity</td><td>Pink</td><td>Layer opacity over time (0–1)</td></tr>
+  <tr><td>Offset</td><td>Blue</td><td>Layer canvas-pixel position offset (X, Y)</td></tr>
+  <tr><td>Grid Scroll</td><td>Orange</td><td>Per-layer grid scroll amount (X, Y in cell units)</td></tr>
+  <tr><td>Camera Pan</td><td>Teal</td><td>Camera pan offset (X, Y in pixels)</td></tr>
+  <tr><td>Camera Zoom</td><td>Green</td><td>Camera zoom factor</td></tr>
+  <tr><td>Camera Rotation</td><td>Cyan</td><td>Camera rotation in degrees</td></tr>
+</table>
+<div class="note">Setting a keyframe on any lane automatically switches that driver to Keyframe mode. Deleting the last keyframe on a lane reverts it to Constant mode.</div>
+
+<h3>Interactions</h3>
+<table>
+  <tr><th>Action</th><th>Effect</th></tr>
+  <tr><td>Click ruler</td><td>Seek playhead to that frame</td></tr>
+  <tr><td>Drag ruler</td><td>Scrub playhead</td></tr>
+  <tr><td>Click on lane (not on a KF)</td><td>Add a keyframe at that frame, capturing the current evaluated value</td></tr>
+  <tr><td>Click a KF diamond</td><td>Select it; seek playhead to its frame</td></tr>
+  <tr><td>Drag a KF diamond</td><td>Move keyframe to a new frame (live preview while dragging)</td></tr>
+  <tr><td>Shift+click</td><td>Additive selection</td></tr>
+  <tr><td>Drag on empty area</td><td>Rubber-band multi-select</td></tr>
+  <tr><td>Option+drag</td><td>Pan timeline horizontally</td></tr>
+  <tr><td>Option+scroll</td><td>Zoom timeline (px/frame)</td></tr>
+  <tr><td>Delete</td><td>Delete selected keyframes</td></tr>
+  <tr><td>⌘C / ⌘V</td><td>Copy / paste selected KFs at playhead (relative offsets preserved)</td></tr>
+  <tr><td>⌘Z / ⌘⇧Z</td><td>Undo / redo (50-state stack)</td></tr>
+  <tr><td>⌘A</td><td>Select all keyframes on all visible lanes</td></tr>
+</table>
+
+<h3>Timing scale</h3>
+<p>When <strong>two or more keyframes</strong> are selected, a <strong>Scale [n]% ↔</strong> row appears in the header column. Enter a percentage and click <strong>↔</strong> to stretch or compress the selected keyframes in time:</p>
+<ul>
+  <li>The <strong>earliest selected frame</strong> is the pivot — it stays fixed.</li>
+  <li>All other selected frames are moved proportionally: <code>newFrame = pivot + (oldFrame − pivot) × (scale / 100)</code>.</li>
+  <li><strong>200%</strong> doubles the spacing between keyframes (slower animation).</li>
+  <li><strong>50%</strong> halves it (faster animation).</li>
+</ul>
+<div class="tip">To tighten a slow camera move, rubber-band select all its KFs, type 50 in the Scale field, and click ↔.</div>
+
+<h3>Keyframe inspector</h3>
+<p>When any keyframe is selected, the <strong>KEYFRAME</strong> section appears at the top of Quick Adjust. Edit the frame number, value (scalar or X/Y), and easing curve (Linear, Ease In, Ease Out, Ease In/Out, Step, Back In, Back Out, Back In/Out, Bounce Out). Changes commit immediately with undo.</p>
 """#
 
 private let qaProjectBody = #"""
@@ -1383,7 +1464,7 @@ private let pendingBody = #"""
 
 <table>
   <tr><th>Area</th><th>Feature</th><th>Notes</th></tr>
-  <tr><td>Right panel</td><td>Full palette-context right panel (Style / Shape detail sections)</td><td>When a STYLE or SHAPE palette item is active and no cell is selected, the right panel could show a dedicated detail section for that item. Currently only the MOTION section appears when a motion set is active. Style detail (RENDER) and Shape detail are not yet context-switched in — you must select cells and edit via PLACE &amp; TIME instead.</td></tr>
+  <tr><td>Right panel</td><td>Full palette-context right panel (Style / Shape detail sections)</td><td>✓ Built — the RENDER section header now reads <strong>STYLE — [name]</strong> when a style is active. A <strong>SHAPE — [name]</strong> section appears below MOTION when a shape is active. A <strong>LAYER DRIVERS</strong> section (collapsed by default) exposes oscillator, jitter, and noise modes for layer opacity and layer offset.</td></tr>
   <tr><td>Left panel</td><td>Resolution preset library (global tabs)</td><td>The LAYERS section already shows preset resolution chips (4×4 through 32×32) and project-saved presets. What's missing is a Library tab to save resolution presets globally across projects.</td></tr>
   <tr><td>Rendering</td><td>Subdivision-level polygon warp</td><td>ORDER/CHAOS currently produces sine-oscillator jitter on sprite transforms. The deeper materialisation — warping polygon vertices via SubdivisionEngine based on the chaos value — is designed but not yet wired.</td></tr>
   <tr><td>Rendering</td><td>Full Loom render modes</td><td>Brushed (stamp-along-path), stenciled, stamped (bitmap at positions), and path perturbation (noise warp of geometry). Current build: Filled, Stroked, Fill &amp; Stroke only.</td></tr>
@@ -1395,7 +1476,7 @@ private let pendingBody = #"""
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>A toggleable overlay colouring each cell by its phaseOffset value (blue = 0, red = max) to make temporal structure visible without playing the animation.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
-  <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>Camera pan, zoom, and rotation support constant values today. Oscillator and keyframe modes (driving camera motion over time) and the per-layer opacity/offset drivers are Phase 2.</td></tr>
+  <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>✓ Built — <strong>LAYER DRIVERS</strong> section in Quick Adjust exposes oscillator, jitter, and noise modes for layer opacity and layer offset. See <a href="um-help://help/layers">Layers</a> for details.</td></tr>
   <tr><td>Layers</td><td>Blend modes</td><td>Layer compositing currently uses Normal (opacity) only. Additional CGBlendMode options are planned.</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>

@@ -56,7 +56,9 @@ struct QuickAdjustView: View {
     @State private var kfInspectorCollapsed = false
     @State private var selectedKeyframeID: UUID? = nil
     @State private var newKeyframeFrame: Int = 24
-    @State private var spritesCollapsed     = false
+    @State private var spritesCollapsed      = false
+    @State private var shapeCollapsed        = false
+    @State private var layerDriversCollapsed = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +72,7 @@ struct QuickAdjustView: View {
                     projectSection
                     canvasSection
                     cameraSection
+                    layerDriversSection
                     exportSection
                     if activeLayerMode == .sprite {
                         spritesSection
@@ -78,6 +81,7 @@ struct QuickAdjustView: View {
                         placeTimeSection
                         renderSection
                         motionSection
+                        shapeSection
                         pathSection
                         advancedSection
                     }
@@ -1046,7 +1050,8 @@ struct QuickAdjustView: View {
     }
 
     private var renderSection: some View {
-        InspectorSection("RENDER", isCollapsed: $renderCollapsed) {
+        let renderTitle = activeStyleIndex.map { "STYLE — \(controller.projectStyles[$0].name)" } ?? "RENDER"
+        return InspectorSection(renderTitle, isCollapsed: $renderCollapsed) {
             let disabled = activeStyleIndex == nil
 
             InspectorField("Fill") {
@@ -1924,7 +1929,245 @@ struct QuickAdjustView: View {
         .padding(.bottom, 4)
     }
 
-    // MARK: - Sequence section
+    // MARK: - Shape section
+
+    @ViewBuilder
+    private var shapeSection: some View {
+        if let shapeID = controller.activeShapeID,
+           let shape = controller.projectShapes.first(where: { $0.id == shapeID }) {
+            let allPolys = controller.shapePolygonMap[shapeID] ?? controller.shapePolygons
+            let visCount = allPolys.filter(\.visible).count
+            let ls = controller.layerStates[controller.activeLayerIndex]
+            let cellCount = ls.engine.document.cells.filter { $0.shapeID == shapeID }.count
+            InspectorSection("SHAPE — \(shape.name)", isCollapsed: $shapeCollapsed) {
+                InspectorField("Polygons") {
+                    Text("\(visCount) visible / \(allPolys.count) total")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+                InspectorField("Cells") {
+                    Text(cellCount == 0 ? "none in active layer"
+                         : "\(cellCount) in active layer")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Layer drivers section
+
+    @ViewBuilder
+    private var layerDriversSection: some View {
+        let ls = controller.layerStates[safe: controller.activeLayerIndex]
+        InspectorSection("LAYER DRIVERS", isCollapsed: $layerDriversCollapsed) {
+
+            // ── Opacity ──────────────────────────────────────────
+            Text("OPACITY")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: Binding(
+                    get: { ls?.opacityDriver.mode ?? .constant },
+                    set: { ls?.opacityDriver.mode = $0 }
+                )) {
+                    ForEach(UMDoubleDriverMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            switch ls?.opacityDriver.mode ?? .constant {
+            case .constant:
+                Text("Adjust opacity via the layer row slider.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
+            case .oscillator:
+                InspectorField("Centre") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.base ?? 1 },
+                        set: { ls?.opacityDriver.base = max(0, min(1, $0)) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                }
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.oscillatorAmplitude ?? 0.5 },
+                        set: { ls?.opacityDriver.oscillatorAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.oscillatorPeriod ?? 2 },
+                        set: { ls?.opacityDriver.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: Binding(
+                        get: { ls?.opacityDriver.oscillatorPhase ?? 0 },
+                        set: { ls?.opacityDriver.oscillatorPhase = $0 }
+                    ), in: 0...1).frame(maxWidth: 90)
+                }
+            case .jitter:
+                InspectorField("Range") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.jitterRange ?? 0.5 },
+                        set: { ls?.opacityDriver.jitterRange = max(0, min(1, $0)) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.jitterDuration ?? 12 },
+                        set: { ls?.opacityDriver.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amplitude") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.noiseAmplitude ?? 0.5 },
+                        set: { ls?.opacityDriver.noiseAmplitude = max(0, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { ls?.opacityDriver.noiseFrequency ?? 1 },
+                        set: { ls?.opacityDriver.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 56)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline Opacity lane for keyframes.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
+            }
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
+
+            // ── Layer offset ──────────────────────────────────────
+            Text("OFFSET")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.bottom, 2)
+            InspectorField("Mode") {
+                Picker("", selection: Binding(
+                    get: { ls?.layerOffset.mode ?? .constant },
+                    set: { ls?.layerOffset.mode = $0 }
+                )) {
+                    ForEach(UMVectorDriverMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            switch ls?.layerOffset.mode ?? .constant {
+            case .constant:
+                InspectorField("Offset X") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.base.x ?? 0 },
+                        set: { ls?.layerOffset.base.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Offset Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.base.y ?? 0 },
+                        set: { ls?.layerOffset.base.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .oscillator:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.oscillatorAmplitude.x ?? 0 },
+                        set: { ls?.layerOffset.oscillatorAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.oscillatorAmplitude.y ?? 0 },
+                        set: { ls?.layerOffset.oscillatorAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Period") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.oscillatorPeriod ?? 2 },
+                        set: { ls?.layerOffset.oscillatorPeriod = max(0.1, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Phase") {
+                    Slider(value: Binding(
+                        get: { ls?.layerOffset.oscillatorPhase ?? 0 },
+                        set: { ls?.layerOffset.oscillatorPhase = $0 }
+                    ), in: 0...1).frame(maxWidth: 90)
+                }
+            case .jitter:
+                InspectorField("Range X") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.jitterRange.x ?? 10 },
+                        set: { ls?.layerOffset.jitterRange.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Range Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.jitterRange.y ?? 10 },
+                        set: { ls?.layerOffset.jitterRange.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Duration") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.jitterDuration ?? 12 },
+                        set: { ls?.layerOffset.jitterDuration = max(1, $0) }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("fr").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .noise:
+                InspectorField("Amp X") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.noiseAmplitude.x ?? 50 },
+                        set: { ls?.layerOffset.noiseAmplitude.x = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Amp Y") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.noiseAmplitude.y ?? 50 },
+                        set: { ls?.layerOffset.noiseAmplitude.y = $0 }
+                    ), format: .number.precision(.fractionLength(1)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("px").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                InspectorField("Frequency") {
+                    TextField("", value: Binding(
+                        get: { ls?.layerOffset.noiseFrequency ?? 1 },
+                        set: { ls?.layerOffset.noiseFrequency = max(0.01, $0) }
+                    ), format: .number.precision(.fractionLength(2)))
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Text("cyc/s").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            case .keyframe:
+                Text("Use the timeline Offset lane for keyframes.")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.vertical, 3)
+            }
+        }
+    }
+
+    // MARK: - Advanced section
 
     private var advancedSection: some View {
         InspectorSection("ADVANCED", isCollapsed: $advancedCollapsed) {
