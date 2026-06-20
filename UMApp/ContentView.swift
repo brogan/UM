@@ -2236,6 +2236,16 @@ struct TransportBarView: View {
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
+                } else if !controller.engine.document.timeline.isEmpty {
+                    Menu("Video ▾") {
+                        Button("Live animation…") { controller.exportVideo() }
+                        Button("Cut sequence (\(controller.engine.document.timeline.count) cuts)…") {
+                            controller.exportCutVideo()
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .font(.system(size: 12))
                 } else {
                     Button("Video") {
                         controller.exportVideo()

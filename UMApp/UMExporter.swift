@@ -268,6 +268,150 @@ enum UMVideoExporter {
         renderer.scale = 1.0
         return renderer.cgImage
     }
+
+    // MARK: - Cut-based export
+
+    /// Render a cut sequence from `timeline` states.
+    /// Each state is rendered for `state.holdFrames` output frames, then the grid is swapped
+    /// to the next state. The animation frame counter (for parametric/keyframe motion) runs
+    /// continuously across all cuts. All layers other than the active grid layer stay constant;
+    /// `activeLayerID` identifies which layer's document gets swapped per state.
+    static func exportCuts(
+        baseLayer: UMLayer,
+        otherLayers: [UMLayer],
+        timeline: [UMTimelineState],
+        backgroundColor: UMColor,
+        backgroundImage: CGImage? = nil,
+        shapePolygonMap: [UUID: [Polygon2D]],
+        shapePolygonIDMap: [UUID: [UUID]],
+        fallbackPolygons: [Polygon2D],
+        projectMotionSets: [UMMotionSet],
+        colorMapEngines: [UUID: UMColorMapEngine],
+        backgroundDraw: Bool,
+        stretchSprites: Bool,
+        fps: Int,
+        exportW: Double,
+        exportH: Double,
+        strokeScale: Double,
+        camera: UMCamera = .identity,
+        to url: URL,
+        progress: @escaping @MainActor (Double) -> Void
+    ) async throws {
+        guard !timeline.isEmpty else { throw UMExportError.renderFailed }
+
+        let totalFrames = timeline.reduce(0) { $0 + $1.holdFrames }
+        let w = Int(exportW); let h = Int(exportH)
+        guard w > 0, h > 0, totalFrames > 0 else { throw UMExportError.setupFailed }
+
+        try? FileManager.default.removeItem(at: url)
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let videoSettings: [String: Any] = [
+            AVVideoCodecKey:  AVVideoCodecType.h264.rawValue,
+            AVVideoWidthKey:  w,
+            AVVideoHeightKey: h,
+        ]
+        let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
+        writerInput.expectsMediaDataInRealTime = false
+        let pixelBufferAttrs: [String: Any] = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+            kCVPixelBufferWidthKey           as String: w,
+            kCVPixelBufferHeightKey          as String: h,
+        ]
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+            assetWriterInput: writerInput,
+            sourcePixelBufferAttributes: pixelBufferAttrs)
+        guard writer.canAdd(writerInput) else { throw UMExportError.setupFailed }
+        writer.add(writerInput)
+        writer.startWriting()
+        writer.startSession(atSourceTime: .zero)
+        guard let pool = adaptor.pixelBufferPool else { throw UMExportError.setupFailed }
+
+        var outputIndex = 0
+        var accum: CGImage? = nil
+
+        for state in timeline {
+            // Build the current-state layer: swap cells/styles/config into the base layer's document.
+            var stateDoc = baseLayer.document
+            stateDoc.gridConfig = state.gridConfig
+            stateDoc.cells      = state.cells
+            stateDoc.styles     = state.styles
+            var stateLayer = baseLayer
+            stateLayer.document = stateDoc
+
+            // Compose the full layer list: others below, state layer at its original z-order
+            // (preserve the original visible layer order including stateLayer's position).
+            // For simplicity: render stateLayer + otherLayers sorted by their original order.
+            // The exporter renders layers[0] first (bottom). Insert stateLayer at its position.
+            let visibleOthers = otherLayers.filter(\.isVisible)
+            // We'll pass stateLayer and otherLayers; sort is preserved from the call site.
+
+            for _ in 0..<max(1, state.holdFrames) {
+                let animFrame = outputIndex  // continuous animation frame
+                var allLayers = otherLayers
+                // Replace the matching layer slot with the state-swapped version.
+                if let idx = allLayers.firstIndex(where: { $0.id == baseLayer.id }) {
+                    allLayers[idx] = stateLayer
+                } else {
+                    allLayers.append(stateLayer)
+                }
+                let visibleLayers = allLayers.filter(\.isVisible)
+
+                let cgImage = renderComposited(
+                    layers:            visibleLayers,
+                    backgroundColor:   backgroundColor,
+                    backgroundImage:   backgroundImage,
+                    shapePolygonMap:   shapePolygonMap,
+                    shapePolygonIDMap: shapePolygonIDMap,
+                    fallbackPolygons:  fallbackPolygons,
+                    projectMotionSets: projectMotionSets,
+                    colorMapEngines:   colorMapEngines,
+                    backgroundDraw:    backgroundDraw,
+                    stretchSprites:    stretchSprites,
+                    frame:             animFrame,
+                    exportW:           exportW,
+                    exportH:           exportH,
+                    strokeScale:       strokeScale,
+                    camera:            camera,
+                    accumulationBuffer: accum)
+
+                if !backgroundDraw { accum = cgImage }
+
+                if let image = cgImage {
+                    var pixelBuffer: CVPixelBuffer?
+                    if CVPixelBufferPoolCreatePixelBuffer(nil, pool, &pixelBuffer) == kCVReturnSuccess,
+                       let pb = pixelBuffer {
+                        CVPixelBufferLockBaseAddress(pb, [])
+                        if let base = CVPixelBufferGetBaseAddress(pb) {
+                            let bpr       = CVPixelBufferGetBytesPerRow(pb)
+                            let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
+                                           | CGBitmapInfo.byteOrder32Little.rawValue
+                            if let ctx = CGContext(data: base, width: w, height: h,
+                                                   bitsPerComponent: 8, bytesPerRow: bpr,
+                                                   space: CGColorSpaceCreateDeviceRGB(),
+                                                   bitmapInfo: bitmapInfo) {
+                                ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+                            }
+                        }
+                        CVPixelBufferUnlockBaseAddress(pb, [])
+                        while !writerInput.isReadyForMoreMediaData { await Task.yield() }
+                        let pts = CMTime(value: CMTimeValue(outputIndex),
+                                        timescale: CMTimeScale(max(1, fps)))
+                        adaptor.append(pb, withPresentationTime: pts)
+                    }
+                }
+
+                outputIndex += 1
+                progress(Double(outputIndex) / Double(totalFrames))
+                await Task.yield()
+            }
+        }
+
+        writerInput.markAsFinished()
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            writer.finishWriting { cont.resume() }
+        }
+        if let error = writer.error { throw error }
+    }
 }
 
 // MARK: - Error

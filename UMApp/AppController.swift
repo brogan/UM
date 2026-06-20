@@ -1729,6 +1729,76 @@ final class AppController {
             }
         }
     }
+
+    func exportCutVideo() {
+        let timeline = engine.document.timeline
+        guard !timeline.isEmpty else { return }
+
+        let config      = engine.document.gridConfig
+        let m           = Double(exportMultiplier)
+        let exportW     = config.canvasWidth  * m
+        let exportH     = config.canvasHeight * m
+        let strokeScale = exportScaleDrawing ? m : 1.0
+
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmmss"
+        let baseName = currentFileURL?.deletingPathExtension().lastPathComponent ?? "umproject"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes  = [.movie]
+        panel.nameFieldStringValue = "\(baseName)_cuts_\(f.string(from: Date())).mov"
+        panel.directoryURL         = animationsRenderDirectory()
+
+        // Snapshot all data before the async panel response
+        let activeIdx   = activeLayerIndex
+        let allLayers   = layerStates.map { $0.toUMLayer() }
+        let baseLayer   = allLayers[activeIdx]
+        let otherLayers = Array(allLayers.enumerated()
+                                    .filter { $0.offset != activeIdx }
+                                    .map { $0.element })
+        let bg          = backgroundColor
+        let polyMap     = shapePolygonMap
+        let polyIDMap   = shapePolygonIDMap
+        let polys       = shapePolygons
+        let cmEngines   = layerColorMapEngines
+        let bgDraw      = backgroundDraw
+        let stretch     = stretchSpritesToCell
+        let fps         = exportFPS
+        let camSnap     = camera
+        let tlSnap      = timeline
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.isExporting    = true
+            self.exportProgress = 0.0
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                do {
+                    try await UMVideoExporter.exportCuts(
+                        baseLayer:         baseLayer,
+                        otherLayers:       otherLayers,
+                        timeline:          tlSnap,
+                        backgroundColor:   bg,
+                        backgroundImage:   self.backgroundCGImage,
+                        shapePolygonMap:   polyMap,
+                        shapePolygonIDMap: polyIDMap,
+                        fallbackPolygons:  polys,
+                        projectMotionSets: self.projectMotionSets,
+                        colorMapEngines:   cmEngines,
+                        backgroundDraw:    bgDraw,
+                        stretchSprites:    stretch,
+                        fps:               fps,
+                        exportW:           exportW,
+                        exportH:           exportH,
+                        strokeScale:       strokeScale,
+                        camera:            camSnap,
+                        to:                url,
+                        progress:          { [weak self] p in self?.exportProgress = p }
+                    )
+                } catch { }
+                self.isExporting = false
+            }
+        }
+    }
 }
 
 // MARK: - Enums

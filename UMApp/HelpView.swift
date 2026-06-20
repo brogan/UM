@@ -1357,17 +1357,28 @@ private let exportBody = #"""
 </ol>
 <p>The export renders at <code>canvasWidth × multiplier</code> × <code>canvasHeight × multiplier</code>. In accumulation mode (Background draw off), the current accumulation buffer is composited as the background before rendering the current frame. All visible layers are composited at their configured opacities.</p>
 
-<h2>Video export</h2>
+<h2>Video export — live animation</h2>
 <ol class="steps">
   <li>Set the export range using <strong>From / To</strong> in the EXPORT section (or the Start / End fields in the Transport Bar — they are the same values).</li>
   <li>Set <strong>Multiplier</strong>, <strong>Scale drawing</strong>, and <strong>FPS</strong> as needed.</li>
-  <li>Click <strong>Video</strong> in the Transport Bar.</li>
+  <li>Click <strong>Video</strong> in the Transport Bar (or <strong>Video ▾ → Live animation…</strong> if the timeline has recorded cuts).</li>
   <li>A save panel opens. Default location: <code>renders/animations/</code> inside your project package.</li>
   <li>Choose a location and click Save. The panel closes and export begins in the background.</li>
   <li>A progress bar replaces the Video button showing <em>N%</em>. The UI remains responsive during export.</li>
   <li>When complete, the Video button returns.</li>
 </ol>
 <p>Format: H.264 in a .mov container. The exported clip spans animation frames <em>From</em> through <em>To − 1</em>, output as a clip starting at time zero. All layers composite per-frame at their configured opacities. In accumulation mode, each exported frame correctly shows the accumulated build-up, exactly as it appears on screen during live playback.</p>
+
+<h2>Video export — cut sequence</h2>
+<p>When the active layer has at least one recorded timeline state, the Transport Bar shows <strong>Video ▾</strong> instead of a plain Video button. Choose <strong>Cut sequence…</strong> to export each recorded state as a discrete cut.</p>
+<ol class="steps">
+  <li>Record a few states using the recording workflow (see <a href="um-help://help/timeline">Timeline &amp; Recording</a>).</li>
+  <li>Click <strong>Video ▾ → Cut sequence (N cuts)…</strong> in the Transport Bar.</li>
+  <li>A save panel opens with a <code>_cuts_</code> filename. Choose a location and click Save.</li>
+  <li>The exporter renders each timeline state for its configured hold duration (in frames), stitching all cuts into a single .mov. The animation frame counter runs continuously so parametric and keyframe motion plays uninterrupted across cuts.</li>
+  <li>Total clip length = sum of all state hold durations ÷ FPS.</li>
+</ol>
+<p>Multiplier, Scale drawing, FPS, and Camera settings from the EXPORT / CAMERA sections apply to the cut sequence export exactly as they do to live animation export. The cut sequence does not use the From / To frame range — that range only applies to live animation.</p>
 
 <h2>Render directories</h2>
 <p>Render directories live <strong>inside</strong> the project package and are created automatically when the project is saved:</p>
