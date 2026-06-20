@@ -28,6 +28,7 @@ final class UMLayerState: Identifiable {
     var layerMode: LayerMode
     var sprites: [UMSprite]
     var blendMode: UMBlendMode
+    var gridDistortion: UMGridDistortion
 
     init(layer: UMLayer) {
         self.id               = layer.id
@@ -44,6 +45,7 @@ final class UMLayerState: Identifiable {
         self.layerMode        = layer.layerMode
         self.sprites          = layer.sprites
         self.blendMode        = layer.blendMode
+        self.gridDistortion   = layer.gridDistortion
     }
 
     func toUMLayer() -> UMLayer {
@@ -53,7 +55,8 @@ final class UMLayerState: Identifiable {
                 gridScrollDriver: gridScrollDriver, gridScrollMode: gridScrollMode,
                 document: engine.document,
                 layerMode: layerMode, sprites: sprites,
-                blendMode: blendMode)
+                blendMode: blendMode,
+                gridDistortion: gridDistortion)
     }
 }
 

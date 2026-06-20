@@ -42,20 +42,24 @@ public struct UMLayer: Codable, Identifiable, Sendable {
     /// How this layer composites with layers below it.
     public var blendMode:  UMBlendMode
 
+    /// Geometric distortion applied to cell positions/sizes at render time.
+    public var gridDistortion: UMGridDistortion
+
     public init(
-        id:              UUID            = UUID(),
-        name:            String          = "Layer",
-        isVisible:       Bool            = true,
-        opacity:         Double          = 1.0,
-        parallaxFactor:  Double          = 1.0,
-        layerOffset:     UMVectorDriver  = .zero,
-        opacityDriver:   UMDoubleDriver  = .one,
-        gridScrollDriver: UMVectorDriver = .zero,
-        gridScrollMode:  GridScrollMode  = .wrap,
-        document:        UMGridDocument  = UMGridDocument.makeDefault(),
-        layerMode:       LayerMode       = .grid,
-        sprites:         [UMSprite]      = [],
-        blendMode:       UMBlendMode     = .normal
+        id:              UUID               = UUID(),
+        name:            String             = "Layer",
+        isVisible:       Bool               = true,
+        opacity:         Double             = 1.0,
+        parallaxFactor:  Double             = 1.0,
+        layerOffset:     UMVectorDriver     = .zero,
+        opacityDriver:   UMDoubleDriver     = .one,
+        gridScrollDriver: UMVectorDriver    = .zero,
+        gridScrollMode:  GridScrollMode     = .wrap,
+        document:        UMGridDocument     = UMGridDocument.makeDefault(),
+        layerMode:       LayerMode          = .grid,
+        sprites:         [UMSprite]         = [],
+        blendMode:       UMBlendMode        = .normal,
+        gridDistortion:  UMGridDistortion   = .none
     ) {
         self.id               = id
         self.name             = name
@@ -70,6 +74,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         self.layerMode        = layerMode
         self.sprites          = sprites
         self.blendMode        = blendMode
+        self.gridDistortion   = gridDistortion
     }
 
     // MARK: - Codable (backward-compatible: new fields use decodeIfPresent)
@@ -78,7 +83,7 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         case id, name, isVisible, opacity, document
         case parallaxFactor, layerOffset, opacityDriver
         case gridScrollDriver, gridScrollMode, blendMode
-        case layerMode, sprites
+        case layerMode, sprites, gridDistortion
     }
 
     public init(from decoder: Decoder) throws {
@@ -92,9 +97,10 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         layerOffset       = try c.decodeIfPresent(UMVectorDriver.self, forKey: .layerOffset)      ?? .zero
         gridScrollDriver  = try c.decodeIfPresent(UMVectorDriver.self, forKey: .gridScrollDriver) ?? .zero
         gridScrollMode    = try c.decodeIfPresent(GridScrollMode.self, forKey: .gridScrollMode)   ?? .wrap
-        layerMode         = try c.decodeIfPresent(LayerMode.self,    forKey: .layerMode)  ?? .grid
-        sprites           = try c.decodeIfPresent([UMSprite].self,  forKey: .sprites)    ?? []
-        blendMode         = try c.decodeIfPresent(UMBlendMode.self, forKey: .blendMode)  ?? .normal
+        layerMode         = try c.decodeIfPresent(LayerMode.self,          forKey: .layerMode)       ?? .grid
+        sprites           = try c.decodeIfPresent([UMSprite].self,        forKey: .sprites)         ?? []
+        blendMode         = try c.decodeIfPresent(UMBlendMode.self,       forKey: .blendMode)       ?? .normal
+        gridDistortion    = try c.decodeIfPresent(UMGridDistortion.self,  forKey: .gridDistortion)  ?? .none
         // Backward compat: existing files have no opacityDriver; seed from opacity
         if let od = try c.decodeIfPresent(UMDoubleDriver.self, forKey: .opacityDriver) {
             opacityDriver = od
@@ -115,9 +121,10 @@ public struct UMLayer: Codable, Identifiable, Sendable {
         try c.encode(opacityDriver,    forKey: .opacityDriver)
         try c.encode(gridScrollDriver, forKey: .gridScrollDriver)
         try c.encode(gridScrollMode,   forKey: .gridScrollMode)
-        if layerMode != .grid   { try c.encode(layerMode,  forKey: .layerMode) }
-        if !sprites.isEmpty     { try c.encode(sprites,    forKey: .sprites) }
-        if blendMode != .normal { try c.encode(blendMode,  forKey: .blendMode) }
+        if layerMode != .grid        { try c.encode(layerMode,       forKey: .layerMode) }
+        if !sprites.isEmpty          { try c.encode(sprites,         forKey: .sprites) }
+        if blendMode != .normal      { try c.encode(blendMode,       forKey: .blendMode) }
+        if gridDistortion != .none   { try c.encode(gridDistortion,  forKey: .gridDistortion) }
     }
 }
 

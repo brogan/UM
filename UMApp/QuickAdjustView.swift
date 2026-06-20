@@ -59,6 +59,7 @@ struct QuickAdjustView: View {
     @State private var spritesCollapsed      = false
     @State private var shapeCollapsed        = false
     @State private var layerDriversCollapsed = true
+    @State private var distortionSeed: UInt64 = 42
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2360,6 +2361,98 @@ struct QuickAdjustView: View {
                     ForEach(UMBlendMode.allCases, id: \.self) { Text($0.displayName).tag($0) }
                 }
                 .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+
+            Divider().padding(.horizontal, 12).padding(.vertical, 3)
+
+            // ── Grid distortion ───────────────────────────────────
+            Text("DISTORTION")
+                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+                .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
+            InspectorField("Mode") {
+                let distortionModeBinding = Binding<String>(
+                    get: {
+                        guard let d = ls?.gridDistortion else { return "none" }
+                        switch d {
+                        case .none:        return "none"
+                        case .perspective: return "perspective"
+                        case .barrel:      return "barrel"
+                        case .fractured:   return "fractured"
+                        }
+                    },
+                    set: { mode in
+                        switch mode {
+                        case "perspective": ls?.gridDistortion = .perspective(vertical: 0.5, horizontal: 0)
+                        case "barrel":      ls?.gridDistortion = .barrel(amount: 0.5)
+                        case "fractured":   ls?.gridDistortion = .fractured(amount: 0.3, seed: distortionSeed)
+                        default:            ls?.gridDistortion = .none
+                        }
+                    }
+                )
+                Picker("", selection: distortionModeBinding) {
+                    Text("None").tag("none")
+                    Text("Perspective").tag("perspective")
+                    Text("Barrel / Cone").tag("barrel")
+                    Text("Fractured").tag("fractured")
+                }
+                .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
+            }
+            switch ls?.gridDistortion ?? .none {
+            case .none:
+                EmptyView()
+            case .perspective(let v, let h):
+                InspectorField("Vertical") {
+                    Slider(value: Binding(
+                        get: { v },
+                        set: { ls?.gridDistortion = .perspective(vertical: $0, horizontal: h) }
+                    ), in: -1...1).frame(maxWidth: 90)
+                    valueLabel(v, digits: 2)
+                }
+                InspectorField("Horizontal") {
+                    Slider(value: Binding(
+                        get: { h },
+                        set: { ls?.gridDistortion = .perspective(vertical: v, horizontal: $0) }
+                    ), in: -1...1).frame(maxWidth: 90)
+                    valueLabel(h, digits: 2)
+                }
+                Text("+ = top rows smaller / left cols smaller")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.bottom, 3)
+            case .barrel(let amount):
+                InspectorField("Amount") {
+                    Slider(value: Binding(
+                        get: { amount },
+                        set: { ls?.gridDistortion = .barrel(amount: $0) }
+                    ), in: -1...1).frame(maxWidth: 90)
+                    valueLabel(amount, digits: 2)
+                }
+                Text(amount >= 0 ? "Centre cells drawn larger (spherical)" : "Centre cells drawn smaller (cone)")
+                    .font(.system(size: 10)).foregroundStyle(.quaternary)
+                    .padding(.horizontal, 12).padding(.bottom, 3)
+            case .fractured(let amount, let seed):
+                InspectorField("Amount") {
+                    Slider(value: Binding(
+                        get: { amount },
+                        set: { ls?.gridDistortion = .fractured(amount: $0, seed: seed) }
+                    ), in: 0...1).frame(maxWidth: 90)
+                    valueLabel(amount, digits: 2)
+                }
+                InspectorField("Seed") {
+                    TextField("", value: Binding(
+                        get: { Int(seed) },
+                        set: { v in
+                            let s = UInt64(max(0, v))
+                            distortionSeed = s
+                            ls?.gridDistortion = .fractured(amount: amount, seed: s)
+                        }
+                    ), format: .number)
+                    .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
+                    Button("↺") {
+                        let s = UInt64.random(in: 1...UInt64.max)
+                        distortionSeed = s
+                        ls?.gridDistortion = .fractured(amount: amount, seed: s)
+                    }.buttonStyle(.borderless).font(.system(size: 11))
+                }
             }
 
             Divider().padding(.horizontal, 12).padding(.vertical, 3)

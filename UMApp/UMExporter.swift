@@ -263,7 +263,8 @@ enum UMVideoExporter {
             drawBackground:    false,
             layerTransform:    layerXF,
             gridScrollDriver:  layer.gridScrollDriver,
-            gridScrollMode:    layer.gridScrollMode
+            gridScrollMode:    layer.gridScrollMode,
+            gridDistortion:    layer.gridDistortion
         ))
         renderer.scale = 1.0
         return renderer.cgImage

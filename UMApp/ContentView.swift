@@ -579,15 +579,33 @@ struct GridCanvasPlaceholder: View {
                     if controller.showGrid {
                         let gc = controller.gridColor
                         var linePath = Path()
-                        for c in 0...config.cols {
-                            let x = Double(c) * cellW
-                            linePath.move(to: CGPoint(x: x, y: 0))
-                            linePath.addLine(to: CGPoint(x: x, y: gridH))
-                        }
-                        for r in 0...config.rows {
-                            let y = Double(r) * cellH
-                            linePath.move(to: CGPoint(x: 0, y: y))
-                            linePath.addLine(to: CGPoint(x: gridW, y: y))
+                        let activeDistortion = controller.layerStates[safe: controller.activeLayerIndex]?.gridDistortion ?? .none
+                        if case .perspective(let vStr, let hStr) = activeDistortion {
+                            let rowH = UMGridDistortion.perspectiveSizes(count: config.rows, total: gridH, strength: vStr)
+                            let colW = UMGridDistortion.perspectiveSizes(count: config.cols, total: gridW, strength: hStr)
+                            var x = 0.0
+                            for i in 0...config.cols {
+                                linePath.move(to: CGPoint(x: x, y: 0))
+                                linePath.addLine(to: CGPoint(x: x, y: gridH))
+                                if i < colW.count { x += colW[i] }
+                            }
+                            var y = 0.0
+                            for i in 0...config.rows {
+                                linePath.move(to: CGPoint(x: 0, y: y))
+                                linePath.addLine(to: CGPoint(x: gridW, y: y))
+                                if i < rowH.count { y += rowH[i] }
+                            }
+                        } else {
+                            for c in 0...config.cols {
+                                let x = Double(c) * cellW
+                                linePath.move(to: CGPoint(x: x, y: 0))
+                                linePath.addLine(to: CGPoint(x: x, y: gridH))
+                            }
+                            for r in 0...config.rows {
+                                let y = Double(r) * cellH
+                                linePath.move(to: CGPoint(x: 0, y: y))
+                                linePath.addLine(to: CGPoint(x: gridW, y: y))
+                            }
                         }
                         ctx.stroke(linePath,
                                    with: .color(Color(red: gc.r, green: gc.g, blue: gc.b, opacity: gc.a)),
@@ -714,7 +732,7 @@ struct GridCanvasPlaceholder: View {
                         let lCellH    = gridH / Double(lConfig.rows)
                         let lScaleX   = lCellW / lConfig.cellWidth
                         let lScaleY   = lCellH / lConfig.cellHeight
-                        let lCellHalf = min(lCellW, lCellH)
+                        let lDistortion = ls.gridDistortion
                         let lStyleMap = Dictionary(uniqueKeysWithValues:
                             ls.engine.document.styles.map { ($0.id, $0) })
                         let lPathMap  = Dictionary(uniqueKeysWithValues:
@@ -762,8 +780,13 @@ struct GridCanvasPlaceholder: View {
                                           r < grid.count, c < grid[r].count {
                                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                                 }
-                                let mx = Double(c) * lCellW + lCellW / 2 - lFracX * lCellW + cell.positionOffset.dx * lScaleX + motion.dx
-                                let my = Double(r) * lCellH + lCellH / 2 - lFracY * lCellH + cell.positionOffset.dy * lScaleY + motion.dy
+                                let dCell = lDistortion.evaluate(row: r, col: c,
+                                                                    rows: lConfig.rows, cols: lConfig.cols,
+                                                                    uniformCellW: lCellW, uniformCellH: lCellH,
+                                                                    gridW: gridW, gridH: gridH)
+                                let dCellW = dCell.cellW, dCellH = dCell.cellH
+                                let mx = dCell.cx - lFracX * lCellW + cell.positionOffset.dx * lScaleX + motion.dx
+                                let my = dCell.cy - lFracY * lCellH + cell.positionOffset.dy * lScaleY + motion.dy
                                 let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
 
                                 let lEffectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
@@ -775,8 +798,8 @@ struct GridCanvasPlaceholder: View {
                                                                fallback: fallbackPolys)
 
                                 if polygons.isEmpty {
-                                    let rw   = (lCellW - 4) / 2 * motion.scaleX
-                                    let rh   = (lCellH - 4) / 2 * motion.scaleY
+                                    let rw   = (dCellW - 4) / 2 * motion.scaleX
+                                    let rh   = (dCellH - 4) / 2 * motion.scaleY
                                     let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
                                     let fc   = motion.fillOverride ?? style?.fillColor ?? .defaultFill
                                     layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
@@ -787,8 +810,9 @@ struct GridCanvasPlaceholder: View {
                                                         with: .color(.accentColor), lineWidth: 1.5)
                                     }
                                 } else {
-                                    let zoomX   = (stretch ? lCellW : lCellHalf) * motion.scaleX
-                                    let zoomY   = (stretch ? lCellH : lCellHalf) * motion.scaleY
+                                    let dCellHalf = min(dCellW, dCellH)
+                                    let zoomX   = (stretch ? dCellW : dCellHalf) * motion.scaleX
+                                    let zoomY   = (stretch ? dCellH : dCellHalf) * motion.scaleY
                                     let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
                                     let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
                                     let strokeW = style?.strokeWidth ?? 1.5
@@ -1712,6 +1736,7 @@ struct FrameCapture: View {
     var layerTransform: CGAffineTransform = .identity
     var gridScrollDriver: UMVectorDriver = .zero
     var gridScrollMode: GridScrollMode = .wrap
+    var gridDistortion: UMGridDistortion = .none
 
     var body: some View {
         Canvas { ctx, size in
@@ -1730,7 +1755,6 @@ struct FrameCapture: View {
             }
 
             let config    = gridConfig
-            let half      = min(cellW, cellH)
             let styleMap  = Dictionary(uniqueKeysWithValues: styles.map         { ($0.id, $0) })
             let pathMap   = Dictionary(uniqueKeysWithValues: motionPaths.map    { ($0.id, $0) })
             let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
@@ -1761,8 +1785,13 @@ struct FrameCapture: View {
                           r < grid.count, c < grid[r].count {
                     applyColorMap(grid[r][c], source: src, style: style, to: &motion)
                 }
-                let mx = Double(c) * cellW + cellW / 2 - fcFracX * cellW + cell.positionOffset.dx * scaleX + motion.dx
-                let my = Double(r) * cellH + cellH / 2 - fcFracY * cellH + cell.positionOffset.dy * scaleY + motion.dy
+                let dCell = gridDistortion.evaluate(row: r, col: c,
+                                                    rows: config.rows, cols: config.cols,
+                                                    uniformCellW: cellW, uniformCellH: cellH,
+                                                    gridW: gridW, gridH: gridH)
+                let dCellW = dCell.cellW, dCellH = dCell.cellH
+                let mx = dCell.cx - fcFracX * cellW + cell.positionOffset.dx * scaleX + motion.dx
+                let my = dCell.cy - fcFracY * cellH + cell.positionOffset.dy * scaleY + motion.dy
                 let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
                 let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
                 let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
@@ -1777,14 +1806,15 @@ struct FrameCapture: View {
                                                fallback: fallbackPolygons)
 
                 if polygons.isEmpty {
-                    let rw = (cellW - 4 * strokeScale) / 2 * motion.scaleX
-                    let rh = (cellH - 4 * strokeScale) / 2 * motion.scaleY
+                    let rw = (dCellW - 4 * strokeScale) / 2 * motion.scaleX
+                    let rh = (dCellH - 4 * strokeScale) / 2 * motion.scaleY
                     ctx.fill(Path(roundedRect: CGRect(x: mx-rw, y: my-rh, width: rw*2, height: rh*2),
                                   cornerRadius: 3),
                              with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
                 } else {
-                    let zoomX = (stretchSprites ? cellW : half) * motion.scaleX
-                    let zoomY = (stretchSprites ? cellH : half) * motion.scaleY
+                    let dCellHalf = min(dCellW, dCellH)
+                    let zoomX = (stretchSprites ? dCellW : dCellHalf) * motion.scaleX
+                    let zoomY = (stretchSprites ? dCellH : dCellHalf) * motion.scaleY
                     for polygon in polygons.filter(\.visible) {
                         let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
                                                    zoomX: zoomX, zoomY: zoomY,
