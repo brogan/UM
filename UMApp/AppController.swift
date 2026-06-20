@@ -4,6 +4,7 @@ import AppKit
 import UniformTypeIdentifiers
 import CoreGraphics
 import ImageIO
+import WebKit
 import UMEngine
 import LoomEngine
 
@@ -1573,6 +1574,7 @@ final class AppController {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
             if NSApp.keyWindow?.firstResponder is NSText { return event }
+            if Self.firstResponderIsInWebView() { return event }
             if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty { return event }
 
             let shift = event.modifierFlags.contains(.shift)
@@ -1597,6 +1599,15 @@ final class AppController {
             default:  return event
             }
         }
+    }
+
+    private static func firstResponderIsInWebView() -> Bool {
+        var view = NSApp.keyWindow?.firstResponder as? NSView
+        while let v = view {
+            if v is WKWebView { return true }
+            view = v.superview
+        }
+        return false
     }
 
     // MARK: Render directories
