@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated)._
+_Generated 2026-06-17. Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -963,6 +963,127 @@ final class UMGridEngine {
     func redo()
 }
 ```
+
+---
+
+### 7.6 SwiftUI State Safety — Required Patterns
+
+This section documents patterns that **must** be followed in all SwiftUI view code. Each rule was established after a class of crashes was observed in practice.
+
+---
+
+#### Rule 1 — Never pass integer indices across view-body boundaries
+
+**Problem:** Integer indices computed from observable state are stale the moment state changes. With `@Observable` (`AppController`, `UMLayerState`), SwiftUI can begin a new render pass before all related properties have settled — in particular, `engine` (swapped in `selectLayer`) may already be the new layer's engine while an integer index `pi` was computed against the old one. Any `array[pi]` using a stale index crashes with "Index out of range".
+
+This pattern is **prohibited**:
+
+```swift
+// WRONG — pi is computed once; engine may swap before the subscript fires
+private var activePathIndex: Int? {
+    controller.engine.document.paths.firstIndex { $0.id == activePathID }
+}
+
+if let pi = activePathIndex {
+    Text(controller.engine.document.paths[pi].name)   // crashes if engine swapped
+    ...
+    keyframeRow(kf, pathIndex: pi)                    // passes stale pi into @ViewBuilder
+}
+```
+
+**Required pattern — identify by stable UUID, subscript only inside closures:**
+
+```swift
+// CORRECT — returns Optional; nil when gone; never holds a stale position
+private var activePath: UMMotionPath? {
+    guard let id = controller.activePathID else { return nil }
+    return controller.engine.document.paths.first { $0.id == id }
+}
+
+if let path = activePath {
+    Text(path.name)            // reading from value copy — always consistent
+    ForEach(path.keyframes) { kf in
+        keyframeRow(kf)        // no index passed; row uses controller.activePathID
+    }
+}
+```
+
+For **Binding setters** (which fire on user action, not at render time), do a fresh ID lookup inside the closure:
+
+```swift
+// CORRECT — fresh lookup at action time; returns early if state is gone
+TextField("Name", text: Binding(
+    get: { path.name },
+    set: {
+        guard let id = controller.activePathID,
+              let i  = controller.engine.document.paths.firstIndex(where: { $0.id == id })
+        else { return }
+        controller.engine.document.paths[i].name = $0
+    }
+))
+```
+
+---
+
+#### Rule 2 — Use a keypath binding factory for repeated field bindings
+
+When an inspector edits multiple fields of the same model object (e.g., all keyframe properties), write a single generic factory rather than repeating the guard/lookup in every Binding:
+
+```swift
+private func kfBinding<V>(_ kp: WritableKeyPath<PathKeyframe, V>, default def: V) -> Binding<V> {
+    Binding(
+        get: { self.activeKeyframe?[keyPath: kp] ?? def },
+        set: { val in
+            guard let pathID = self.controller.activePathID,
+                  let kfID   = self.selectedKeyframeID,
+                  let pi = self.controller.engine.document.paths.firstIndex(where: { $0.id == pathID }),
+                  let ki = self.controller.engine.document.paths[pi].keyframes.firstIndex(where: { $0.id == kfID })
+            else { return }
+            self.controller.engine.document.paths[pi].keyframes[ki][keyPath: kp] = val
+        }
+    )
+}
+
+// Usage — one line per field, no repeated guard logic
+ResettableSlider(value: kfBinding(\.dx, default: 0), range: -3...3, defaultValue: 0)
+ResettableSlider(value: kfBinding(\.dy, default: 0), range: -3...3, defaultValue: 0)
+Picker("", selection: kfBinding(\.easing, default: .easeInOut)) { ... }
+```
+
+Fields that require validation (clamping, sorting) need an inline Binding; the factory handles the pure-assign case.
+
+---
+
+#### Rule 3 — `@ViewBuilder` functions must not take integer index parameters
+
+A `@ViewBuilder` function or property that takes an `Int` index is a latent crash: the index is evaluated by the caller at build time but `controller.engine` is read live inside the builder body. These two reads can see different arrays.
+
+Pass the **value** (struct copy) instead, and use stable IDs for any write-back:
+
+```swift
+// WRONG
+@ViewBuilder private func keyframeEditor(pathIndex pi: Int, keyframeIndex ki: Int) -> some View
+
+// CORRECT
+@ViewBuilder private func keyframeEditor(keyframe kf: PathKeyframe) -> some View
+// kf is a value snapshot for display; kfBinding looks up by ID for writes
+```
+
+---
+
+#### Rule 4 — Scale deviations must be interpolated, not multiplied
+
+When attenuating a scale value that represents a multiplier around identity (1.0), multiplying directly collapses to zero scale rather than no-motion:
+
+```swift
+// WRONG — axisScale=0 collapses sprite to zero size
+m.scaleX *= axisScale
+
+// CORRECT — axisScale=0 returns 1.0 (no motion); 1.0 returns full effect
+m.scaleX = 1.0 + (m.scaleX - 1.0) * axisScale
+```
+
+This applies anywhere a `Double` parameter scales the *deviation* of a scale value from its identity — per-axis amounts, Order/Chaos scale jitter, etc.
 
 ---
 
