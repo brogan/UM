@@ -1868,10 +1868,15 @@ Gesture support:
 
 Hit-testing: `canvasPoint(_:viewSize:gridW:gridH:)` inverse-transforms all gesture locations before they reach `handleDrag`, `handleNudge`, and `handleSelectEnd`. Rubber-band selection is stored and drawn in canvas space (drawn inside the Canvas body, not as a SwiftUI overlay).
 
-**Hover preview on undrawn cells**
-- No visual feedback on undrawn cells before the user commits a draw stroke.
-- Required: when hovering in Draw or Fill mode, show a faint preview of the active style's sprite on the cell under the cursor.
-- Depends on shape rendering being functional (otherwise only style colours are shown, which is minimally useful).
+**Hover preview on undrawn cells** ✓ Built 2026-06-20
+
+`GridCanvasPlaceholder` gains `hoverViewPoint: CGPoint?` state updated via `.onContinuousHover`. When `activeTool` is `.draw` or `.fill` and the cursor is over an undrawn cell, a ghost sprite is drawn in the `Canvas` body at 40% opacity, after all layer compositing and before the path overlay.
+
+Rendering mirrors the live cell draw path:
+- Resolves the active shape's polygons via `resolvePolygons(shapeID: controller.activeShapeID, ...)` — polygon geometry if a shape is assigned, rounded-rect fallback otherwise.
+- Uses the active style's `fillColor`, `strokeColor`, `strokeWidth`, and `renderMode` at `opacity * 0.4`.
+- No motion applied — rest pose only (no `computeMotion` call).
+- Position: `col * cellW + cellW/2, row * cellH + cellH/2` — pre-camera-transform canvas space, consistent with where `handleDrag` places cells. Camera pan may cause a slight visual offset when camera is active; this is a known minor limitation.
 
 ---
 
@@ -2158,8 +2163,8 @@ Appears when any KF is selected. Shows: lane label (read-only), Frame stepper, V
 | **Rendering** | Subdivision integration (polygon-level warp) | — |
 | **Rendering** | Full Loom render modes (brushed, stamped, perturbation, blur) | — |
 | **Rendering** | Animated style thumbnails | — |
-| **Canvas** | Zoom and pan | — |
-| **Canvas** | Hover preview on undrawn cells | — |
+| **Canvas** | Zoom and pan | ✓ Built 2026-06-20 |
+| **Canvas** | Hover preview on undrawn cells | ✓ Built 2026-06-20 |
 | **Export** | SVG export | Loom pipeline |
 | **Export** | Video export from timeline (cut-based) | — |
 | **Path editor** | Bezier tangent handles | — |
