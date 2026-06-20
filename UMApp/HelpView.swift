@@ -45,12 +45,19 @@ private struct HelpWebView: NSViewRepresentable {
 
 private class HelpSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start task: any WKURLSchemeTask) {
-        let path = task.request.url?.host == "help"
-            ? (task.request.url?.lastPathComponent ?? "intro")
-            : "intro"
-        let html = helpPages[path] ?? helpPages["intro"]!
+        let url  = task.request.url
+        let path = url?.host == "help" ? (url?.lastPathComponent ?? "intro") : "intro"
+        let html: String
+        if path == "search" {
+            let q = URLComponents(url: url ?? URL(string: "um-help://help/search")!,
+                                  resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "q" })?.value ?? ""
+            html = page("Search", searchBody(query: q))
+        } else {
+            html = helpPages[path] ?? helpPages["intro"]!
+        }
         let data = Data(html.utf8)
-        let resp = URLResponse(url: task.request.url!,
+        let resp = URLResponse(url: url ?? URL(string: "um-help://help/intro")!,
                                mimeType: "text/html",
                                expectedContentLength: data.count,
                                textEncodingName: "utf-8")
@@ -104,6 +111,145 @@ private let helpPages: [String: String] = [
     "shortcuts":  page("Keyboard Shortcuts",      shortcutsBody),
     "pending":    page("Not Yet Built",           pendingBody),
 ]
+
+// MARK: - Search helpers
+
+// Body-only content indexed for search (no nav/CSS noise).
+private let helpBodies: [String: String] = [
+    "intro":      introBody,
+    "layout":     layoutBody,
+    "layers":     layersBody,
+    "painting":   paintingBody,
+    "transforms": transformsBody,
+    "phase":      phaseBody,
+    "playback":   playbackBody,
+    "qa-project": qaProjectBody,
+    "qa-style":   qaStyleBody,
+    "qa-motion":  qaMotionBody,
+    "qa-path":    qaPathBody,
+    "qa-place":   qaPlaceBody,
+    "palette":    paletteBody,
+    "export":     exportBody,
+    "resample":   resampleBody,
+    "save":       saveBody,
+    "shortcuts":  shortcutsBody,
+    "pending":    pendingBody,
+]
+
+private let pageTitles: [String: String] = [
+    "intro":      "Introduction",
+    "layout":     "Interface Layout",
+    "layers":     "Working with Layers",
+    "painting":   "Painting Tools",
+    "transforms": "Grid Transforms",
+    "phase":      "Phase Policy & Scatter",
+    "playback":   "Playback & Recording",
+    "qa-project": "PROJECT / CANVAS / CAMERA",
+    "qa-style":   "Style (RENDER section)",
+    "qa-motion":  "Motion Palette",
+    "qa-path":    "PATH EDITOR",
+    "qa-place":   "PLACE & TIME",
+    "palette":    "Style Palette",
+    "export":     "Export",
+    "resample":   "Resample Grid",
+    "save":       "Save, Load & Undo",
+    "shortcuts":  "Keyboard Shortcuts",
+    "pending":    "Not Yet Built",
+]
+
+private func escapeHTML(_ s: String) -> String {
+    s.replacingOccurrences(of: "&", with: "&amp;")
+     .replacingOccurrences(of: "<", with: "&lt;")
+     .replacingOccurrences(of: ">", with: "&gt;")
+     .replacingOccurrences(of: "\"", with: "&quot;")
+}
+
+private func stripHTML(_ html: String) -> String {
+    var s = html
+    for pattern in ["<script[^>]*>[\\s\\S]*?</script>", "<style[^>]*>[\\s\\S]*?</style>"] {
+        if let rx = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+            s = rx.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: " ")
+        }
+    }
+    if let rx = try? NSRegularExpression(pattern: "<[^>]+>") {
+        s = rx.stringByReplacingMatches(in: s, range: NSRange(s.startIndex..., in: s), withTemplate: " ")
+    }
+    s = s.replacingOccurrences(of: "&amp;",  with: "&")
+         .replacingOccurrences(of: "&lt;",   with: "<")
+         .replacingOccurrences(of: "&gt;",   with: ">")
+         .replacingOccurrences(of: "&nbsp;", with: " ")
+         .replacingOccurrences(of: "&#39;",  with: "'")
+         .replacingOccurrences(of: "&quot;", with: "\"")
+    return s.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
+}
+
+private func searchBody(query: String) -> String {
+    let q = query.trimmingCharacters(in: .whitespaces)
+    guard !q.isEmpty else {
+        return """
+        <h1>Search</h1>
+        <p class="subtitle">Type a term in the search box to find help topics.</p>
+        """
+    }
+    let qLower = q.lowercased()
+
+    struct Hit { var key: String; var title: String; var count: Int; var snippet: String }
+    var hits: [Hit] = []
+
+    for (key, body) in helpBodies {
+        let text     = stripHTML(body)
+        let textLow  = text.lowercased()
+        var count    = 0
+        var pos      = textLow.startIndex
+        while let r = textLow.range(of: qLower, range: pos..<textLow.endIndex) {
+            count += 1
+            pos = r.upperBound
+            if count >= 15 { break }
+        }
+        guard count > 0,
+              let firstR = textLow.range(of: qLower) else { continue }
+
+        let matchOffset = text.distance(from: text.startIndex, to: firstR.lowerBound)
+        let lo  = max(0, matchOffset - 80)
+        let hi  = min(text.count, matchOffset + q.count + 120)
+        let s0  = text.index(text.startIndex, offsetBy: lo)
+        let s1  = text.index(text.startIndex, offsetBy: hi)
+        var snip = escapeHTML(String(text[s0..<s1]))
+        if lo > 0 { snip = "…" + snip }
+        if hi < text.count { snip += "…" }
+        // highlight (q is plain text so safe to inject wrapped in <mark>)
+        let qEsc  = escapeHTML(q)
+        let snipHL = snip.replacingOccurrences(of: qEsc, with: "<mark>\(qEsc)</mark>",
+                                               options: .caseInsensitive)
+        hits.append(Hit(key: key, title: pageTitles[key] ?? key, count: count, snippet: snipHL))
+    }
+
+    hits.sort { $0.count > $1.count }
+
+    guard !hits.isEmpty else {
+        return """
+        <h1>Search: &ldquo;\(escapeHTML(q))&rdquo;</h1>
+        <p>No results found. Try a shorter or different term, or browse the navigation on the left.</p>
+        """
+    }
+
+    let cards = hits.map { h in
+        """
+        <div class="search-result">
+          <span class="result-count">\(h.count) match\(h.count == 1 ? "" : "es")</span>
+          <a href="um-help://help/\(h.key)">\(escapeHTML(h.title))</a>
+          <p class="snippet">\(h.snippet)</p>
+        </div>
+        """
+    }.joined()
+
+    let n = hits.count
+    return """
+    <h1>Search: &ldquo;\(escapeHTML(q))&rdquo;</h1>
+    <p class="subtitle">\(n) page\(n == 1 ? "" : "s") matched</p>
+    \(cards)
+    """
+}
 
 // MARK: - Shared CSS
 
@@ -174,12 +320,30 @@ ol.steps li{counter-increment:step;position:relative;padding-left:32px;margin-bo
 ol.steps li::before{content:counter(step);position:absolute;left:0;top:1px;width:22px;height:22px;
   background:var(--accent);color:#fff;border-radius:50%;font-size:11px;font-weight:700;
   display:flex;align-items:center;justify-content:center}
+.search-form{padding:8px 10px 6px}
+.search-form input[type=search]{width:100%;padding:5px 9px;font-size:12px;border-radius:7px;
+  border:1px solid var(--border);background:var(--bg);color:var(--text);outline:none;
+  -webkit-appearance:none}
+.search-form input[type=search]:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,113,227,.18)}
+.search-result{background:var(--bg);border:1px solid var(--border);border-radius:9px;
+  padding:11px 14px;margin-bottom:9px;overflow:hidden}
+.search-result a{font-size:13px;font-weight:600;display:block;margin-bottom:2px}
+.result-count{font-size:10px;color:var(--sub);float:right;margin-top:2px}
+.snippet{font-size:12px;color:var(--sub);margin-top:5px;line-height:1.5;clear:both}
+mark{background:rgba(255,210,0,.38);border-radius:2px;padding:0 1px;color:inherit}
+@media(prefers-color-scheme:dark){
+  mark{background:rgba(255,210,0,.22)}
+  .search-form input[type=search]:focus{box-shadow:0 0 0 2px rgba(10,132,255,.25)}
+}
 """#
 
 // MARK: - Navigation HTML
 
 private let nav = #"""
 <a class="nav-logo" href="um-help://help/intro">UM Help</a>
+<form class="search-form" action="um-help://help/search" method="GET">
+  <input type="search" name="q" placeholder="Search help…" autocomplete="off" autocorrect="off" spellcheck="false">
+</form>
 <div class="nav-group">Getting Started</div>
 <a href="um-help://help/intro">Introduction</a>
 <a href="um-help://help/layout">Interface Layout</a>
@@ -1566,6 +1730,7 @@ private let pendingBody = #"""
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
   <tr><td>Layers</td><td>Animated opacity &amp; parallax drivers</td><td>✓ Built — <strong>LAYER DRIVERS</strong> section in Quick Adjust exposes oscillator, jitter, and noise modes for layer opacity and layer offset. See <a href="um-help://help/layers">Layers</a> for details.</td></tr>
   <tr><td>Layers</td><td>Blend modes</td><td>✓ Built — <strong>Blend</strong> picker at the top of the <strong>LAYER DRIVERS</strong> section: Normal, Multiply, Screen, Overlay, Dodge, Burn, Soft Light, Hard Light, Difference, Exclusion, Add. Applied in all render paths.</td></tr>
+  <tr><td>Layers</td><td>Grid distortion</td><td>✓ Built — <strong>DISTORTION</strong> subsection in LAYER DRIVERS. Three modes: <strong>Perspective</strong> (exponential row/column taper, ±1 strength per axis; grid lines follow distorted boundaries); <strong>Barrel/Cone</strong> (radial size modulation, +1 = centre cells larger, −1 = centre cells smaller); <strong>Fractured</strong> (stable per-cell random position jitter with seed control and ↺ randomise button).</td></tr>
   <tr><td>Undo</td><td>Keyframe edit undo</td><td>Keyframe edits in PATH EDITOR update the path immediately but are not tracked in the undo stack.</td></tr>
   <tr><td>Compatibility</td><td>Legacy UM XML import</td><td>No importer for Java UM .xml project files. Old Swift .umproj files (pre-4-axis model) are automatically migrated on open.</td></tr>
 </table>
