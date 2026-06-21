@@ -143,7 +143,8 @@ struct ToolStripView: View {
             HStack(spacing: 0) {
                 Button("−") { controller.stampPhaseOffset -= 1 }
                     .buttonStyle(.plain)
-                    .frame(width: 16)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
                 Text(controller.stampPhaseOffset >= 0
                      ? "+\(controller.stampPhaseOffset)"
                      : "\(controller.stampPhaseOffset)")
@@ -152,7 +153,8 @@ struct ToolStripView: View {
                     .multilineTextAlignment(.center)
                 Button("+") { controller.stampPhaseOffset += 1 }
                     .buttonStyle(.plain)
-                    .frame(width: 16)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -174,7 +176,8 @@ struct ToolStripView: View {
                         max(1, controller.engine.document.gridConfig.phaseStepFrames - 1)
                 }
                 .buttonStyle(.plain)
-                .frame(width: 16)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
                 Text("\(controller.engine.document.gridConfig.phaseStepFrames) fr")
                     .font(.system(size: 11, design: .monospaced))
                     .frame(minWidth: 36)
@@ -184,7 +187,8 @@ struct ToolStripView: View {
                         min(240, controller.engine.document.gridConfig.phaseStepFrames + 1)
                 }
                 .buttonStyle(.plain)
-                .frame(width: 16)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
             }
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: 4))
@@ -2134,6 +2138,8 @@ struct TransportBarView: View {
                     .frame(width: 16)
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
             .foregroundStyle(Color.primary)
             .help("Rewind to start / exit timeline mode")
 
@@ -2144,6 +2150,8 @@ struct TransportBarView: View {
                     .frame(width: 16)
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
             .foregroundStyle(controller.isPlaying ? Color.accentColor : Color.primary)
 
             // Record
@@ -2153,6 +2161,8 @@ struct TransportBarView: View {
                     .frame(width: 16)
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
             .foregroundStyle(controller.isRecording ? Color.red : Color.primary)
             .help(controller.isRecording ? "Stop recording" : "Record timeline states")
 
@@ -2199,6 +2209,8 @@ struct TransportBarView: View {
                     .foregroundStyle(controller.showScrubBar ? Color.accentColor : Color.secondary)
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
             .help(controller.showScrubBar ? "Hide scrub bar" : "Show scrub bar")
 
             // Timeline navigation (shown when cut states have been recorded)
@@ -2210,6 +2222,8 @@ struct TransportBarView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .foregroundStyle(Color.primary)
                 .help("Previous state")
 
@@ -2221,6 +2235,8 @@ struct TransportBarView: View {
                         .foregroundStyle(pos < 0 ? Color.secondary : Color.primary)
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .help("Open cut timeline editor")
 
                 Button(action: { controller.stepTimeline(forward: true) }) {
@@ -2228,6 +2244,8 @@ struct TransportBarView: View {
                         .font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .foregroundStyle(Color.primary)
                 .help("Next state")
             }

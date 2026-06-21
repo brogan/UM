@@ -213,10 +213,10 @@ struct UMTimelinePanel: View {
             HStack(spacing: 4) {
                 Button { zoom = max(1.0, zoom / 1.5) } label: {
                     Image(systemName: "minus.magnifyingglass").font(.system(size: 12))
-                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22)
+                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22).contentShape(Rectangle())
                 Button { zoom = min(64.0, zoom * 1.5) } label: {
                     Image(systemName: "plus.magnifyingglass").font(.system(size: 12))
-                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22)
+                }.buttonStyle(.plain).foregroundStyle(.secondary).frame(width: 22, height: 22).contentShape(Rectangle())
                 Spacer()
                 // Add marker at current frame
                 Button {
@@ -228,11 +228,11 @@ struct UMTimelinePanel: View {
                     markerRenameText = ""
                 } label: {
                     Image(systemName: "bookmark.fill").font(.system(size: 10)).foregroundStyle(.orange.opacity(0.8))
-                }.buttonStyle(.plain).help("Add marker at current frame")
+                }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle()).help("Add marker at current frame")
                 if !selectedItems.isEmpty {
                     Button { deleteSelectedKeyframes() } label: {
                         Image(systemName: "trash").font(.system(size: 11)).foregroundStyle(.red.opacity(0.7))
-                    }.buttonStyle(.plain).help("Delete selected keyframes")
+                    }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle()).help("Delete selected keyframes")
                 }
             }
             .frame(height: markerH).padding(.horizontal, 6)
@@ -250,6 +250,7 @@ struct UMTimelinePanel: View {
                     Text("%").font(.system(size: 9)).foregroundStyle(.secondary)
                     Button("↔") { applyTimingScale() }
                         .font(.system(size: 10)).buttonStyle(.plain)
+                        .frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                         .foregroundStyle(Color.accentColor)
                         .help("Scale selected KF timing from earliest-frame pivot")
                 }
@@ -270,7 +271,7 @@ struct UMTimelinePanel: View {
                     .onSubmit { selectedMarkerID = nil }
                     Button { controller.timelineMarkers.remove(at: idx); selectedMarkerID = nil } label: {
                         Image(systemName: "xmark").font(.system(size: 9)).foregroundStyle(.red.opacity(0.7))
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                 }
                 .frame(height: rulerH).padding(.horizontal, 6)
                 .background(Color.orange.opacity(0.07))
@@ -297,7 +298,7 @@ struct UMTimelinePanel: View {
                 } label: {
                     Image(systemName: cameraExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 8)).frame(width: 10)
-                }.buttonStyle(.plain)
+                }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                 Image(systemName: "camera").font(.system(size: 9)).foregroundStyle(.teal)
                 Text("Camera").font(.system(size: 11, weight: .medium))
                 Spacer()
@@ -320,7 +321,7 @@ struct UMTimelinePanel: View {
                 } label: {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 8)).frame(width: 10)
-                }.buttonStyle(.plain)
+                }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                 Circle()
                     .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.3))
                     .frame(width: 6, height: 6)
@@ -363,7 +364,7 @@ struct UMTimelinePanel: View {
             Spacer(minLength: 2)
             Button(action: onHide) {
                 Image(systemName: "eye.slash").font(.system(size: 9)).foregroundStyle(.tertiary)
-            }.buttonStyle(.plain).help("Hide lane")
+            }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle()).help("Hide lane")
         }
         .frame(height: rowH).padding(.horizontal, 6).padding(.leading, 8)
         .background(Color(NSColor.windowBackgroundColor).opacity(0.4))

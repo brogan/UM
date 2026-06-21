@@ -178,6 +178,8 @@ struct QuickAdjustView: View {
                             .foregroundStyle(Color.secondary)
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                     .help("Clear background image")
                 } else {
                     Button("Choose…") { chooseBgImage() }
@@ -269,6 +271,8 @@ struct QuickAdjustView: View {
                             .foregroundStyle(Color.secondary)
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                     .help("Clear color map")
                 } else {
                     Button("Choose…") { chooseColorSource() }
@@ -1301,6 +1305,8 @@ struct QuickAdjustView: View {
                             .foregroundStyle(Color.accentColor)
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                     .help("Proportional — click to unlock X/Y independently")
                 }
             } else {
@@ -1314,6 +1320,8 @@ struct QuickAdjustView: View {
                             .foregroundStyle(Color.secondary)
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                     .help("Independent — click to link X and Y")
                 }
                 InspectorField("Scale Y") {
@@ -1374,6 +1382,8 @@ struct QuickAdjustView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .foregroundStyle(disabled || controller.projectColorPalettes.isEmpty ? Color.secondary.opacity(0.3) : Color.secondary)
                 .disabled(disabled || controller.projectColorPalettes.isEmpty)
                 .popover(isPresented: $showFillPalette, arrowEdge: .trailing) {
@@ -1395,6 +1405,8 @@ struct QuickAdjustView: View {
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .foregroundStyle(disabled || controller.projectColorPalettes.isEmpty ? Color.secondary.opacity(0.3) : Color.secondary)
                 .disabled(disabled || controller.projectColorPalettes.isEmpty)
                 .popover(isPresented: $showStrokePalette, arrowEdge: .trailing) {
@@ -1562,6 +1574,8 @@ struct QuickAdjustView: View {
                                         .foregroundStyle(.red)
                                 }
                                 .buttonStyle(.plain)
+                                .frame(minWidth: 22, minHeight: 22)
+                                .contentShape(Rectangle())
                             }
                         }
                         Button {
@@ -1606,6 +1620,8 @@ struct QuickAdjustView: View {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(.plain)
+                .frame(minWidth: 22, minHeight: 22)
+                .contentShape(Rectangle())
                 .help("New path")
 
                 if controller.activePathID != nil {
@@ -1616,6 +1632,8 @@ struct QuickAdjustView: View {
                         Image(systemName: "trash")
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                     .foregroundStyle(.red)
                     .help("Delete path")
                 }
@@ -1689,6 +1707,8 @@ struct QuickAdjustView: View {
                             .foregroundStyle(Color.accentColor)
                     }
                     .buttonStyle(.plain)
+                    .frame(minWidth: 22, minHeight: 22)
+                    .contentShape(Rectangle())
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -1739,6 +1759,8 @@ struct QuickAdjustView: View {
                     .foregroundStyle(Color.secondary)
             }
             .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
             .disabled((activePath?.keyframes.count ?? 0) <= 2)
         }
         .padding(.horizontal, 12)
@@ -1956,6 +1978,8 @@ struct QuickAdjustView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .contentShape(Rectangle())
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { controller.activeSpriteID = sprite.id }
@@ -2248,7 +2272,7 @@ struct QuickAdjustView: View {
                                 else { sprite.wrappedValue.polygonOverrides[polyKey] = ovr }
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                         } else {
                             Button {
                                 var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
@@ -2256,7 +2280,7 @@ struct QuickAdjustView: View {
                                 sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                             } label: {
                                 Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                         }
                         Spacer()
                         Text("S")
@@ -2279,7 +2303,7 @@ struct QuickAdjustView: View {
                                 else { sprite.wrappedValue.polygonOverrides[polyKey] = ovr }
                             } label: {
                                 Image(systemName: "xmark").font(.system(size: 8)).foregroundStyle(.secondary)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                         } else {
                             Button {
                                 var ovr = sprite.wrappedValue.polygonOverrides[polyKey] ?? UMPolygonOverride()
@@ -2287,7 +2311,7 @@ struct QuickAdjustView: View {
                                 sprite.wrappedValue.polygonOverrides[polyKey] = ovr
                             } label: {
                                 Text("set").font(.system(size: 10)).foregroundStyle(Color.accentColor)
-                            }.buttonStyle(.plain)
+                            }.buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
                         }
                     }
                     .padding(.horizontal, 10)
