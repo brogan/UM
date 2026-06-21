@@ -623,6 +623,11 @@ private let layersBody = #"""
 
 <h3>Moving a sprite</h3>
 <p>Drag any sprite to reposition it. The sprite moves in real time. Alternatively, edit the <strong>Position X</strong> and <strong>Position Y</strong> fields in the SPRITES inspector (values shown as a percentage of canvas width/height).</p>
+<p>Drag behaviour depends on the sprite's <strong>Position Driver</strong> mode:</p>
+<ul>
+  <li><strong>Constant / other modes</strong> — drag updates the sprite's base position. This is the normal way to place a sprite.</li>
+  <li><strong>Keyframe mode</strong> — drag writes (or overwrites) a position keyframe at the current playhead frame. The sprite's base position stays fixed; the keyframe records an offset from it. Move the playhead to a different frame and drag again to add another keyframe, building up a motion path entirely by dragging.</li>
+</ul>
 
 <h3>Deleting a sprite</h3>
 <ul>
@@ -653,8 +658,9 @@ private let layersBody = #"""
   <tr><td><strong>Oscillator</strong></td><td>Amp X/Y (px), Period (s), Phase (0–1)</td><td>Sinusoidal back-and-forth drift. The sprite oscillates symmetrically around its base position.</td></tr>
   <tr><td><strong>Jitter</strong></td><td>Range X/Y (px), Duration (frames)</td><td>Step-change jitter: the offset jumps to a new random value within ±Range every Duration frames, then holds.</td></tr>
   <tr><td><strong>Noise</strong></td><td>Amp X/Y (px), Frequency (cyc/s)</td><td>Smooth Perlin-style noise drift. Organic, non-repeating position wander.</td></tr>
-  <tr><td><strong>Keyframe</strong></td><td>Frame, Pos X, Pos Y, Easing (in KF inspector)</td><td>Keyframe-driven position. Expand the sprite's layer in the timeline — each sprite shows a purple <strong>↑ [name]</strong> lane. Click the lane to add a keyframe at the current frame; drag to move it; Delete to remove. The KF inspector in Quick Adjust shows Frame, Pos X, Pos Y (canvas pixels), and Easing. All standard timeline operations apply: rubber-band select, Cmd+C/V, timing-scale, Cmd+Z undo.</td></tr>
+  <tr><td><strong>Keyframe</strong></td><td>Frame, Pos X, Pos Y, Easing (in KF inspector)</td><td>Keyframe-driven position. Expand the sprite's layer in the timeline — each sprite shows a purple <strong>↑ [name]</strong> lane. Click the lane to add the first keyframe and switch to Keyframe mode. Once in Keyframe mode, <strong>dragging the sprite on the canvas</strong> records a position keyframe at the current playhead frame — move the playhead and drag to build a motion path by hand. Keyframes can also be dragged left/right in the timeline; Delete removes selected ones. The KF inspector in Quick Adjust shows Frame, Pos X, Pos Y (canvas pixels), and Easing. All standard timeline operations apply: rubber-band select, Cmd+C/V, timing-scale, Cmd+Z undo.</td></tr>
 </table>
+<div class="tip"><strong>Drag-to-keyframe workflow</strong> — click the purple lane in the timeline once to plant the first keyframe, then drag the sprite to each position at the appropriate frame. No need to touch the KF inspector unless you want to fine-tune values or easing.</div>
 <div class="tip"><strong>Position Driver + Motion Set</strong> — both contribute independently. The motion set&apos;s oscillation is driven by its preset and speed/amount parameters; the Position Driver runs its own separate waveform. Stacking an Oscillator motion set (slow, large arc) with a Noise Position Driver (fast, small amplitude) gives organic floating motion with a directional bias.</div>
 
 <h3>SEQUENCE shape cycling</h3>
