@@ -10,7 +10,10 @@ public enum UMGridDistortion: Sendable, Equatable {
     /// Perspective taper: row heights and column widths vary exponentially from one edge to the
     /// other. `vertical` ∈ [-1, 1]: positive compresses top rows, expands bottom (floor receding).
     /// `horizontal` ∈ [-1, 1]: positive compresses left columns, expands right.
-    case perspective(vertical: Double, horizontal: Double)
+    /// `convergence` ∈ [0, 1]: links each row's horizontal span to its vertical scale factor so
+    /// compressed rows are also narrower. An auto-zoom is applied so the most-foreshortened row
+    /// still fills the full canvas width; wider rows overflow and are clipped.
+    case perspective(vertical: Double, horizontal: Double, convergence: Double)
 
     /// Radial size modulation. `amount` ∈ [-1, 1]:
     ///   > 0 → centre cells drawn larger, corner cells normal (spherical/barrel look).
@@ -42,10 +45,21 @@ public enum UMGridDistortion: Sendable, Equatable {
         case .none:
             return Cell(cx: baseCx, cy: baseCy, cellW: uniformCellW, cellH: uniformCellH)
 
-        case .perspective(let vStr, let hStr):
+        case .perspective(let vStr, let hStr, let convergence):
             let rh = Self.perspectiveSizes(count: rows, total: gridH, strength: vStr)
             let cw = Self.perspectiveSizes(count: cols, total: gridW, strength: hStr)
             let cy = rh[0..<row].reduce(0, +) + rh[row] / 2
+
+            if convergence > 1e-6, abs(vStr) > 1e-6 {
+                let (bandLeft, bandWidth) = Self.convergenceBand(
+                    forRow: row, rowHeights: rh, gridW: gridW, convergence: convergence)
+                let colFrac = (Double(col) + 0.5) / Double(cols)
+                return Cell(cx: bandLeft + colFrac * bandWidth,
+                            cy: cy,
+                            cellW: bandWidth / Double(cols),
+                            cellH: rh[row])
+            }
+
             let cx = cw[0..<col].reduce(0, +) + cw[col] / 2
             return Cell(cx: cx, cy: cy, cellW: cw[col], cellH: rh[row])
 
@@ -64,7 +78,7 @@ public enum UMGridDistortion: Sendable, Equatable {
         }
     }
 
-    // MARK: - Perspective helper (public for grid-line drawing)
+    // MARK: - Perspective helpers (public for grid-line drawing)
 
     /// Returns an array of `count` sizes that sum to `total`, tapering exponentially by `strength`.
     /// Positive strength → early elements smaller, later elements larger.
@@ -79,6 +93,36 @@ public enum UMGridDistortion: Sendable, Equatable {
         }
         let sum = weights.reduce(0, +)
         return weights.map { $0 / sum * total }
+    }
+
+    /// Returns (bandLeft, bandWidth) for the converged horizontal band of a specific row.
+    /// The most-foreshortened row's band spans exactly `gridW`; others overflow the canvas.
+    /// Pass the full `rowHeights` array (from `perspectiveSizes`) to avoid recomputation.
+    public static func convergenceBand(
+        forRow row: Int,
+        rowHeights: [Double],
+        gridW: Double,
+        convergence: Double
+    ) -> (left: Double, width: Double) {
+        let rows = rowHeights.count
+        guard rows > 0 else { return (0, gridW) }
+        let uniformH = rowHeights.reduce(0, +) / Double(rows)
+        let autoZoom = Self.convergenceAutoZoom(rowHeights: rowHeights, convergence: convergence)
+        let rowScale = rowHeights[min(row, rows - 1)] / uniformH
+        let eff = 1.0 - convergence * (1.0 - rowScale)
+        let width = gridW * eff * autoZoom
+        return (left: (gridW - width) / 2, width: width)
+    }
+
+    /// Auto-zoom factor that brings the most-compressed row's band to exactly `gridW`.
+    public static func convergenceAutoZoom(rowHeights: [Double], convergence: Double) -> Double {
+        guard !rowHeights.isEmpty else { return 1.0 }
+        let uniformH = rowHeights.reduce(0, +) / Double(rowHeights.count)
+        let minEff = rowHeights.map { h -> Double in
+            let s = h / uniformH
+            return 1.0 - convergence * (1.0 - s)
+        }.min() ?? 1.0
+        return minEff > 1e-8 ? 1.0 / minEff : 1.0
     }
 
     // MARK: - Stable hash
@@ -96,7 +140,7 @@ public enum UMGridDistortion: Sendable, Equatable {
 // MARK: - Codable
 
 extension UMGridDistortion: Codable {
-    private enum K: String, CodingKey { case type, vertical, horizontal, amount, seed }
+    private enum K: String, CodingKey { case type, vertical, horizontal, convergence, amount, seed }
 
     public init(from decoder: Decoder) throws {
         let c    = try decoder.container(keyedBy: K.self)
@@ -104,8 +148,9 @@ extension UMGridDistortion: Codable {
         switch type {
         case "perspective":
             self = .perspective(
-                vertical:   (try? c.decodeIfPresent(Double.self, forKey: .vertical))   ?? 0,
-                horizontal: (try? c.decodeIfPresent(Double.self, forKey: .horizontal)) ?? 0)
+                vertical:    (try? c.decodeIfPresent(Double.self, forKey: .vertical))    ?? 0,
+                horizontal:  (try? c.decodeIfPresent(Double.self, forKey: .horizontal))  ?? 0,
+                convergence: (try? c.decodeIfPresent(Double.self, forKey: .convergence)) ?? 0)
         case "barrel":
             self = .barrel(amount: (try? c.decodeIfPresent(Double.self, forKey: .amount)) ?? 0)
         case "fractured":
@@ -122,10 +167,11 @@ extension UMGridDistortion: Codable {
         switch self {
         case .none:
             try c.encode("none", forKey: .type)
-        case .perspective(let v, let h):
+        case .perspective(let v, let h, let conv):
             try c.encode("perspective", forKey: .type)
             try c.encode(v, forKey: .vertical)
             try c.encode(h, forKey: .horizontal)
+            if conv != 0 { try c.encode(conv, forKey: .convergence) }
         case .barrel(let a):
             try c.encode("barrel", forKey: .type)
             try c.encode(a, forKey: .amount)

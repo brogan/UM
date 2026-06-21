@@ -584,20 +584,49 @@ struct GridCanvasPlaceholder: View {
                         let gc = controller.gridColor
                         var linePath = Path()
                         let activeDistortion = controller.layerStates[safe: controller.activeLayerIndex]?.gridDistortion ?? .none
-                        if case .perspective(let vStr, let hStr) = activeDistortion {
+                        if case .perspective(let vStr, let hStr, let conv) = activeDistortion {
                             let rowH = UMGridDistortion.perspectiveSizes(count: config.rows, total: gridH, strength: vStr)
                             let colW = UMGridDistortion.perspectiveSizes(count: config.cols, total: gridW, strength: hStr)
-                            var x = 0.0
-                            for i in 0...config.cols {
-                                linePath.move(to: CGPoint(x: x, y: 0))
-                                linePath.addLine(to: CGPoint(x: x, y: gridH))
-                                if i < colW.count { x += colW[i] }
-                            }
-                            var y = 0.0
-                            for i in 0...config.rows {
-                                linePath.move(to: CGPoint(x: 0, y: y))
-                                linePath.addLine(to: CGPoint(x: gridW, y: y))
-                                if i < rowH.count { y += rowH[i] }
+
+                            if conv > 1e-6, abs(vStr) > 1e-6 {
+                                // Converging lines: vertical lines fan out, horizontal lines vary in width.
+                                // Top boundary (row 0) fills exactly gridW; lower rows overflow and are clipped.
+                                let (topLeft, topWidth) = UMGridDistortion.convergenceBand(
+                                    forRow: 0, rowHeights: rowH, gridW: gridW, convergence: conv)
+                                let (botLeft, botWidth) = UMGridDistortion.convergenceBand(
+                                    forRow: config.rows - 1, rowHeights: rowH, gridW: gridW, convergence: conv)
+                                // Vertical lines: straight from top boundary to bottom boundary
+                                for c in 0...config.cols {
+                                    let frac = Double(c) / Double(config.cols)
+                                    let xTop = topLeft + frac * topWidth
+                                    let xBot = botLeft + frac * botWidth
+                                    linePath.move(to: CGPoint(x: xTop, y: 0))
+                                    linePath.addLine(to: CGPoint(x: xBot, y: gridH))
+                                }
+                                // Horizontal lines: each spans its row's convergence band
+                                var cumY = 0.0
+                                for r in 0...config.rows {
+                                    let rowIdx = min(r, config.rows - 1)
+                                    let (left, width) = UMGridDistortion.convergenceBand(
+                                        forRow: rowIdx, rowHeights: rowH, gridW: gridW, convergence: conv)
+                                    linePath.move(to: CGPoint(x: left, y: cumY))
+                                    linePath.addLine(to: CGPoint(x: left + width, y: cumY))
+                                    if r < config.rows { cumY += rowH[r] }
+                                }
+                            } else {
+                                // Standard perspective: straight vertical/horizontal lines at computed pitches
+                                var x = 0.0
+                                for i in 0...config.cols {
+                                    linePath.move(to: CGPoint(x: x, y: 0))
+                                    linePath.addLine(to: CGPoint(x: x, y: gridH))
+                                    if i < colW.count { x += colW[i] }
+                                }
+                                var y = 0.0
+                                for i in 0...config.rows {
+                                    linePath.move(to: CGPoint(x: 0, y: y))
+                                    linePath.addLine(to: CGPoint(x: gridW, y: y))
+                                    if i < rowH.count { y += rowH[i] }
+                                }
                             }
                         } else {
                             for c in 0...config.cols {

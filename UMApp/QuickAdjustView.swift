@@ -2406,7 +2406,7 @@ struct QuickAdjustView: View {
                     },
                     set: { mode in
                         switch mode {
-                        case "perspective": ls?.gridDistortion = .perspective(vertical: 0.5, horizontal: 0)
+                        case "perspective": ls?.gridDistortion = .perspective(vertical: 0.5, horizontal: 0, convergence: 0)
                         case "barrel":      ls?.gridDistortion = .barrel(amount: 0.5)
                         case "fractured":   ls?.gridDistortion = .fractured(amount: 0.3, seed: distortionSeed)
                         default:            ls?.gridDistortion = .none
@@ -2424,22 +2424,31 @@ struct QuickAdjustView: View {
             switch ls?.gridDistortion ?? .none {
             case .none:
                 EmptyView()
-            case .perspective(let v, let h):
+            case .perspective(let v, let h, let conv):
                 InspectorField("Vertical") {
                     Slider(value: Binding(
                         get: { v },
-                        set: { ls?.gridDistortion = .perspective(vertical: $0, horizontal: h) }
+                        set: { ls?.gridDistortion = .perspective(vertical: $0, horizontal: h, convergence: conv) }
                     ), in: -1...1).frame(maxWidth: 90)
                     valueLabel(v, digits: 2)
                 }
                 InspectorField("Horizontal") {
                     Slider(value: Binding(
                         get: { h },
-                        set: { ls?.gridDistortion = .perspective(vertical: v, horizontal: $0) }
+                        set: { ls?.gridDistortion = .perspective(vertical: v, horizontal: $0, convergence: conv) }
                     ), in: -1...1).frame(maxWidth: 90)
                     valueLabel(h, digits: 2)
                 }
-                Text("+ = top rows smaller / left cols smaller")
+                InspectorField("Converge") {
+                    Slider(value: Binding(
+                        get: { conv },
+                        set: { ls?.gridDistortion = .perspective(vertical: v, horizontal: h, convergence: $0) }
+                    ), in: 0...1).frame(maxWidth: 90)
+                    valueLabel(conv, digits: 2)
+                }
+                Text(conv < 0.05
+                     ? "+ = top rows smaller / left cols smaller"
+                     : "Rows narrow proportionally; auto-zoom fills canvas")
                     .font(.system(size: 10)).foregroundStyle(.quaternary)
                     .padding(.horizontal, 12).padding(.bottom, 3)
             case .barrel(let amount):
