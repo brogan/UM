@@ -71,6 +71,8 @@ final class UMLayerState: Identifiable {
 @MainActor
 final class AppController {
 
+    private let defaultNewSpriteScale = 2.0
+
     // MARK: Layer stack
 
     var layerStates: [UMLayerState] = []
@@ -122,8 +124,19 @@ final class AppController {
         rebuildShapePolygonMap()
     }
 
+    func setProjectCanvasSize(width: Double, height: Double) {
+        let w = max(1, width)
+        let h = max(1, height)
+        for ls in layerStates {
+            ls.engine.document.gridConfig.canvasWidth = w
+            ls.engine.document.gridConfig.canvasHeight = h
+        }
+    }
+
     func removeLayer(at index: Int) {
         guard layerStates.count > 1, index >= 0, index < layerStates.count else { return }
+        let canvasW = engine.document.gridConfig.canvasWidth
+        let canvasH = engine.document.gridConfig.canvasHeight
         let removedID = layerStates[index].id
         layerStates.remove(at: index)
         layerColorMapEngines.removeValue(forKey: removedID)
@@ -135,6 +148,7 @@ final class AppController {
         activeSpriteID  = nil
         selectedIndices = []
         colorMapEngine  = layerColorMapEngines[layerStates[newIndex].id] ?? UMColorMapEngine()
+        setProjectCanvasSize(width: canvasW, height: canvasH)
         rebuildShapePolygonMap()
     }
 
@@ -205,6 +219,8 @@ final class AppController {
             name:     "Sprite \(count)",
             x:        Double(point.x),
             y:        Double(point.y),
+            scaleX:   defaultNewSpriteScale,
+            scaleY:   defaultNewSpriteScale,
             styleID:  activeStyleID,
             shapeID:  activeShapeID,
             motionID: activeMotionID
@@ -233,18 +249,29 @@ final class AppController {
     /// sprite's base position so that sprite.x/y stays fixed as the animation reference.
     func setSpritePositionKeyframe(id: UUID, frame: Int,
                                    canvasX: Double, canvasY: Double,
-                                   gridW: Double, gridH: Double) {
+                                   gridW: Double, gridH: Double,
+                                   motionDX: Double = 0, motionDY: Double = 0) {
         guard activeLayerIndex < layerStates.count else { return }
         let ls = layerStates[activeLayerIndex]
         guard let si = ls.sprites.firstIndex(where: { $0.id == id }) else { return }
         let sprite = ls.sprites[si]
-        let offset = UMVec2(x: canvasX - sprite.x * gridW, y: canvasY - sprite.y * gridH)
+        let offset = UMVec2(x: canvasX - sprite.x * gridW - motionDX,
+                            y: canvasY - sprite.y * gridH - motionDY)
         var d = sprite.positionDriver
         d.mode = .keyframe
+        d.loopMode = .once
         d.keyframes.removeAll { $0.frame == frame }
         d.keyframes.append(UMVectorKeyframe(frame: frame, value: offset))
         d.keyframes.sort { $0.frame < $1.frame }
         ls.sprites[si].positionDriver = d
+    }
+
+    private func normalizeSpritePositionDrivers() {
+        for ls in layerStates where ls.layerMode == .sprite {
+            for i in ls.sprites.indices where ls.sprites[i].positionDriver.mode == .keyframe {
+                ls.sprites[i].positionDriver.loopMode = .once
+            }
+        }
     }
 
     func updateSprite(id: UUID, _ body: (inout UMSprite) -> Void) {
@@ -310,6 +337,14 @@ final class AppController {
     var kfClipboard:        UMKFClipboard?         = nil
 
     var maxScrubFrames: Int { endFrame > 0 ? endFrame : 240 }
+
+    func selectSpriteFromCanvas(_ id: UUID?) {
+        activeSpriteID = id
+        selectedTimelineKF = nil
+        selectedCameraKF = nil
+        selectedSpriteKF = nil
+        selectedIndices = []
+    }
 
     func seekToFrame(_ f: Int) {
         let clamped = max(0, min(maxScrubFrames, f))
@@ -600,6 +635,8 @@ final class AppController {
         selectedIndices           = []
         currentFileURL            = nil
         camera            = .identity
+        backgroundColor     = UMColor(r: 1, g: 1, b: 1, a: 1)
+        backgroundDraw      = true
         backgroundCGImage   = nil
         backgroundImagePath = nil
         rebuildShapePolygonMap()
@@ -690,11 +727,13 @@ final class AppController {
         var camera: UMCamera?             // Added in v4; nil → .identity
         var timelineMarkers: [UMTimelineMarker]?  // Added in v5; nil → []
         var backgroundImageRelPath: String?       // Added in v7; nil → no background image
+        var backgroundColor: UMColor?             // Added in v9; nil → white
+        var backgroundDraw: Bool?                 // Added in v9; nil → true
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
             case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
-            case camera, timelineMarkers, backgroundImageRelPath
+            case camera, timelineMarkers, backgroundImageRelPath, backgroundColor, backgroundDraw
         }
 
         init(version: Int, activeLayerIndex: Int, projectStyles: [CellStyle],
@@ -703,7 +742,9 @@ final class AppController {
              projectResolutionPresets: [UMResolutionPreset],
              layers: [LayerRecord], camera: UMCamera?,
              timelineMarkers: [UMTimelineMarker]?,
-             backgroundImageRelPath: String?) {
+             backgroundImageRelPath: String?,
+             backgroundColor: UMColor?,
+             backgroundDraw: Bool?) {
             self.version                  = version
             self.activeLayerIndex         = activeLayerIndex
             self.projectStyles            = projectStyles
@@ -715,6 +756,8 @@ final class AppController {
             self.camera                   = camera
             self.timelineMarkers          = timelineMarkers
             self.backgroundImageRelPath   = backgroundImageRelPath
+            self.backgroundColor          = backgroundColor
+            self.backgroundDraw           = backgroundDraw
         }
 
         init(from decoder: Decoder) throws {
@@ -730,6 +773,8 @@ final class AppController {
             camera                   = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
             timelineMarkers          = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
             backgroundImageRelPath   = try? c.decodeIfPresent(String.self,                forKey: .backgroundImageRelPath)
+            backgroundColor          = try? c.decodeIfPresent(UMColor.self,               forKey: .backgroundColor)
+            backgroundDraw           = try? c.decodeIfPresent(Bool.self,                  forKey: .backgroundDraw)
         }
     }
 
@@ -866,7 +911,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 8,
+            version: 9,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -898,7 +943,9 @@ final class AppController {
             },
             camera: camera,
             timelineMarkers: timelineMarkers.isEmpty ? nil : timelineMarkers,
-            backgroundImageRelPath: bgImageRelPath
+            backgroundImageRelPath: bgImageRelPath,
+            backgroundColor: backgroundColor,
+            backgroundDraw: backgroundDraw
         )
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -969,12 +1016,15 @@ final class AppController {
             ls.activeStyleID = record.activeStyleID ?? styles.first?.id
             return ls
         }
+        normalizeSpritePositionDrivers()
 
         let idx      = max(0, min(config.activeLayerIndex, layerStates.count - 1))
         activeLayerIndex  = idx
         engine            = layerStates[idx].engine
         camera            = config.camera ?? .identity
         timelineMarkers   = config.timelineMarkers ?? []
+        backgroundColor   = config.backgroundColor ?? UMColor(r: 1, g: 1, b: 1, a: 1)
+        backgroundDraw    = config.backgroundDraw ?? true
         projectStyles             = styles
         projectShapes             = loaded
         projectMotionSets         = config.projectMotionSets
@@ -1054,6 +1104,8 @@ final class AppController {
         engine           = layerStates[0].engine
         camera           = .identity
         projectStyles    = layerStates[0].engine.document.styles
+        backgroundColor  = UMColor(r: 1, g: 1, b: 1, a: 1)
+        backgroundDraw   = true
 
         // Migrate shapes
         var seen = Set<UUID>()
@@ -1068,6 +1120,7 @@ final class AppController {
                 return legacy
             } ?? []
         projectMotionSets = Self.migrateLegacyMotion(legacyStyles: legacyStyles, layerStates: &layerStates)
+        normalizeSpritePositionDrivers()
 
         activeStyleID    = layerStates[0].activeStyleID ?? projectStyles.first?.id
         activeMotionID   = projectMotionSets.first?.id

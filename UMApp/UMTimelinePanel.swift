@@ -50,6 +50,7 @@ struct UMTimelinePanel: View {
 
     @State private var panelHeight:      CGFloat  = 200
     @State private var resizeStartH:     CGFloat? = nil
+    @State private var resizePreviewH:   CGFloat? = nil
     @State private var zoom:             Double   = 4.0   // px per frame
     @State private var hOffset:          Double   = 0.0   // horizontal scroll, px
     @State private var cameraExpanded:   Bool     = false
@@ -150,6 +151,16 @@ struct UMTimelinePanel: View {
                 Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
             }
             .foregroundStyle(.tertiary)
+            if let h = resizePreviewH {
+                Text("\(Int(h.rounded())) px")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.thinMaterial, in: Capsule())
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 10)
+            }
         }
         .frame(height: handleH)
         .contentShape(Rectangle())
@@ -163,16 +174,28 @@ struct UMTimelinePanel: View {
                     }
                     let start = resizeStartH ?? panelHeight
                     resizeStartH = start
-                    panelHeight = max(minPanelH, min(maxPanelH, start - v.translation.height))
+                    resizePreviewH = clampedPanelHeight(start - v.translation.height)
                 }
-                .onEnded { _ in resizeStartH = nil }
+                .onEnded { _ in
+                    if let h = resizePreviewH {
+                        panelHeight = h
+                    }
+                    resizeStartH = nil
+                    resizePreviewH = nil
+                }
         )
         .simultaneousGesture(
             TapGesture().onEnded {
+                resizeStartH = nil
+                resizePreviewH = nil
                 controller.isTimelineCollapsed.toggle()
                 if !controller.isTimelineCollapsed { panelHeight = max(panelHeight, minPanelH) }
             }
         )
+    }
+
+    private func clampedPanelHeight(_ height: CGFloat) -> CGFloat {
+        max(minPanelH, min(maxPanelH, height))
     }
 
     // MARK: Row layout
@@ -656,18 +679,24 @@ struct UMTimelinePanel: View {
     private func drawDiamond(_ ctx: inout GraphicsContext, x: CGFloat, y: CGFloat, sz: CGFloat,
                               color: Color, selected: Bool, dragging: Bool) {
         let s = dragging ? sz * 1.4 : sz
-        let path = Path {
-            $0.move(to:    CGPoint(x: x,     y: y - s))
-            $0.addLine(to: CGPoint(x: x + s, y: y))
-            $0.addLine(to: CGPoint(x: x,     y: y + s))
-            $0.addLine(to: CGPoint(x: x - s, y: y))
-            $0.closeSubpath()
-        }
+        let path = diamondPath(x: x, y: y, size: s)
         ctx.fill(path, with: .color(color.opacity(dragging ? 1.0 : 0.85)))
         if selected {
-            ctx.stroke(path, with: .color(.white.opacity(0.9)), lineWidth: 1.5)
+            let halo = diamondPath(x: x, y: y, size: s + 2)
+            ctx.stroke(halo, with: .color(Color.green.opacity(0.95)), lineWidth: 2.0)
+            ctx.stroke(path, with: .color(Color.white.opacity(0.95)), lineWidth: 1.0)
         } else if dragging {
             ctx.stroke(path, with: .color(color), lineWidth: 1.0)
+        }
+    }
+
+    private func diamondPath(x: CGFloat, y: CGFloat, size: CGFloat) -> Path {
+        Path {
+            $0.move(to:    CGPoint(x: x,          y: y - size))
+            $0.addLine(to: CGPoint(x: x + size,   y: y))
+            $0.addLine(to: CGPoint(x: x,          y: y + size))
+            $0.addLine(to: CGPoint(x: x - size,   y: y))
+            $0.closeSubpath()
         }
     }
 
@@ -1025,6 +1054,7 @@ struct UMTimelinePanel: View {
                       let si = ls.sprites.firstIndex(where: { $0.id == spriteID }) else { continue }
                 let f = base + offset
                 ls.sprites[si].positionDriver.mode = .keyframe
+                ls.sprites[si].positionDriver.loopMode = .once
                 ls.sprites[si].positionDriver.keyframes.removeAll { $0.frame == f }
                 ls.sprites[si].positionDriver.keyframes.append(UMVectorKeyframe(frame: f, value: value, easing: easing))
                 ls.sprites[si].positionDriver.keyframes.sort { $0.frame < $1.frame }
@@ -1108,9 +1138,12 @@ struct UMTimelinePanel: View {
         guard let ls = controller.layerStates[safe: layerIndex],
               let si = ls.sprites.firstIndex(where: { $0.id == spriteID }) else { return }
         recordUndo()
+        controller.selectLayer(layerIndex)
+        controller.activeSpriteID = spriteID
         let val = DriverEvaluator.evaluate(ls.sprites[si].positionDriver, frame: frame)
         var d = ls.sprites[si].positionDriver
         d.mode = .keyframe
+        d.loopMode = .once
         d.keyframes.removeAll { $0.frame == frame }
         d.keyframes.append(UMVectorKeyframe(frame: frame, value: val))
         d.keyframes.sort { $0.frame < $1.frame }
@@ -1453,9 +1486,16 @@ struct UMTimelinePanel: View {
             controller.selectedTimelineKF = nil
             controller.selectedSpriteKF   = nil
         case .sprite(let i, let spriteID, let ki):
+            controller.selectLayer(i)
+            controller.activeSpriteID = spriteID
             controller.selectedSpriteKF   = UMSpriteKFSelection(layerIndex: i, spriteID: spriteID, keyframeIdx: ki)
             controller.selectedTimelineKF = nil
             controller.selectedCameraKF   = nil
+            if let ls = controller.layerStates[safe: i],
+               let si = ls.sprites.firstIndex(where: { $0.id == spriteID }),
+               let frame = ls.sprites[si].positionDriver.keyframes[safe: ki]?.frame {
+                controller.seekToFrame(frame)
+            }
         }
     }
 

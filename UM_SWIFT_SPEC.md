@@ -2389,6 +2389,80 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 
 ---
 
+### 15.13 Animated Geometry / Sprite Set Assets (Future)
+
+**Motivation**
+
+Sprite layers now support two distinct animation concepts:
+
+- **Stage motion** — where an individual sprite travels on the canvas, currently handled by the per-sprite `positionDriver` lane in the main keyframe timeline.
+- **Internal motion** — how the sprite itself changes shape over time, currently possible through `UMMotionSet.sequenceMode` and `shapeIDs`, but presented as a motion-set feature rather than as a dedicated animated sprite asset.
+
+For character-like or object-like animation, these should be separated. The main timeline should answer "where does the shark go?" while a reusable sprite-state asset should answer "how does the shark swim?"
+
+**Feature concept**
+
+Add a first-class **Animated Geometry** or **Sprite Set** asset: a Loom-style layered geometry file that wraps multiple sprite states into one reusable object. Instead of placing several separate sprites or building replacement cycles laboriously on the main keyframe timeline, the user defines the cycle once in a separate editing context, then places that animated object as a single sprite on a sprite layer.
+
+This feature is conceptually an evolution of the existing Motion Set SEQUENCE mechanism:
+
+- Current: a `UMMotionSet` can cycle through a list of shape IDs at a fixed frame step.
+- Future: an animated geometry asset owns the ordered states, timing, loop behaviour, per-state offsets, and editing UI directly.
+
+**Proposed data model**
+
+```swift
+public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
+    public var id: UUID
+    public var name: String
+    public var states: [UMAnimatedGeometryState]
+    public var loopMode: UMAnimatedGeometryLoopMode
+    public var defaultFrameStep: Int
+}
+
+public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
+    public var id: UUID
+    public var shapeID: UUID
+    public var holdFrames: Int
+    public var offsetX: Double
+    public var offsetY: Double
+    public var rotation: Double
+    public var scaleX: Double
+    public var scaleY: Double
+}
+
+public enum UMAnimatedGeometryLoopMode: String, Codable, CaseIterable, Sendable {
+    case loop
+    case pingPong
+    case once
+    case holdLast
+}
+```
+
+`UMSprite` would gain an optional `animatedGeometryID`. When set, the animated geometry asset resolves the effective shape at render time, replacing or taking priority over `sprite.shapeID` and Motion Set SEQUENCE cycling. The sprite's existing `styleID`, `motionID`, `phaseOffset`, `positionDriver`, and polygon overrides still apply, so external movement and styling remain independent.
+
+**Editing workflow**
+
+- Add an **ANIMATED GEOMETRY** or **SPRITE SETS** section to the left palette, parallel to SHAPES / MOTIONS / PATHS.
+- `+ New Sprite Set` creates an asset with one state.
+- `+ Add State` appends additional Loom shapes or layered geometry states.
+- A dedicated editor/preview context shows the cycle playing in isolation, with controls for state order, hold frames, loop mode, per-state registration offset, and optional onion-skin previews.
+- Once authored, the asset can be assigned to a sprite from the sprite inspector.
+- On the main timeline, the sprite remains a single selectable object. Position, scale, rotation, opacity, camera, and layer timing stay in the main composition context.
+
+**Relationship to Loom**
+
+The long-term ideal is to follow Loom's layered geometry-file model: a single geometry document can contain multiple named/layered states that together describe a complete animated object. Once `LoomEditorKit` is extracted, this feature should reuse the same geometry authoring code rather than inventing a second editor. UM should store the animated asset in project JSON and optionally promote it to the global library, just like shapes, paths, styles, and motion sets.
+
+**Open decisions**
+
+- Whether animated geometry states reference existing `UMShape` records or embed their own Loom geometry JSON directly.
+- Whether per-state polygon colour overrides live on the animated asset, the sprite instance, or both.
+- Whether Motion Set SEQUENCE remains as a lightweight cycling feature for grid cells while sprites prefer `UMAnimatedGeometry`.
+- Whether a sprite can layer multiple animated geometry assets, or whether one sprite maps to one animated geometry asset.
+
+---
+
 ### Summary Table
 
 | Area | Item | Depends on |
@@ -2422,6 +2496,7 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 | **Sprite layer** | MOTION section in sprite context (effectiveMotionID from selected sprite) | ✓ Built 2026-06-20 |
 | **Sprite layer** | positionDriver keyframe lane in timeline (per-sprite purple lanes, full KF ops) | ✓ Built 2026-06-20 |
 | **Sprite layer** | Polygon override index stability (UUID-keyed instead of positional) | ✓ Built 2026-06-20 |
+| **Sprite layer** | Animated Geometry / Sprite Set assets (reusable Loom-style sprite-state cycles edited outside the main timeline) | LoomEditorKit / future data model |
 | **UI** | "Nothing active" hint in right panel | ✓ Built 2026-06-20 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

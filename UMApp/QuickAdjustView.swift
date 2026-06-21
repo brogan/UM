@@ -1982,7 +1982,7 @@ struct QuickAdjustView: View {
                         .contentShape(Rectangle())
                     }
                     .contentShape(Rectangle())
-                    .onTapGesture { controller.activeSpriteID = sprite.id }
+                    .onTapGesture { controller.selectSpriteFromCanvas(sprite.id) }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 3)
                 }
@@ -2014,25 +2014,24 @@ struct QuickAdjustView: View {
 
     @ViewBuilder
     private func spriteInspector(sprite: Binding<UMSprite>) -> some View {
-        let s = sprite.wrappedValue
         VStack(alignment: .leading, spacing: 0) {
             // Name
             InspectorField("Name") {
-                TextField("", text: Binding(get: { s.name }, set: { sprite.wrappedValue.name = $0 }))
+                TextField("", text: Binding(get: { sprite.wrappedValue.name }, set: { sprite.wrappedValue.name = $0 }))
                     .textFieldStyle(.plain)
                     .font(.system(size: 11))
             }
             // Position
             InspectorField("Position X") {
                 FloatEntryField(value: Binding(
-                    get: { s.x * 100 },
+                    get: { sprite.wrappedValue.x * 100 },
                     set: { sprite.wrappedValue.x = $0 / 100.0 }
                 ), width: 52, fractionDigits: 1)
                 Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             InspectorField("Position Y") {
                 FloatEntryField(value: Binding(
-                    get: { s.y * 100 },
+                    get: { sprite.wrappedValue.y * 100 },
                     set: { sprite.wrappedValue.y = $0 / 100.0 }
                 ), width: 52, fractionDigits: 1)
                 Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -2040,7 +2039,7 @@ struct QuickAdjustView: View {
             // Rotation
             InspectorField("Rotation") {
                 FloatEntryField(value: Binding(
-                    get: { s.rotation },
+                    get: { sprite.wrappedValue.rotation },
                     set: { sprite.wrappedValue.rotation = $0 }
                 ), width: 52, fractionDigits: 1)
                 Text("°").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -2048,20 +2047,20 @@ struct QuickAdjustView: View {
             // Scale
             InspectorField("Scale X") {
                 FloatEntryField(value: Binding(
-                    get: { s.scaleX },
+                    get: { sprite.wrappedValue.scaleX },
                     set: { sprite.wrappedValue.scaleX = max(0.01, $0) }
                 ), width: 52, fractionDigits: 2)
             }
             InspectorField("Scale Y") {
                 FloatEntryField(value: Binding(
-                    get: { s.scaleY },
+                    get: { sprite.wrappedValue.scaleY },
                     set: { sprite.wrappedValue.scaleY = max(0.01, $0) }
                 ), width: 52, fractionDigits: 2)
             }
             // Style picker
             InspectorField("Style") {
                 Picker("", selection: Binding(
-                    get: { s.styleID },
+                    get: { sprite.wrappedValue.styleID },
                     set: { sprite.wrappedValue.styleID = $0 }
                 )) {
                     Text("None").tag(UUID?.none)
@@ -2075,7 +2074,7 @@ struct QuickAdjustView: View {
             // Shape picker
             InspectorField("Shape") {
                 Picker("", selection: Binding(
-                    get: { s.shapeID },
+                    get: { sprite.wrappedValue.shapeID },
                     set: { sprite.wrappedValue.shapeID = $0 }
                 )) {
                     Text("Default").tag(UUID?.none)
@@ -2089,7 +2088,7 @@ struct QuickAdjustView: View {
             // Motion picker
             InspectorField("Motion") {
                 Picker("", selection: Binding(
-                    get: { s.motionID },
+                    get: { sprite.wrappedValue.motionID },
                     set: { sprite.wrappedValue.motionID = $0 }
                 )) {
                     Text("None").tag(UUID?.none)
@@ -2103,7 +2102,7 @@ struct QuickAdjustView: View {
             // Phase offset
             InspectorField("Phase") {
                 FloatEntryField(value: Binding(
-                    get: { Double(s.phaseOffset) },
+                    get: { Double(sprite.wrappedValue.phaseOffset) },
                     set: { sprite.wrappedValue.phaseOffset = Int($0) }
                 ), width: 52, fractionDigits: 0)
                 Text("frames").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -2118,7 +2117,7 @@ struct QuickAdjustView: View {
                 .padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: Binding(
-                    get: { s.positionDriver.mode },
+                    get: { sprite.wrappedValue.positionDriver.mode },
                     set: { sprite.wrappedValue.positionDriver.mode = $0 }
                 )) {
                     ForEach(UMVectorDriverMode.allCases, id: \.self) {
@@ -2127,11 +2126,11 @@ struct QuickAdjustView: View {
                 }
                 .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
             }
-            switch s.positionDriver.mode {
+            switch sprite.wrappedValue.positionDriver.mode {
             case .constant:
                 InspectorField("Offset X") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.base.x },
+                        get: { sprite.wrappedValue.positionDriver.base.x },
                         set: { sprite.wrappedValue.positionDriver.base.x = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2139,7 +2138,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Offset Y") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.base.y },
+                        get: { sprite.wrappedValue.positionDriver.base.y },
                         set: { sprite.wrappedValue.positionDriver.base.y = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2148,7 +2147,7 @@ struct QuickAdjustView: View {
             case .oscillator:
                 InspectorField("Amp X") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.oscillatorAmplitude.x },
+                        get: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.x },
                         set: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.x = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2156,7 +2155,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Amp Y") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.oscillatorAmplitude.y },
+                        get: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.y },
                         set: { sprite.wrappedValue.positionDriver.oscillatorAmplitude.y = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2164,7 +2163,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Period") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.oscillatorPeriod },
+                        get: { sprite.wrappedValue.positionDriver.oscillatorPeriod },
                         set: { sprite.wrappedValue.positionDriver.oscillatorPeriod = max(0.1, $0) }
                     ), format: .number.precision(.fractionLength(2)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2172,14 +2171,14 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Phase") {
                     Slider(value: Binding(
-                        get: { s.positionDriver.oscillatorPhase },
+                        get: { sprite.wrappedValue.positionDriver.oscillatorPhase },
                         set: { sprite.wrappedValue.positionDriver.oscillatorPhase = $0 }
                     ), in: 0...1).frame(maxWidth: 90)
                 }
             case .jitter:
                 InspectorField("Range X") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.jitterRange.x },
+                        get: { sprite.wrappedValue.positionDriver.jitterRange.x },
                         set: { sprite.wrappedValue.positionDriver.jitterRange.x = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2187,7 +2186,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Range Y") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.jitterRange.y },
+                        get: { sprite.wrappedValue.positionDriver.jitterRange.y },
                         set: { sprite.wrappedValue.positionDriver.jitterRange.y = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2195,7 +2194,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Duration") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.jitterDuration },
+                        get: { sprite.wrappedValue.positionDriver.jitterDuration },
                         set: { sprite.wrappedValue.positionDriver.jitterDuration = max(1, $0) }
                     ), format: .number)
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2204,7 +2203,7 @@ struct QuickAdjustView: View {
             case .noise:
                 InspectorField("Amp X") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.noiseAmplitude.x },
+                        get: { sprite.wrappedValue.positionDriver.noiseAmplitude.x },
                         set: { sprite.wrappedValue.positionDriver.noiseAmplitude.x = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2212,7 +2211,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Amp Y") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.noiseAmplitude.y },
+                        get: { sprite.wrappedValue.positionDriver.noiseAmplitude.y },
                         set: { sprite.wrappedValue.positionDriver.noiseAmplitude.y = $0 }
                     ), format: .number.precision(.fractionLength(1)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2220,7 +2219,7 @@ struct QuickAdjustView: View {
                 }
                 InspectorField("Frequency") {
                     TextField("", value: Binding(
-                        get: { s.positionDriver.noiseFrequency },
+                        get: { sprite.wrappedValue.positionDriver.noiseFrequency },
                         set: { sprite.wrappedValue.positionDriver.noiseFrequency = max(0.01, $0) }
                     ), format: .number.precision(.fractionLength(2)))
                     .textFieldStyle(.squareBorder).font(.system(size: 11, design: .monospaced)).frame(width: 60)
@@ -2235,9 +2234,9 @@ struct QuickAdjustView: View {
             }
 
             // MARK: Polygon overrides
-            let polygons   = (s.shapeID.flatMap { controller.shapePolygonMap[$0] } ?? controller.shapePolygons)
+            let polygons   = (sprite.wrappedValue.shapeID.flatMap { controller.shapePolygonMap[$0] } ?? controller.shapePolygons)
                 .filter(\.visible)
-            let polygonIDs = s.shapeID.flatMap { controller.shapePolygonIDMap[$0] } ?? []
+            let polygonIDs = sprite.wrappedValue.shapeID.flatMap { controller.shapePolygonIDMap[$0] } ?? []
             if !polygons.isEmpty {
                 Divider().padding(.vertical, 4)
                 Text("POLYGON OVERRIDES")
@@ -2255,7 +2254,7 @@ struct QuickAdjustView: View {
                         Text("F")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                        if let fillOvr = s.polygonOverrides[polyKey]?.fill {
+                        if let fillOvr = sprite.wrappedValue.polygonOverrides[polyKey]?.fill {
                             ColorWell(color: Binding(
                                 get: { fillOvr.swiftUIColor },
                                 set: { newC in
@@ -2286,7 +2285,7 @@ struct QuickAdjustView: View {
                         Text("S")
                             .font(.system(size: 10))
                             .foregroundStyle(.secondary)
-                        if let strokeOvr = s.polygonOverrides[polyKey]?.stroke {
+                        if let strokeOvr = sprite.wrappedValue.polygonOverrides[polyKey]?.stroke {
                             ColorWell(color: Binding(
                                 get: { strokeOvr.swiftUIColor },
                                 set: { newC in
@@ -3004,8 +3003,7 @@ struct QuickAdjustView: View {
             },
             set: { preset in
                 guard let dims = preset.dimensions else { return }
-                controller.engine.document.gridConfig.canvasWidth  = dims.width
-                controller.engine.document.gridConfig.canvasHeight = dims.height
+                controller.setProjectCanvasSize(width: dims.width, height: dims.height)
             }
         )
     }
@@ -3013,14 +3011,22 @@ struct QuickAdjustView: View {
     private var canvasWidthBinding: Binding<Double> {
         Binding(
             get: { controller.engine.document.gridConfig.canvasWidth },
-            set: { controller.engine.document.gridConfig.canvasWidth = max(1, $0) }
+            set: {
+                controller.setProjectCanvasSize(
+                    width: $0,
+                    height: controller.engine.document.gridConfig.canvasHeight)
+            }
         )
     }
 
     private var canvasHeightBinding: Binding<Double> {
         Binding(
             get: { controller.engine.document.gridConfig.canvasHeight },
-            set: { controller.engine.document.gridConfig.canvasHeight = max(1, $0) }
+            set: {
+                controller.setProjectCanvasSize(
+                    width: controller.engine.document.gridConfig.canvasWidth,
+                    height: $0)
+            }
         )
     }
 

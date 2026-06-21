@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 let projectDir = "/Users/broganbunt/UMApp"
 let scheme     = "UMApp"
@@ -12,11 +13,22 @@ func appendLog(_ msg: String) {
     if FileManager.default.fileExists(atPath: logPath),
        let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: logPath)) {
         defer { try? handle.close() }
-        try? handle.seekToEnd()
+        _ = try? handle.seekToEnd()
         try? handle.write(contentsOf: data)
     } else {
         try? data.write(to: URL(fileURLWithPath: logPath))
     }
+}
+
+func showAlert(title: String, message: String) {
+    NSApplication.shared.setActivationPolicy(.regular)
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = message
+    alert.alertStyle = .warning
+    alert.addButton(withTitle: "OK")
+    alert.runModal()
 }
 
 @discardableResult
@@ -52,11 +64,17 @@ let status = run("/usr/bin/xcodebuild", [
 ])
 
 guard status == 0 else {
-    appendLog("xcodebuild failed (status \(status)). Check /tmp/um-launcher.log")
+    let message = "The UM build failed with status \(status). Details were written to \(logPath)."
+    appendLog("xcodebuild failed (status \(status)). Check \(logPath)")
+    showAlert(title: "UM could not be built", message: message)
     exit(status)
 }
 
 appendLog("Launching \(appPath)...")
 let openStatus = run("/usr/bin/open", [appPath])
 appendLog("open finished with status \(openStatus).")
+if openStatus != 0 {
+    showAlert(title: "UM could not be opened",
+              message: "The app was built, but macOS could not open \(appPath). Details were written to \(logPath).")
+}
 exit(openStatus)

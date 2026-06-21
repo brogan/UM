@@ -4,6 +4,9 @@ import AVFoundation
 import ImageIO
 import UMEngine
 
+private let umColorMapSampleColorSpace: CGColorSpace =
+    CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
 @Observable
 @MainActor
 final class UMColorMapEngine {
@@ -148,7 +151,7 @@ final class UMColorMapEngine {
     // to computing the mean color of each cell region from the full-resolution source.
     private static func sample(_ image: CGImage, rows: Int, cols: Int) -> [[UMColor]] {
         guard rows > 0, cols > 0 else { return [] }
-        let cs   = CGColorSpaceCreateDeviceRGB()
+        let cs   = umColorMapSampleColorSpace
         let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
         guard let ctx = CGContext(data: nil, width: cols, height: rows,
                                   bitsPerComponent: 8, bytesPerRow: cols * 4,

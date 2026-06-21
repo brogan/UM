@@ -2,6 +2,9 @@ import SwiftUI
 import UMEngine
 import LoomEngine
 
+private let umCompositingColorSpace: CGColorSpace =
+    CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
 struct ContentView: View {
     @Environment(AppController.self) private var controller
 
@@ -320,7 +323,7 @@ private nonisolated func renderAccumulationCG(_ snap: AccumulationSnapshot) -> C
                    | CGBitmapInfo.byteOrder32Little.rawValue
     guard let mainCtx = CGContext(data: nil, width: snap.pw, height: snap.ph,
                                    bitsPerComponent: 8, bytesPerRow: 0,
-                                   space: CGColorSpaceCreateDeviceRGB(),
+                                   space: umCompositingColorSpace,
                                    bitmapInfo: bitmapInfo) else { return nil }
     let frame = CGRect(x: 0, y: 0, width: snap.pw, height: snap.ph)
 
@@ -355,7 +358,7 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                    | CGBitmapInfo.byteOrder32Little.rawValue
     guard let ctx = CGContext(data: nil, width: pw, height: ph,
                                bitsPerComponent: 8, bytesPerRow: 0,
-                               space: CGColorSpaceCreateDeviceRGB(),
+                               space: umCompositingColorSpace,
                                bitmapInfo: bitmapInfo) else { return nil }
 
     // Mirror y-axis so drawing coordinates match Canvas (y increases downward)
@@ -1095,36 +1098,54 @@ struct GridCanvasPlaceholder: View {
                             // Sprite layer intercept
                             let activeLS = controller.layerStates[controller.activeLayerIndex]
                             if activeLS.layerMode == .sprite {
-                                if spriteDragID == nil {
-                                    let startPt = canvasPoint(value.startLocation,
-                                                              viewSize: geo.size,
-                                                              gridW: gridW, gridH: gridH)
-                                    let frame = controller.engine.currentFrame
+                                let frame = controller.engine.currentFrame
+                                let startPt = canvasPoint(value.startLocation,
+                                                          viewSize: geo.size,
+                                                          gridW: gridW, gridH: gridH)
+                                if spriteDragID == nil && rubberBandStart == nil {
                                     if let hit = spriteHitTest(at: startPt, in: activeLS,
                                                                gridW: gridW, gridH: gridH, frame: frame) {
-                                        controller.activeSpriteID = hit.id
+                                        if controller.activeTool == .select {
+                                            controller.selectSpriteFromCanvas(hit.id)
+                                        } else {
+                                            controller.activeSpriteID = hit.id
+                                        }
                                         spriteDragID = hit.id
                                         spriteDragIsKeyframe = hit.positionDriver.mode == .keyframe
                                         // offset = rendered display position - click position
                                         let si = activeLS.sprites.firstIndex(where: { $0.id == hit.id }) ?? 0
                                         let dOff = DriverEvaluator.evaluate(hit.positionDriver, frame: frame, spriteIndex: si)
-                                        spriteDragOffset = CGPoint(x: hit.x * gridW + dOff.x - startPt.x,
-                                                                   y: hit.y * gridH + dOff.y - startPt.y)
+                                        let motion = spriteMotion(for: hit, index: si, frame: frame,
+                                                                  gridW: gridW, gridH: gridH)
+                                        spriteDragOffset = CGPoint(x: hit.x * gridW + motion.dx + dOff.x - startPt.x,
+                                                                   y: hit.y * gridH + motion.dy + dOff.y - startPt.y)
+                                    } else if controller.activeTool == .select {
+                                        rubberBandStart = startPt
                                     }
                                 }
                                 if let dragID = spriteDragID {
                                     let targetX = pt.x + spriteDragOffset.x
                                     let targetY = pt.y + spriteDragOffset.y
                                     if spriteDragIsKeyframe {
+                                        let si = activeLS.sprites.firstIndex(where: { $0.id == dragID }) ?? 0
+                                        let sprite = activeLS.sprites[safe: si]
+                                        let targetFrame = controller.engine.currentFrame
+                                        let motion = sprite.map {
+                                            spriteMotion(for: $0, index: si, frame: targetFrame,
+                                                         gridW: gridW, gridH: gridH)
+                                        } ?? SpriteMotion()
                                         controller.setSpritePositionKeyframe(
                                             id: dragID,
-                                            frame: controller.engine.currentFrame,
+                                            frame: targetFrame,
                                             canvasX: targetX, canvasY: targetY,
-                                            gridW: gridW, gridH: gridH)
+                                            gridW: gridW, gridH: gridH,
+                                            motionDX: motion.dx, motionDY: motion.dy)
                                     } else {
                                         controller.moveSprite(id: dragID,
                                                              to: CGPoint(x: targetX / gridW, y: targetY / gridH))
                                     }
+                                } else if controller.activeTool == .select {
+                                    rubberBandCurrent = pt
                                 }
                                 return
                             }
@@ -1193,15 +1214,21 @@ struct GridCanvasPlaceholder: View {
                                     spriteDragID         = nil
                                     spriteDragOffset     = .zero
                                     spriteDragIsKeyframe = false
+                                } else if controller.activeTool == .select {
+                                    handleSpriteSelectEnd(value: value, in: activeLS)
+                                    rubberBandStart = nil
+                                    rubberBandCurrent = nil
                                 } else {
                                     let dist = hypot(value.translation.width, value.translation.height)
                                     if dist < 8 {
                                         let startPt = canvasPoint(value.startLocation,
                                                                   viewSize: geo.size,
                                                                   gridW: cachedGridW, gridH: cachedGridH)
-                                        if spriteHitTest(at: startPt, in: activeLS,
+                                        let frame = controller.engine.currentFrame
+                                        if controller.activeTool != .select,
+                                           spriteHitTest(at: startPt, in: activeLS,
                                                          gridW: cachedGridW, gridH: cachedGridH,
-                                                         frame: controller.engine.currentFrame) == nil {
+                                                         frame: frame) == nil {
                                             let tap = canvasPoint(value.location,
                                                                   viewSize: geo.size,
                                                                   gridW: cachedGridW, gridH: cachedGridH)
@@ -1392,6 +1419,45 @@ struct GridCanvasPlaceholder: View {
         return nil
     }
 
+    private func spriteBounds(for sprite: UMSprite, index: Int, frame: Int,
+                              gridW: Double, gridH: Double) -> CGRect {
+        let ref = min(gridW, gridH) / 8.0
+        let motion = spriteMotion(for: sprite, index: index, frame: frame, gridW: gridW, gridH: gridH)
+        let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: index)
+        let sx = sprite.x * gridW + motion.dx + dOff.x
+        let sy = sprite.y * gridH + motion.dy + dOff.y
+        let hw = max(6, (ref / 2) * sprite.scaleX * abs(motion.scaleX))
+        let hh = max(6, (ref / 2) * sprite.scaleY * abs(motion.scaleY))
+        let fallback = CGRect(x: sx - hw, y: sy - hh, width: hw * 2, height: hh * 2)
+        let style = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
+        let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
+        let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                                       frame: frame, phaseOffset: sprite.phaseOffset)
+        let polygons = resolvePolygons(shapeID: effectiveShapeID,
+                                       shapeMap: controller.shapePolygonMap,
+                                       fallback: controller.shapePolygons)
+        guard !polygons.isEmpty else { return fallback }
+        let zoomX = (ref / 2) * sprite.scaleX * motion.scaleX
+        let zoomY = (ref / 2) * sprite.scaleY * motion.scaleY
+        let rot = sprite.rotation + motion.rotation
+        let bounds = polygons.filter(\.visible).reduce(CGRect.null) { partial, polygon in
+            partial.union(Path(buildPolygonPath(polygon, cx: sx, cy: sy,
+                                                zoomX: zoomX, zoomY: zoomY,
+                                                scaleX: 1.0, scaleY: 1.0,
+                                                rotation: rot)).boundingRect)
+        }
+        let strokeW = CGFloat(style?.strokeWidth ?? 1.5)
+        return bounds.isNull ? fallback : bounds.insetBy(dx: -max(8, strokeW), dy: -max(8, strokeW))
+    }
+
+    private func spriteCenter(for sprite: UMSprite, index: Int, frame: Int,
+                              gridW: Double, gridH: Double) -> CGPoint {
+        let motion = spriteMotion(for: sprite, index: index, frame: frame, gridW: gridW, gridH: gridH)
+        let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: index)
+        return CGPoint(x: sprite.x * gridW + motion.dx + dOff.x,
+                       y: sprite.y * gridH + motion.dy + dOff.y)
+    }
+
     private func applyTangentDrag(_ drag: TangentDragState, pt: CGPoint,
                                   cellW: Double, cellH: Double) {
         guard let activePID = controller.activePathID,
@@ -1434,17 +1500,82 @@ struct GridCanvasPlaceholder: View {
 
     private func spriteHitTest(at pt: CGPoint, in ls: UMLayerState,
                                gridW: Double, gridH: Double, frame: Int = 0) -> UMSprite? {
-        let ref = min(gridW, gridH) / 8.0
+        if let activeID = controller.activeSpriteID,
+           let idx = ls.sprites.firstIndex(where: { $0.id == activeID }) {
+            let sprite = ls.sprites[idx]
+            if spriteBounds(for: sprite, index: idx, frame: frame,
+                            gridW: gridW, gridH: gridH).contains(pt) {
+                return sprite
+            }
+        }
         for idx in ls.sprites.indices.reversed() {
             let sprite = ls.sprites[idx]
-            let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: idx)
-            let sx = sprite.x * gridW + dOff.x
-            let sy = sprite.y * gridH + dOff.y
-            let hw = (ref / 2) * sprite.scaleX
-            let hh = (ref / 2) * sprite.scaleY
-            if abs(pt.x - sx) < hw && abs(pt.y - sy) < hh { return sprite }
+            if spriteBounds(for: sprite, index: idx, frame: frame,
+                            gridW: gridW, gridH: gridH).contains(pt) {
+                return sprite
+            }
         }
         return nil
+    }
+
+    private func spriteMotion(for sprite: UMSprite, index: Int, frame: Int,
+                              gridW: Double, gridH: Double) -> SpriteMotion {
+        let style     = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
+        let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
+        let spriteRef = min(gridW, gridH) / 8.0
+        return computeMotion(motionSet: motionSet, style: style, path: nil,
+                             frame: frame,
+                             phaseOffset: sprite.phaseOffset,
+                             cellIndex: index,
+                             cellW: spriteRef * sprite.scaleX,
+                             cellH: spriteRef * sprite.scaleY)
+    }
+
+    private func handleSpriteSelectEnd(value: DragGesture.Value, in ls: UMLayerState) {
+        let shift = NSEvent.modifierFlags.contains(.shift)
+        let t = value.translation
+        let isClick = t.width.magnitude < 4 && t.height.magnitude < 4
+        let frame = controller.engine.currentFrame
+
+        if isClick {
+            guard let pt = rubberBandStart else { return }
+            if let hit = spriteHitTest(at: pt, in: ls, gridW: cachedGridW, gridH: cachedGridH, frame: frame) {
+                controller.selectSpriteFromCanvas(hit.id)
+            } else if !shift {
+                controller.selectSpriteFromCanvas(nil)
+            }
+            return
+        }
+
+        guard let start = rubberBandStart, let end = rubberBandCurrent else { return }
+        let rect = CGRect(x: min(start.x, end.x), y: min(start.y, end.y),
+                          width: abs(end.x - start.x), height: abs(end.y - start.y))
+        for idx in ls.sprites.indices.reversed() {
+            let sprite = ls.sprites[idx]
+            if rect.contains(spriteCenter(for: sprite, index: idx, frame: frame,
+                                          gridW: cachedGridW, gridH: cachedGridH)) {
+                controller.selectSpriteFromCanvas(sprite.id)
+                return
+            }
+        }
+        var best: (id: UUID, area: CGFloat)?
+        for idx in ls.sprites.indices {
+            let sprite = ls.sprites[idx]
+            let intersection = rect.intersection(spriteBounds(for: sprite, index: idx, frame: frame,
+                                                              gridW: cachedGridW, gridH: cachedGridH))
+            guard !intersection.isNull, !intersection.isEmpty else { continue }
+            let area = intersection.width * intersection.height
+            if best == nil || area > best!.area {
+                best = (sprite.id, area)
+            }
+        }
+        if let best {
+            controller.selectSpriteFromCanvas(best.id)
+            return
+        }
+        if !shift {
+            controller.selectSpriteFromCanvas(nil)
+        }
     }
 
     private func handleDrag(at pt: CGPoint,
@@ -1563,11 +1694,11 @@ struct GridCanvasPlaceholder: View {
 
 // MARK: - Polygon path builder (file scope — shared by canvas and frame buffer renderer)
 
-private func buildPolygonPath(_ polygon: Polygon2D,
-                               cx: Double, cy: Double,
-                               zoomX: Double, zoomY: Double,
-                               scaleX: Double = 1, scaleY: Double = 1,
-                               rotation: Double = 0) -> CGPath {
+func buildPolygonPath(_ polygon: Polygon2D,
+                      cx: Double, cy: Double,
+                      zoomX: Double, zoomY: Double,
+                      scaleX: Double = 1, scaleY: Double = 1,
+                      rotation: Double = 0) -> CGPath {
     let pts      = polygon.points
     let path     = CGMutablePath()
     let θ        = rotation * .pi / 180
@@ -1626,7 +1757,7 @@ private func buildPolygonPath(_ polygon: Polygon2D,
 
 // MARK: - Per-sprite motion transform
 
-private struct SpriteMotion {
+struct SpriteMotion {
     var dx:             Double = 0
     var dy:             Double = 0
     var scaleX:         Double = 1
@@ -1637,8 +1768,8 @@ private struct SpriteMotion {
 }
 
 /// Inject sampled image/video color into motion's fill and/or stroke override channels.
-private func applyColorMap(_ sampled: UMColor, source: UMColorSource,
-                            style: CellStyle?, to motion: inout SpriteMotion) {
+func applyColorMap(_ sampled: UMColor, source: UMColorSource,
+                   style: CellStyle?, to motion: inout SpriteMotion) {
     let a      = source.preserveStyleAlpha ? (style?.fillColor.a ?? 1.0) : sampled.a
     let mapped = UMColor(r: sampled.r, g: sampled.g, b: sampled.b, a: a)
     switch source.applyTo {
@@ -1651,10 +1782,10 @@ private func applyColorMap(_ sampled: UMColor, source: UMColorSource,
 /// Compute the animated transform for a single cell at a given frame.
 /// Combines the motionSet's parametric preset with an optional keyframe path (additive),
 /// then layers Order/Chaos jitter on top.
-private func computeMotion(motionSet: UMMotionSet?, style: CellStyle?, path: UMMotionPath?,
-                            frame: Int, phaseOffset: Int,
-                            cellIndex: Int,
-                            cellW: Double, cellH: Double) -> SpriteMotion {
+func computeMotion(motionSet: UMMotionSet?, style: CellStyle?, path: UMMotionPath?,
+                   frame: Int, phaseOffset: Int,
+                   cellIndex: Int,
+                   cellW: Double, cellH: Double) -> SpriteMotion {
     var m = SpriteMotion()
 
     // --- Parametric preset ---
@@ -1690,22 +1821,22 @@ private func computeMotion(motionSet: UMMotionSet?, style: CellStyle?, path: UMM
 }
 
 /// Resolve the polygon list for a cell from its direct shapeID reference.
-private func resolvePolygons(shapeID: UUID?,
-                              shapeMap: [UUID: [Polygon2D]],
-                              fallback: [Polygon2D]) -> [Polygon2D] {
+func resolvePolygons(shapeID: UUID?,
+                     shapeMap: [UUID: [Polygon2D]],
+                     fallback: [Polygon2D]) -> [Polygon2D] {
     guard let id = shapeID, let polys = shapeMap[id] else { return fallback }
     return polys
 }
 
 /// Resolve the ordered EditableClosedPolygon IDs for a shape. Returns [] when no shape is assigned.
-private func resolvePolygonIDs(shapeID: UUID?, idMap: [UUID: [UUID]]) -> [UUID] {
+func resolvePolygonIDs(shapeID: UUID?, idMap: [UUID: [UUID]]) -> [UUID] {
     guard let id = shapeID, let ids = idMap[id] else { return [] }
     return ids
 }
 
-private func computeParametric(motionSet: UMMotionSet, style: CellStyle?,
-                                frame: Int, phaseOffset: Int,
-                                cellW: Double, cellH: Double) -> SpriteMotion {
+func computeParametric(motionSet: UMMotionSet, style: CellStyle?,
+                       frame: Int, phaseOffset: Int,
+                       cellW: Double, cellH: Double) -> SpriteMotion {
     guard motionSet.motionPreset != .static, motionSet.motionPreset != .custom
     else { return SpriteMotion() }
 
@@ -2011,6 +2142,7 @@ func umRenderFrame(
         strokeScale:       strokeScale
     ))
     renderer.scale = 1.0
+    renderer.colorMode = .nonLinear
     return renderer.cgImage
 }
 
@@ -2062,7 +2194,7 @@ func umRenderComposited(
                    | CGBitmapInfo.byteOrder32Little.rawValue
     guard let ctx = CGContext(data: nil, width: w, height: h,
                               bitsPerComponent: 8, bytesPerRow: 0,
-                              space: CGColorSpaceCreateDeviceRGB(),
+                              space: umCompositingColorSpace,
                               bitmapInfo: bitmapInfo) else { return nil }
     let destRect = CGRect(x: 0, y: 0, width: w, height: h)
 
@@ -2099,6 +2231,7 @@ func umRenderComposited(
                 layerTransform:    layerXF
             ))
             renderer.scale = 1.0
+            renderer.colorMode = .nonLinear
             if let img = renderer.cgImage {
                 ctx.setBlendMode(ls.blendMode.cgBlendMode)
                 ctx.setAlpha(opacity)
@@ -2139,9 +2272,11 @@ func umRenderComposited(
             drawBackground:    false,
             layerTransform:    layerXF,
             gridScrollDriver:  ls.gridScrollDriver,
-            gridScrollMode:    ls.gridScrollMode
+            gridScrollMode:    ls.gridScrollMode,
+            gridDistortion:    ls.gridDistortion
         ))
         renderer.scale = 1.0
+        renderer.colorMode = .nonLinear
         if let img = renderer.cgImage {
             ctx.setBlendMode(ls.blendMode.cgBlendMode)
             ctx.setAlpha(opacity)

@@ -7,6 +7,245 @@ import UniformTypeIdentifiers
 import UMEngine
 import LoomEngine
 
+private let umExportColorSpace: CGColorSpace =
+    CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
+private func umExportVideoColorProperties() -> [String: Any] {
+    [
+        AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+        AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+        AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+    ]
+}
+
+private func umExportPixelBufferColorAttributes() -> [String: Any] {
+    [
+        kCVImageBufferCGColorSpaceKey as String: umExportColorSpace,
+        kCVImageBufferColorPrimariesKey as String: kCVImageBufferColorPrimaries_ITU_R_709_2,
+        kCVImageBufferTransferFunctionKey as String: kCVImageBufferTransferFunction_ITU_R_709_2,
+        kCVImageBufferYCbCrMatrixKey as String: kCVImageBufferYCbCrMatrix_ITU_R_709_2,
+    ]
+}
+
+private func umExportVideoSettings(width: Int, height: Int) -> [String: Any] {
+    [
+        AVVideoCodecKey: AVVideoCodecType.proRes4444.rawValue,
+        AVVideoWidthKey: width,
+        AVVideoHeightKey: height,
+        AVVideoColorPropertiesKey: umExportVideoColorProperties(),
+    ]
+}
+
+private let umExportPreviewMatchSaturation = 1.06
+private let umExportPreviewMatchBrightness = -0.04
+
+private struct UMExportFrameCapture: View {
+    let existingBuffer: CGImage?
+    let backgroundColor: UMColor
+    let backgroundImage: CGImage?
+    let layers: [UMLayer]
+    let shapePolygonMap: [UUID: [Polygon2D]]
+    let shapePolygonIDMap: [UUID: [UUID]]
+    let fallbackPolygons: [Polygon2D]
+    let projectMotionSets: [UMMotionSet]
+    let colorMapEngines: [UUID: UMColorMapEngine]
+    let stretchSprites: Bool
+    let frame: Int
+    let gridW: Double
+    let gridH: Double
+    let strokeScale: Double
+    let camera: UMCamera
+
+    var body: some View {
+        Canvas { ctx, size in
+            let destRect = CGRect(origin: .zero, size: size)
+            if let existingBuffer {
+                let img = ctx.resolve(Image(decorative: existingBuffer, scale: 1))
+                ctx.draw(img, in: destRect)
+            } else {
+                let bg = backgroundColor
+                ctx.fill(Path(destRect),
+                         with: .color(Color(red: bg.r, green: bg.g, blue: bg.b, opacity: bg.a)))
+                if let backgroundImage {
+                    let img = ctx.resolve(Image(decorative: backgroundImage, scale: 1))
+                    ctx.draw(img, in: destRect)
+                }
+            }
+
+            let cameraFrame = camera.evaluate(frame: frame)
+            let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
+
+            for layer in layers where layer.isVisible {
+                let opacity = DriverEvaluator.evaluate(layer.opacityDriver, frame: frame)
+                let layerOff = DriverEvaluator.evaluate(layer.layerOffset, frame: frame)
+                let layerXF = umLayerTransform(cameraFrame: cameraFrame,
+                                               parallaxFactor: layer.parallaxFactor,
+                                               layerOffset: layerOff,
+                                               canvasW: gridW, canvasH: gridH)
+                var layerCompositeCtx = ctx
+                layerCompositeCtx.blendMode = layer.blendMode.swiftUIBlendMode
+                layerCompositeCtx.drawLayer { layerCtx in
+                    layerCtx.opacity = opacity
+                    if !layerXF.isIdentity { layerCtx.concatenate(layerXF) }
+
+                    if layer.layerMode == .sprite {
+                        drawSprites(in: &layerCtx, layer: layer, motionMap: motionMap)
+                    } else {
+                        drawGrid(in: &layerCtx, layer: layer, motionMap: motionMap)
+                    }
+                }
+            }
+        }
+        .frame(width: gridW, height: gridH)
+    }
+
+    private func drawSprites(in ctx: inout GraphicsContext,
+                             layer: UMLayer,
+                             motionMap: [UUID: UMMotionSet]) {
+        let styleMap = Dictionary(uniqueKeysWithValues: layer.document.styles.map { ($0.id, $0) })
+        let spriteRef = min(gridW, gridH) / 8.0
+        for (idx, sprite) in layer.sprites.enumerated() {
+            let style = sprite.styleID.flatMap { styleMap[$0] }
+            let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+            let motion = computeMotion(motionSet: motionSet, style: style, path: nil,
+                                       frame: frame,
+                                       phaseOffset: sprite.phaseOffset,
+                                       cellIndex: idx,
+                                       cellW: spriteRef * sprite.scaleX,
+                                       cellH: spriteRef * sprite.scaleY)
+            let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: idx)
+            let mx = sprite.x * gridW + motion.dx + driverPos.x
+            let my = sprite.y * gridH + motion.dy + driverPos.y
+            let rot = sprite.rotation + motion.rotation
+            let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
+                                                          cellShapeID: sprite.shapeID,
+                                                          frame: frame,
+                                                          phaseOffset: sprite.phaseOffset)
+            let polygons = resolvePolygons(shapeID: effectiveShapeID,
+                                           shapeMap: shapePolygonMap,
+                                           fallback: fallbackPolygons)
+            let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
+            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
+            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+            let fillC = style?.fillColor ?? .defaultFill
+            let strokeC = style?.strokeColor ?? .defaultStroke
+            let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
+            let mode = style?.renderMode ?? .filledStroked
+
+            if polygons.isEmpty {
+                let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                         with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
+            } else {
+                for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                    let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
+                    let fC = ovr?.fill ?? fillC
+                    let sC = ovr?.stroke ?? strokeC
+                    let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                               zoomX: zoomX, zoomY: zoomY,
+                                               scaleX: 1.0, scaleY: 1.0,
+                                               rotation: rot)
+                    if mode == .filled || mode == .filledStroked {
+                        ctx.fill(Path(cgp),
+                                 with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
+                    }
+                    if mode == .stroked || mode == .filledStroked {
+                        ctx.stroke(Path(cgp),
+                                   with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
+                                   lineWidth: strokeW)
+                    }
+                }
+            }
+        }
+    }
+
+    private func drawGrid(in ctx: inout GraphicsContext,
+                          layer: UMLayer,
+                          motionMap: [UUID: UMMotionSet]) {
+        let config = layer.document.gridConfig
+        let cellW = gridW / Double(config.cols)
+        let cellH = gridH / Double(config.rows)
+        let scaleX = cellW / config.cellWidth
+        let scaleY = cellH / config.cellHeight
+        let styleMap = Dictionary(uniqueKeysWithValues: layer.document.styles.map { ($0.id, $0) })
+        let pathMap = Dictionary(uniqueKeysWithValues: layer.document.paths.map { ($0.id, $0) })
+        let loopMode = layer.document.colorSource?.videoLoopMode ?? .loop
+        let colorGrid = colorMapEngines[layer.id]?.currentGrid(animationFrame: frame, loopMode: loopMode)
+        let scroll = DriverEvaluator.evaluate(layer.gridScrollDriver, frame: frame)
+        let fracX = scroll.x - floor(scroll.x)
+        let fracY = scroll.y - floor(scroll.y)
+        let specs = gridScrollRenderSpecs(cells: layer.document.cells, scroll: scroll,
+                                          mode: layer.gridScrollMode,
+                                          rows: config.rows, cols: config.cols)
+
+        for spec in specs {
+            let cell = spec.cell
+            let r = spec.displayRow
+            let c = spec.displayCol
+            let style = styleMap[cell.styleID]
+            let motionSet = cell.motionID.flatMap { motionMap[$0] }
+            let path = cell.pathID.flatMap { pathMap[$0] }
+            var motion = computeMotion(motionSet: motionSet, style: style, path: path,
+                                       frame: frame,
+                                       phaseOffset: cell.phaseOffset,
+                                       cellIndex: cell.gridIndex,
+                                       cellW: cellW, cellH: cellH)
+            if cell.lockedFillColor != nil || cell.lockedStrokeColor != nil {
+                if let fc = cell.lockedFillColor { motion.fillOverride = fc }
+                if let sc = cell.lockedStrokeColor { motion.strokeOverride = sc }
+            } else if let src = layer.document.colorSource, let grid = colorGrid,
+                      r < grid.count, c < grid[r].count {
+                applyColorMap(grid[r][c], source: src, style: style, to: &motion)
+            }
+
+            let dCell = layer.gridDistortion.evaluate(row: r, col: c,
+                                                      rows: config.rows, cols: config.cols,
+                                                      uniformCellW: cellW, uniformCellH: cellH,
+                                                      gridW: gridW, gridH: gridH)
+            let mx = dCell.cx - fracX * cellW + cell.positionOffset.dx * scaleX + motion.dx
+            let my = dCell.cy - fracY * cellH + cell.positionOffset.dy * scaleY + motion.dy
+            let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
+                                                          cellShapeID: cell.shapeID,
+                                                          frame: frame,
+                                                          phaseOffset: cell.phaseOffset)
+            let polygons = resolvePolygons(shapeID: effectiveShapeID,
+                                           shapeMap: shapePolygonMap,
+                                           fallback: fallbackPolygons)
+            let fillC = motion.fillOverride ?? style?.fillColor ?? .defaultFill
+            let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
+            let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
+            let mode = style?.renderMode ?? .filledStroked
+
+            if polygons.isEmpty {
+                let rw = (dCell.cellW - 4 * strokeScale) / 2 * motion.scaleX
+                let rh = (dCell.cellH - 4 * strokeScale) / 2 * motion.scaleY
+                let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                         with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
+            } else {
+                let dCellHalf = min(dCell.cellW, dCell.cellH)
+                let zoomX = (stretchSprites ? dCell.cellW : dCellHalf) * motion.scaleX
+                let zoomY = (stretchSprites ? dCell.cellH : dCellHalf) * motion.scaleY
+                for polygon in polygons.filter(\.visible) {
+                    let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                               zoomX: zoomX, zoomY: zoomY,
+                                               scaleX: cell.scaleX, scaleY: cell.scaleY,
+                                               rotation: cell.rotation + motion.rotation)
+                    if mode == .filled || mode == .filledStroked {
+                        ctx.fill(Path(cgp),
+                                 with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
+                    }
+                    if mode == .stroked || mode == .filledStroked {
+                        ctx.stroke(Path(cgp),
+                                   with: .color(Color(red: strokeC.r, green: strokeC.g, blue: strokeC.b, opacity: strokeC.a)),
+                                   lineWidth: strokeW)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Video exporter
 
 @MainActor
@@ -42,11 +281,7 @@ enum UMVideoExporter {
 
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
 
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey:  AVVideoCodecType.h264.rawValue,
-            AVVideoWidthKey:  w,
-            AVVideoHeightKey: h,
-        ]
+        let videoSettings = umExportVideoSettings(width: w, height: h)
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         writerInput.expectsMediaDataInRealTime = false
 
@@ -54,7 +289,7 @@ enum UMVideoExporter {
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey           as String: w,
             kCVPixelBufferHeightKey          as String: h,
-        ]
+        ].merging(umExportPixelBufferColorAttributes()) { current, _ in current }
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: writerInput,
             sourcePixelBufferAttributes: pixelBufferAttrs
@@ -106,7 +341,7 @@ enum UMVideoExporter {
                                        | CGBitmapInfo.byteOrder32Little.rawValue
                         if let ctx = CGContext(data: base, width: w, height: h,
                                                bitsPerComponent: 8, bytesPerRow: bpr,
-                                               space: CGColorSpaceCreateDeviceRGB(),
+                                               space: umExportColorSpace,
                                                bitmapInfo: bitmapInfo) {
                             ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
                         }
@@ -156,43 +391,28 @@ enum UMVideoExporter {
     ) -> CGImage? {
         let w = Int(exportW); let h = Int(exportH)
         guard w > 0, h > 0 else { return nil }
-        let bitmapInfo = CGImageAlphaInfo.premultipliedFirst.rawValue
-                       | CGBitmapInfo.byteOrder32Little.rawValue
-        guard let ctx = CGContext(data: nil, width: w, height: h,
-                                  bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpaceCreateDeviceRGB(),
-                                  bitmapInfo: bitmapInfo) else { return nil }
-        let destRect = CGRect(x: 0, y: 0, width: w, height: h)
-
-        if let buf = accumulationBuffer, !backgroundDraw {
-            ctx.draw(buf, in: destRect)
-        } else {
-            ctx.setFillColor(CGColor(red: backgroundColor.r, green: backgroundColor.g,
-                                     blue: backgroundColor.b, alpha: backgroundColor.a))
-            ctx.fill(destRect)
-            if let bgImg = backgroundImage { ctx.draw(bgImg, in: destRect) }
-        }
-
-        let cameraFrame = camera.evaluate(frame: frame)
-        for layer in layers {
-            if let img = renderLayerCells(layer: layer,
-                                          shapePolygonMap: shapePolygonMap,
-                                          shapePolygonIDMap: shapePolygonIDMap,
-                                          fallbackPolygons: fallbackPolygons,
-                                          projectMotionSets: projectMotionSets,
-                                          colorMapEngine: colorMapEngines[layer.id],
-                                          stretchSprites: stretchSprites,
-                                          frame: frame,
-                                          exportW: exportW, exportH: exportH,
-                                          strokeScale: strokeScale,
-                                          cameraFrame: cameraFrame) {
-                ctx.setAlpha(DriverEvaluator.evaluate(layer.opacityDriver, frame: frame))
-                ctx.draw(img, in: destRect)
-                ctx.setAlpha(1.0)
-            }
-        }
-
-        return ctx.makeImage()
+        let renderer = ImageRenderer(content: UMExportFrameCapture(
+            existingBuffer:    backgroundDraw ? nil : accumulationBuffer,
+            backgroundColor:   backgroundColor,
+            backgroundImage:   backgroundImage,
+            layers:            layers,
+            shapePolygonMap:   shapePolygonMap,
+            shapePolygonIDMap: shapePolygonIDMap,
+            fallbackPolygons:  fallbackPolygons,
+            projectMotionSets: projectMotionSets,
+            colorMapEngines:   colorMapEngines,
+            stretchSprites:    stretchSprites,
+            frame:             frame,
+            gridW:             exportW,
+            gridH:             exportH,
+            strokeScale:       strokeScale,
+            camera:            camera
+        )
+        .saturation(umExportPreviewMatchSaturation)
+        .brightness(umExportPreviewMatchBrightness))
+        renderer.scale = 1.0
+        renderer.colorMode = .nonLinear
+        return renderer.cgImage
     }
 
     // Render one layer's cells onto a transparent background and return a CGImage.
@@ -230,6 +450,7 @@ enum UMVideoExporter {
                 layerTransform:    layerXF
             ))
             renderer.scale = 1.0
+            renderer.colorMode = .nonLinear
             return renderer.cgImage
         }
 
@@ -267,6 +488,7 @@ enum UMVideoExporter {
             gridDistortion:    layer.gridDistortion
         ))
         renderer.scale = 1.0
+        renderer.colorMode = .nonLinear
         return renderer.cgImage
     }
 
@@ -306,18 +528,14 @@ enum UMVideoExporter {
 
         try? FileManager.default.removeItem(at: url)
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
-        let videoSettings: [String: Any] = [
-            AVVideoCodecKey:  AVVideoCodecType.h264.rawValue,
-            AVVideoWidthKey:  w,
-            AVVideoHeightKey: h,
-        ]
+        let videoSettings = umExportVideoSettings(width: w, height: h)
         let writerInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings)
         writerInput.expectsMediaDataInRealTime = false
         let pixelBufferAttrs: [String: Any] = [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey           as String: w,
             kCVPixelBufferHeightKey          as String: h,
-        ]
+        ].merging(umExportPixelBufferColorAttributes()) { current, _ in current }
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(
             assetWriterInput: writerInput,
             sourcePixelBufferAttributes: pixelBufferAttrs)
@@ -388,7 +606,7 @@ enum UMVideoExporter {
                                            | CGBitmapInfo.byteOrder32Little.rawValue
                             if let ctx = CGContext(data: base, width: w, height: h,
                                                    bitsPerComponent: 8, bytesPerRow: bpr,
-                                                   space: CGColorSpaceCreateDeviceRGB(),
+                                                   space: umExportColorSpace,
                                                    bitmapInfo: bitmapInfo) {
                                 ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
                             }
