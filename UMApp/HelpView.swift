@@ -734,9 +734,10 @@ private let layersBody = #"""
   <tr><th>Control</th><th>Range</th><th>Effect</th></tr>
   <tr><td><strong>Vertical</strong></td><td>−1 to +1</td><td>+1: top rows compressed, bottom rows expanded (floor receding away at top). −1: the reverse (floor receding toward bottom, or ceiling effect).</td></tr>
   <tr><td><strong>Horizontal</strong></td><td>−1 to +1</td><td>+1: left columns compressed, right columns expanded. −1: the reverse. Set both to zero for a uniform grid.</td></tr>
+  <tr><td><strong>Converge</strong></td><td>0 to 1</td><td>Links each row's horizontal width to its vertical scale factor. At 1, compressed rows are proportionally narrower — distant rows taper in from the sides as they would on a true receding plane. An automatic zoom is applied so the most-foreshortened row always fills the full canvas width; wider rows extend beyond the canvas edge and are clipped.</td></tr>
 </table>
 <p>When perspective is active, the grid lines in the canvas redraw at the correct variable-pitch positions so they match the distorted cell boundaries.</p>
-<div class="tip">Set Vertical to 0.6 and Horizontal to 0 for a classic isometric-style floor. Combine with a Grid Scroll oscillator to animate tiles across the receding surface.</div>
+<div class="tip">Set Vertical to 0.6, Converge to 0.8 for a strong one-point floor perspective. Combine with a Grid Scroll oscillator to animate tiles travelling away across the receding surface.</div>
 <div class="note">Click-to-draw accuracy is reduced when perspective is strong, because the hit-test still uses the uniform grid to find which cell was clicked. For detailed painting, reduce the distortion while drawing and restore it for playback.</div>
 
 <h3>Barrel / Cone</h3>
@@ -990,6 +991,19 @@ private let playbackBody = #"""
   <tr><td>Camera Rotation</td><td>Cyan</td><td>Camera rotation in degrees</td></tr>
 </table>
 <div class="note">Setting a keyframe on any lane automatically switches that driver to Keyframe mode. Deleting the last keyframe on a lane reverts it to Constant mode.</div>
+
+<h3>Showing and hiding lanes</h3>
+<p>Each lane header has an <strong>eye.slash</strong> button (far right) that hides the lane from view. Hidden lanes still animate normally — hiding is purely a workspace declutter. To restore hidden lanes, look at the <strong>layer row</strong> (or Camera row) in the header column: when any of its lanes are hidden, an <strong>eye</strong> icon appears on the right side of that row. Click it to show all hidden lanes for that layer at once.</p>
+
+<h3>Selecting and deleting keyframes</h3>
+<p>Keyframes are shown as diamond shapes on each lane. To select them:</p>
+<ul>
+  <li><strong>Click</strong> a diamond to select it (and seek the playhead to its frame).</li>
+  <li><strong>Shift+click</strong> a diamond to add it to the current selection.</li>
+  <li><strong>Drag</strong> on any empty lane area to rubber-band multi-select.</li>
+  <li><strong>⌘A</strong> to select all keyframes on all visible lanes.</li>
+</ul>
+<p>Once keyframes are selected, delete them with the <strong>Delete</strong> key, or with the trash icon that appears in the header toolbar. A <strong>trash icon</strong> also appears in the lane header area whenever there is a selection.</p>
 
 <h3>Interactions</h3>
 <table>

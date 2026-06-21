@@ -292,6 +292,7 @@ struct UMTimelinePanel: View {
     private func headerRow(_ row: TLRow) -> some View {
         switch row.kind {
         case .cameraSummary:
+            let hasHiddenCamLanes = UMCameraLane.allCases.contains { hiddenLanes.contains(camLaneID($0)) }
             HStack(spacing: 4) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) { cameraExpanded.toggle() }
@@ -302,6 +303,15 @@ struct UMTimelinePanel: View {
                 Image(systemName: "camera").font(.system(size: 9)).foregroundStyle(.teal)
                 Text("Camera").font(.system(size: 11, weight: .medium))
                 Spacer()
+                if hasHiddenCamLanes {
+                    Button {
+                        for lane in UMCameraLane.allCases { hiddenLanes.remove(camLaneID(lane)) }
+                    } label: {
+                        Image(systemName: "eye").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
+                    .help("Show all hidden camera lanes")
+                }
             }
             .frame(height: rowH).padding(.leading, 5)
 
@@ -313,6 +323,8 @@ struct UMTimelinePanel: View {
             let ls = controller.layerStates[i]
             let isActive   = i == controller.activeLayerIndex
             let isExpanded = expandedLayers.contains(ls.id)
+            let hasHiddenLayerLanes = UMTimelineLane.allCases.contains { hiddenLanes.contains(layerLaneID(ls.id, $0)) }
+                || ls.sprites.contains { hiddenLanes.contains(spriteLaneID(ls.id, $0.id)) }
             HStack(spacing: 4) {
                 Button {
                     withAnimation(.easeInOut(duration: 0.15)) {
@@ -327,6 +339,16 @@ struct UMTimelinePanel: View {
                     .frame(width: 6, height: 6)
                 Text(ls.name).font(.system(size: 11)).lineLimit(1).truncationMode(.tail)
                 Spacer()
+                if hasHiddenLayerLanes {
+                    Button {
+                        for lane in UMTimelineLane.allCases { hiddenLanes.remove(layerLaneID(ls.id, lane)) }
+                        for sprite in ls.sprites { hiddenLanes.remove(spriteLaneID(ls.id, sprite.id)) }
+                    } label: {
+                        Image(systemName: "eye").font(.system(size: 9)).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain).frame(minWidth: 22, minHeight: 22).contentShape(Rectangle())
+                    .help("Show all hidden lanes for this layer")
+                }
             }
             .frame(height: rowH).padding(.leading, 5)
             .background(isActive ? Color.accentColor.opacity(0.07) : Color.clear)
