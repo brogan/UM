@@ -332,7 +332,10 @@ struct StylePaletteView: View {
                     .foregroundStyle(.tertiary)
                     .frame(width: 12)
                     .help("Opacity")
-                Slider(value: Binding(get: { ls.opacity }, set: { ls.opacity = $0 }), in: 0...1)
+                Slider(value: Binding(
+                    get: { ls.opacity },
+                    set: { ls.opacity = $0; ls.opacityDriver.base = $0 }
+                ), in: 0...1)
                     .controlSize(.mini)
                 Text("\(Int((ls.opacity * 100).rounded()))%")
                     .font(.system(size: 10, design: .monospaced))
@@ -386,7 +389,11 @@ struct StylePaletteView: View {
             Divider()
             Menu("Opacity") {
                 ForEach([100, 75, 50, 25], id: \.self) { pct in
-                    Button("\(pct)%") { ls.opacity = Double(pct) / 100.0 }
+                    Button("\(pct)%") {
+                        let v = Double(pct) / 100.0
+                        ls.opacity = v
+                        ls.opacityDriver.base = v
+                    }
                 }
             }
             Divider()

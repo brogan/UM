@@ -38,7 +38,6 @@ final class UMLayerState: Identifiable {
         self.opacity          = layer.opacity
         self.parallaxFactor   = layer.parallaxFactor
         self.layerOffset      = layer.layerOffset
-        self.opacityDriver    = layer.opacityDriver
         self.gridScrollDriver = layer.gridScrollDriver
         self.gridScrollMode   = layer.gridScrollMode
         self.engine           = UMGridEngine(document: layer.document)
@@ -47,6 +46,11 @@ final class UMLayerState: Identifiable {
         self.sprites          = layer.sprites
         self.blendMode        = layer.blendMode
         self.gridDistortion   = layer.gridDistortion
+        // Keep opacityDriver.base in sync with opacity for constant mode so the
+        // layer-row slider and the driver evaluator always agree.
+        var driver = layer.opacityDriver
+        if driver.mode == .constant { driver.base = layer.opacity }
+        self.opacityDriver = driver
     }
 
     func toUMLayer() -> UMLayer {
