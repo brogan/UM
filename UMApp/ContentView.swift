@@ -521,8 +521,9 @@ struct GridCanvasPlaceholder: View {
     @State private var cachedGridW: Double = 400
     @State private var cachedGridH: Double = 400
     // Sprite drag state
-    @State private var spriteDragID:     UUID?    = nil
-    @State private var spriteDragOffset: CGPoint  = .zero
+    @State private var spriteDragID:          UUID?    = nil
+    @State private var spriteDragOffset:      CGPoint  = .zero
+    @State private var spriteDragIsKeyframe:  Bool     = false
     // Zoom/pan state
     @State private var baseZoom: Double = 1.0
     @State private var scrollMonitor: Any? = nil
@@ -1098,20 +1099,32 @@ struct GridCanvasPlaceholder: View {
                                     let startPt = canvasPoint(value.startLocation,
                                                               viewSize: geo.size,
                                                               gridW: gridW, gridH: gridH)
+                                    let frame = controller.engine.currentFrame
                                     if let hit = spriteHitTest(at: startPt, in: activeLS,
-                                                               gridW: gridW, gridH: gridH) {
+                                                               gridW: gridW, gridH: gridH, frame: frame) {
                                         controller.activeSpriteID = hit.id
-                                        spriteDragID     = hit.id
-                                        // offset = display position of sprite - click position (display)
-                                        spriteDragOffset = CGPoint(x: hit.x * gridW - startPt.x,
-                                                                   y: hit.y * gridH - startPt.y)
+                                        spriteDragID = hit.id
+                                        spriteDragIsKeyframe = hit.positionDriver.mode == .keyframe
+                                        // offset = rendered display position - click position
+                                        let si = activeLS.sprites.firstIndex(where: { $0.id == hit.id }) ?? 0
+                                        let dOff = DriverEvaluator.evaluate(hit.positionDriver, frame: frame, spriteIndex: si)
+                                        spriteDragOffset = CGPoint(x: hit.x * gridW + dOff.x - startPt.x,
+                                                                   y: hit.y * gridH + dOff.y - startPt.y)
                                     }
                                 }
                                 if let dragID = spriteDragID {
-                                    let newX = (pt.x + spriteDragOffset.x) / gridW
-                                    let newY = (pt.y + spriteDragOffset.y) / gridH
-                                    controller.moveSprite(id: dragID,
-                                                         to: CGPoint(x: newX, y: newY))
+                                    let targetX = pt.x + spriteDragOffset.x
+                                    let targetY = pt.y + spriteDragOffset.y
+                                    if spriteDragIsKeyframe {
+                                        controller.setSpritePositionKeyframe(
+                                            id: dragID,
+                                            frame: controller.engine.currentFrame,
+                                            canvasX: targetX, canvasY: targetY,
+                                            gridW: gridW, gridH: gridH)
+                                    } else {
+                                        controller.moveSprite(id: dragID,
+                                                             to: CGPoint(x: targetX / gridW, y: targetY / gridH))
+                                    }
                                 }
                                 return
                             }
@@ -1177,8 +1190,9 @@ struct GridCanvasPlaceholder: View {
                             let activeLS = controller.layerStates[controller.activeLayerIndex]
                             if activeLS.layerMode == .sprite {
                                 if spriteDragID != nil {
-                                    spriteDragID     = nil
-                                    spriteDragOffset = .zero
+                                    spriteDragID         = nil
+                                    spriteDragOffset     = .zero
+                                    spriteDragIsKeyframe = false
                                 } else {
                                     let dist = hypot(value.translation.width, value.translation.height)
                                     if dist < 8 {
@@ -1186,7 +1200,8 @@ struct GridCanvasPlaceholder: View {
                                                                   viewSize: geo.size,
                                                                   gridW: cachedGridW, gridH: cachedGridH)
                                         if spriteHitTest(at: startPt, in: activeLS,
-                                                         gridW: cachedGridW, gridH: cachedGridH) == nil {
+                                                         gridW: cachedGridW, gridH: cachedGridH,
+                                                         frame: controller.engine.currentFrame) == nil {
                                             let tap = canvasPoint(value.location,
                                                                   viewSize: geo.size,
                                                                   gridW: cachedGridW, gridH: cachedGridH)
@@ -1418,15 +1433,18 @@ struct GridCanvasPlaceholder: View {
     }
 
     private func spriteHitTest(at pt: CGPoint, in ls: UMLayerState,
-                               gridW: Double, gridH: Double) -> UMSprite? {
+                               gridW: Double, gridH: Double, frame: Int = 0) -> UMSprite? {
         let ref = min(gridW, gridH) / 8.0
-        return ls.sprites.last { sprite in
-            let sx = sprite.x * gridW
-            let sy = sprite.y * gridH
+        for idx in ls.sprites.indices.reversed() {
+            let sprite = ls.sprites[idx]
+            let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: idx)
+            let sx = sprite.x * gridW + dOff.x
+            let sy = sprite.y * gridH + dOff.y
             let hw = (ref / 2) * sprite.scaleX
             let hh = (ref / 2) * sprite.scaleY
-            return abs(pt.x - sx) < hw && abs(pt.y - sy) < hh
+            if abs(pt.x - sx) < hw && abs(pt.y - sy) < hh { return sprite }
         }
+        return nil
     }
 
     private func handleDrag(at pt: CGPoint,

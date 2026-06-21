@@ -228,6 +228,25 @@ final class AppController {
         ls.sprites[i].y = Double(point.y)
     }
 
+    /// Records (or overwrites) a position keyframe on a sprite's positionDriver at the given
+    /// frame. canvasX/Y are in display-canvas pixels; the stored offset is relative to the
+    /// sprite's base position so that sprite.x/y stays fixed as the animation reference.
+    func setSpritePositionKeyframe(id: UUID, frame: Int,
+                                   canvasX: Double, canvasY: Double,
+                                   gridW: Double, gridH: Double) {
+        guard activeLayerIndex < layerStates.count else { return }
+        let ls = layerStates[activeLayerIndex]
+        guard let si = ls.sprites.firstIndex(where: { $0.id == id }) else { return }
+        let sprite = ls.sprites[si]
+        let offset = UMVec2(x: canvasX - sprite.x * gridW, y: canvasY - sprite.y * gridH)
+        var d = sprite.positionDriver
+        d.mode = .keyframe
+        d.keyframes.removeAll { $0.frame == frame }
+        d.keyframes.append(UMVectorKeyframe(frame: frame, value: offset))
+        d.keyframes.sort { $0.frame < $1.frame }
+        ls.sprites[si].positionDriver = d
+    }
+
     func updateSprite(id: UUID, _ body: (inout UMSprite) -> Void) {
         guard activeLayerIndex < layerStates.count else { return }
         let ls = layerStates[activeLayerIndex]
