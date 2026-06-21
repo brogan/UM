@@ -108,6 +108,10 @@ final class AppController {
     func addLayer(name: String? = nil) {
         let config = engine.document.gridConfig
         var doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        doc.gridConfig.canvasWidth  = config.canvasWidth
+        doc.gridConfig.canvasHeight = config.canvasHeight
+        doc.gridConfig.cellWidth    = config.cellWidth
+        doc.gridConfig.cellHeight   = config.cellHeight
         doc.styles = projectStyles
         let label  = name ?? "Layer \(layerStates.count + 1)"
         let ls     = UMLayerState(layer: UMLayer(name: label, document: doc))
@@ -177,6 +181,12 @@ final class AppController {
     func addSpriteLayer(name: String? = nil) {
         let config = engine.document.gridConfig
         var doc    = UMGridDocument.makeDefault(rows: config.rows, cols: config.cols)
+        // Carry canvas dimensions from the active layer so the sprite layer
+        // does not reset to the 1080×1080 default.
+        doc.gridConfig.canvasWidth  = config.canvasWidth
+        doc.gridConfig.canvasHeight = config.canvasHeight
+        doc.gridConfig.cellWidth    = config.cellWidth
+        doc.gridConfig.cellHeight   = config.cellHeight
         doc.styles = projectStyles
         let label  = name ?? "Sprites \(layerStates.count + 1)"
         let ls     = UMLayerState(layer: UMLayer(name: label, document: doc, layerMode: .sprite))
