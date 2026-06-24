@@ -2404,10 +2404,16 @@ For character-like or object-like animation, these should be separated. The main
 
 Add a first-class **Animated Geometry** or **Sprite Set** asset: a Loom-style layered geometry file that wraps multiple sprite states into one reusable object. Instead of placing several separate sprites or building replacement cycles laboriously on the main keyframe timeline, the user defines the cycle once in a separate editing context, then places that animated object as a single sprite on a sprite layer.
 
+This feature supports three animation modes, all unified under the same keyframe model. The mode per state boundary is determined by `transitionFrames` and the shapes involved:
+
+- **Image replacement** — the default. Hard-cut between states (`transitionFrames == 0`). Each state references a different shape from the project shape library. Phase 1.
+- **Morph target** — smooth vertex interpolation between two same-topology shapes (`transitionFrames > 0`, both shapes share the same point count). The render path blends polygon vertices using `easing` over the transition window. Phase 2, depends on LoomEditorKit / multi-layer geometry import.
+- **Style animation** — per-state `styleID` override. With `transitionFrames > 0`, fill and stroke colours are interpolated between adjacent states. Can be combined with either of the above. Phase 1 or 2.
+
 This feature is conceptually an evolution of the existing Motion Set SEQUENCE mechanism:
 
-- Current: a `UMMotionSet` can cycle through a list of shape IDs at a fixed frame step.
-- Future: an animated geometry asset owns the ordered states, timing, loop behaviour, per-state offsets, and editing UI directly.
+- Current: a `UMMotionSet` can cycle through a list of shape IDs at a fixed frame step, hard-cut only.
+- Future: an animated geometry asset owns the ordered states, per-state timing, transition type, loop behaviour, per-state registration offsets, and its own editing context.
 
 **Proposed data model**
 
@@ -2417,17 +2423,19 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
     public var name: String
     public var states: [UMAnimatedGeometryState]
     public var loopMode: UMAnimatedGeometryLoopMode
-    public var defaultFrameStep: Int
 }
 
 public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
     public var id: UUID
-    public var shapeID: UUID
-    public var holdFrames: Int
-    public var offsetX: Double
+    public var shapeID: UUID        // required; for morph: must share topology with the next state
+    public var styleID: UUID?       // nil = inherit the sprite's assigned style
+    public var holdFrames: Int      // frames this state is fully "on"
+    public var transitionFrames: Int // blend frames into the next state; 0 = hard cut (Phase 1 only renders 0)
+    public var easing: PathEasing   // applied during transitionFrames; ignored when transitionFrames == 0
+    public var offsetX: Double      // per-state registration offset (canvas pixels)
     public var offsetY: Double
-    public var rotation: Double
-    public var scaleX: Double
+    public var rotation: Double     // per-state rotation offset (degrees)
+    public var scaleX: Double       // per-state scale factor
     public var scaleY: Double
 }
 
@@ -2439,27 +2447,50 @@ public enum UMAnimatedGeometryLoopMode: String, Codable, CaseIterable, Sendable 
 }
 ```
 
-`UMSprite` would gain an optional `animatedGeometryID`. When set, the animated geometry asset resolves the effective shape at render time, replacing or taking priority over `sprite.shapeID` and Motion Set SEQUENCE cycling. The sprite's existing `styleID`, `motionID`, `phaseOffset`, `positionDriver`, and polygon overrides still apply, so external movement and styling remain independent.
+**The keyframe-with-easing unification**
+
+Image replacement, morph targets, and style animation are the same model at different `transitionFrames` values:
+
+| `transitionFrames` | Shape topology | Effect |
+|---|---|---|
+| 0 | Any | Hard cut — image replacement |
+| > 0 | Same point count | Vertex morph blend |
+| > 0 | Different shapes | Cross-fade (opacity blend, not vertex morph) |
+| Any | — | `styleID` present → style override; with `transitionFrames > 0`, colours interpolate |
+
+Phase 1 implements only `transitionFrames == 0`. The fields `transitionFrames` and `easing` are persisted but inert until Phase 2. This means files authored in Phase 1 will automatically gain morph playback once Phase 2 is built, with no data migration.
+
+`UMSprite` would gain an optional `animatedGeometryID`. When set, the animated geometry asset resolves the effective shape (and optionally style) at render time, replacing or taking priority over `sprite.shapeID` and Motion Set SEQUENCE cycling. The sprite's existing `motionID`, `phaseOffset`, `positionDriver`, and polygon overrides still apply — external movement and styling remain independent.
 
 **Editing workflow**
 
 - Add an **ANIMATED GEOMETRY** or **SPRITE SETS** section to the left palette, parallel to SHAPES / MOTIONS / PATHS.
 - `+ New Sprite Set` creates an asset with one state.
-- `+ Add State` appends additional Loom shapes or layered geometry states.
-- A dedicated editor/preview context shows the cycle playing in isolation, with controls for state order, hold frames, loop mode, per-state registration offset, and optional onion-skin previews.
-- Once authored, the asset can be assigned to a sprite from the sprite inspector.
+- `+ Add State` appends a shape from the project shape library.
+- A **dedicated editor window** (independent of the main composition) shows the cycle playing in isolation, with controls for:
+  - State order (drag to reorder)
+  - Hold frames and transition frames per state
+  - Transition type indicator (Step / Morph / Cross-fade, derived automatically)
+  - Loop mode
+  - Per-state registration offset, rotation, scale
+  - Optional onion-skin preview of adjacent states
+- Once authored, the asset can be assigned to a sprite from the SPRITES inspector.
 - On the main timeline, the sprite remains a single selectable object. Position, scale, rotation, opacity, camera, and layer timing stay in the main composition context.
+
+**Phase 2: multi-layer Loom geometry import**
+
+When `LoomEditorKit` is available, the editor window gains an **Import Loom File** action. A multi-layer Loom geometry file — where each named layer represents one state of the character and all layers share the same point count — is parsed and each layer becomes a `UMAnimatedGeometryState` automatically. The system checks topology parity between adjacent states and sets `transitionFrames` to the default when point counts match, enabling morph playback immediately. This is the "reads multi-layer Loom geometry assets" workflow. Loom's existing morph interpolation code is reused rather than reimplemented.
 
 **Relationship to Loom**
 
-The long-term ideal is to follow Loom's layered geometry-file model: a single geometry document can contain multiple named/layered states that together describe a complete animated object. Once `LoomEditorKit` is extracted, this feature should reuse the same geometry authoring code rather than inventing a second editor. UM should store the animated asset in project JSON and optionally promote it to the global library, just like shapes, paths, styles, and motion sets.
+The long-term ideal is to follow Loom's layered geometry-file model: a single geometry document containing multiple named/layered states that together describe a complete animated object. UM stores the animated asset in project JSON and optionally promotes it to the global library, just like shapes, paths, styles, and motion sets. The independent editor window is the natural home for this authoring work in both applications.
 
 **Open decisions**
 
-- Whether animated geometry states reference existing `UMShape` records or embed their own Loom geometry JSON directly.
-- Whether per-state polygon colour overrides live on the animated asset, the sprite instance, or both.
+- Whether per-state polygon colour overrides live on the animated asset's state, the sprite instance, or both.
 - Whether Motion Set SEQUENCE remains as a lightweight cycling feature for grid cells while sprites prefer `UMAnimatedGeometry`.
-- Whether a sprite can layer multiple animated geometry assets, or whether one sprite maps to one animated geometry asset.
+- Whether a sprite can layer multiple animated geometry assets (e.g. body cycle + blink cycle), or one sprite maps to one asset.
+- Whether cross-fade (opacity blend between different-topology shapes) is worth implementing before full morph support.
 
 ---
 
