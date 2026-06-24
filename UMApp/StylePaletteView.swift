@@ -15,6 +15,7 @@ struct StylePaletteView: View {
     @State private var showResampleSheet:    Bool  = false
     @State private var showGeneratePalette:  Bool  = false
     @State private var renamingPaletteID:    UUID? = nil
+    @State private var editingGeoID:         UUID? = nil
 
     private enum PaletteTab { case project, library }
 
@@ -37,6 +38,15 @@ struct StylePaletteView: View {
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .sheet(isPresented: Binding(
+            get: { editingGeoID != nil },
+            set: { if !$0 { editingGeoID = nil } }
+        )) {
+            if let geoID = editingGeoID {
+                AnimatedGeometryEditorView(geoID: geoID)
+                    .environment(controller)
+            }
+        }
     }
 
     // MARK: - Project tab
@@ -166,6 +176,24 @@ struct StylePaletteView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                 }
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("SPRITE SETS")
+
+                ForEach(controller.projectAnimatedGeometries) { geo in
+                    spriteSetsRow(geo)
+                }
+
+                Button("+ New Sprite Set") {
+                    controller.addAnimatedGeometry()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -1018,6 +1046,47 @@ struct StylePaletteView: View {
         }
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { controller.importShape(from: url) }
+    }
+
+    // MARK: - Sprite Sets row
+
+    private func spriteSetsRow(_ geo: UMAnimatedGeometry) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "rectangle.stack")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            Text(geo.name)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer()
+
+            Text("\(geo.states.count)")
+                .font(.system(size: 10))
+                .foregroundStyle(.tertiary)
+
+            Button {
+                editingGeoID = geo.id
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 10))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .contextMenu {
+            Button("Edit…") { editingGeoID = geo.id }
+            Divider()
+            Button("Delete", role: .destructive) {
+                controller.removeAnimatedGeometry(id: geo.id)
+            }
+        }
     }
 
     // MARK: - Helpers

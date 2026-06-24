@@ -28,6 +28,7 @@
 		AA000044000000000000001A /* UMTimelineTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000045000000000000001A /* UMTimelineTypes.swift */; };
 		AA000046000000000000001A /* UMTimelinePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000047000000000000001A /* UMTimelinePanel.swift */; };
 		AA000048000000000000001A /* GridScrollUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000049000000000000001A /* GridScrollUtils.swift */; };
+		AA00004A000000000000001A /* AnimatedGeometryEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA00004B000000000000001A /* AnimatedGeometryEditorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -51,6 +52,7 @@
 		AA000045000000000000001A /* UMTimelineTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMTimelineTypes.swift; sourceTree = "<group>"; };
 		AA000047000000000000001A /* UMTimelinePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UMTimelinePanel.swift; sourceTree = "<group>"; };
 		AA000049000000000000001A /* GridScrollUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GridScrollUtils.swift; sourceTree = "<group>"; };
+		AA00004B000000000000001A /* AnimatedGeometryEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedGeometryEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -102,6 +104,7 @@
 				AA000045000000000000001A /* UMTimelineTypes.swift */,
 				AA000047000000000000001A /* UMTimelinePanel.swift */,
 				AA000049000000000000001A /* GridScrollUtils.swift */,
+				AA00004B000000000000001A /* AnimatedGeometryEditorView.swift */,
 				AA000009000000000000001A /* Assets.xcassets */,
 				AA000031000000000000001A /* polygonSets */,
 			);
@@ -203,6 +206,7 @@
 				AA000044000000000000001A /* UMTimelineTypes.swift in Sources */,
 				AA000046000000000000001A /* UMTimelinePanel.swift in Sources */,
 				AA000048000000000000001A /* GridScrollUtils.swift in Sources */,
+				AA00004A000000000000001A /* AnimatedGeometryEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

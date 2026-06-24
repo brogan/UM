@@ -309,6 +309,7 @@ private struct AccumulationSnapshot: @unchecked Sendable {
     let shapePolygonIDMap: [UUID: [UUID]]
     let fallbackPolygons: [Polygon2D]
     let projectMotionSets: [UMMotionSet]
+    let projectAnimatedGeometries: [UMAnimatedGeometry]
     let stretchSprites: Bool
     let frame: Int
     let pw: Int
@@ -373,8 +374,11 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     if layer.layerMode == .sprite {
         let spriteRef = min(layer.gridW, layer.gridH) / 8.0
         for (idx, sprite) in layer.sprites.enumerated() {
-            let style     = sprite.styleID.flatMap { styleMap[$0] }
             let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+            let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
+                                                                 animatedGeometries: snap.projectAnimatedGeometries,
+                                                                 frame: snap.frame)
+            let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
             let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
                                           frame: snap.frame, phaseOffset: sprite.phaseOffset,
                                           cellIndex: idx,
@@ -383,8 +387,9 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: snap.frame, spriteIndex: idx)
             let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x) * dsf
             let my = (sprite.y * layer.gridH + motion.dy + driverPos.y) * dsf
-            let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
-                                                          frame: snap.frame, phaseOffset: sprite.phaseOffset)
+            let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
+                                                                  animatedGeometries: snap.projectAnimatedGeometries,
+                                                                  frame: snap.frame)
             let polygons   = resolvePolygons(shapeID: effectiveShapeID,
                                              shapeMap: snap.shapePolygonMap,
                                              fallback: snap.fallbackPolygons)
@@ -693,8 +698,11 @@ struct GridCanvasPlaceholder: View {
                                 let styleMap  = Dictionary(uniqueKeysWithValues: controller.projectStyles.map { ($0.id, $0) })
                                 let spriteRef = min(gridW, gridH) / 8.0
                                 for (idx, sprite) in ls.sprites.enumerated() {
-                                    let style     = sprite.styleID.flatMap { styleMap[$0] }
                                     let motionSet = sprite.motionID.flatMap { lMotionMap[$0] }
+                                    let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
+                                                                                         animatedGeometries: controller.projectAnimatedGeometries,
+                                                                                         frame: currentFrame)
+                                    let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
                                     let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
                                                                   frame: currentFrame,
                                                                   phaseOffset: sprite.phaseOffset,
@@ -705,8 +713,9 @@ struct GridCanvasPlaceholder: View {
                                     let mx  = sprite.x * gridW + motion.dx + driverPos.x
                                     let my  = sprite.y * gridH + motion.dy + driverPos.y
                                     let rot = sprite.rotation + motion.rotation
-                                    let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
-                                                                                  frame: currentFrame, phaseOffset: sprite.phaseOffset)
+                                    let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
+                                                                                          animatedGeometries: controller.projectAnimatedGeometries,
+                                                                                          frame: currentFrame)
                                     let polygons   = resolvePolygons(shapeID: effectiveShapeID,
                                                                      shapeMap: shapePolyMap,
                                                                      fallback: fallbackPolys)
@@ -1313,6 +1322,7 @@ struct GridCanvasPlaceholder: View {
                         shapePolygonIDMap: controller.shapePolygonIDMap,
                         fallbackPolygons:  controller.shapePolygons,
                         projectMotionSets: controller.projectMotionSets,
+                        projectAnimatedGeometries: controller.projectAnimatedGeometries,
                         stretchSprites:    controller.stretchSpritesToCell,
                         frame:           currentFrame,
                         pw: pw, ph: ph,
@@ -1431,8 +1441,9 @@ struct GridCanvasPlaceholder: View {
         let fallback = CGRect(x: sx - hw, y: sy - hh, width: hw * 2, height: hh * 2)
         let style = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
         let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
-        let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
-                                                       frame: frame, phaseOffset: sprite.phaseOffset)
+        let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
+                                                              animatedGeometries: controller.projectAnimatedGeometries,
+                                                              frame: frame)
         let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                        shapeMap: controller.shapePolygonMap,
                                        fallback: controller.shapePolygons)
@@ -2025,6 +2036,7 @@ struct SpriteCapture: View {
     let sprites: [UMSprite]
     let projectStyles: [CellStyle]
     let projectMotionSets: [UMMotionSet]
+    let projectAnimatedGeometries: [UMAnimatedGeometry]
     let shapePolygonMap: [UUID: [Polygon2D]]
     let shapePolygonIDMap: [UUID: [UUID]]
     let fallbackPolygons: [Polygon2D]
@@ -2041,8 +2053,11 @@ struct SpriteCapture: View {
             let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
             let spriteRef = min(gridW, gridH) / 8.0
             for (idx, sprite) in sprites.enumerated() {
-                let style     = sprite.styleID.flatMap { styleMap[$0] }
                 let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+                let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
+                                                                     animatedGeometries: projectAnimatedGeometries,
+                                                                     frame: currentFrame)
+                let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
                 let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
                                               frame: currentFrame, phaseOffset: sprite.phaseOffset,
                                               cellIndex: idx,
@@ -2052,8 +2067,9 @@ struct SpriteCapture: View {
                 let mx  = sprite.x * gridW + motion.dx + driverPos.x
                 let my  = sprite.y * gridH + motion.dy + driverPos.y
                 let rot = sprite.rotation + motion.rotation
-                let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
-                                                              frame: currentFrame, phaseOffset: sprite.phaseOffset)
+                let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
+                                                                      animatedGeometries: projectAnimatedGeometries,
+                                                                      frame: currentFrame)
                 let polygons   = resolvePolygons(shapeID: effectiveShapeID,
                                                  shapeMap: shapePolygonMap,
                                                  fallback: fallbackPolygons)
@@ -2178,6 +2194,7 @@ func umRenderComposited(
     shapePolygonIDMap: [UUID: [UUID]],
     fallbackPolygons: [Polygon2D],
     projectMotionSets: [UMMotionSet],
+    projectAnimatedGeometries: [UMAnimatedGeometry] = [],
     colorMapEngines: [UUID: UMColorMapEngine],
     backgroundDraw: Bool,
     stretchSprites: Bool,
@@ -2219,16 +2236,17 @@ func umRenderComposited(
 
         if ls.layerMode == .sprite {
             let renderer = ImageRenderer(content: SpriteCapture(
-                sprites:           ls.sprites,
-                projectStyles:     ls.engine.document.styles,
-                projectMotionSets: projectMotionSets,
-                shapePolygonMap:   shapePolygonMap,
-                shapePolygonIDMap: shapePolygonIDMap,
-                fallbackPolygons:  fallbackPolygons,
-                currentFrame:      frame,
+                sprites:                    ls.sprites,
+                projectStyles:              ls.engine.document.styles,
+                projectMotionSets:          projectMotionSets,
+                projectAnimatedGeometries:  projectAnimatedGeometries,
+                shapePolygonMap:            shapePolygonMap,
+                shapePolygonIDMap:          shapePolygonIDMap,
+                fallbackPolygons:           fallbackPolygons,
+                currentFrame:               frame,
                 gridW: exportW, gridH: exportH,
-                strokeScale:       strokeScale,
-                layerTransform:    layerXF
+                strokeScale:                strokeScale,
+                layerTransform:             layerXF
             ))
             renderer.scale = 1.0
             renderer.colorMode = .nonLinear

@@ -50,8 +50,8 @@ struct QuickAdjustView: View {
     @State private var motionCollapsed     = false
     @State private var pathCollapsed       = false
     @State private var advancedCollapsed   = true
-    @State private var exportCollapsed     = false
-    @State private var cameraCollapsed      = false
+    @State private var exportCollapsed     = true
+    @State private var cameraCollapsed      = true
     @State private var gridScrollCollapsed  = true
     @State private var kfInspectorCollapsed = false
     // controller.selectedPathKeyframeID is now controller.selectedPathKeyframeID (shared with canvas overlay)
@@ -77,17 +77,16 @@ struct QuickAdjustView: View {
                     exportSection
                     if activeLayerMode == .sprite {
                         spritesSection
-                        motionSection
                     } else {
                         gridScrollSection
                         placeTimeSection
-                        renderSection
-                        motionSection
-                        shapeSection
-                        pathSection
-                        advancedSection
-                        nothingActiveHint
                     }
+                    renderSection
+                    motionSection
+                    shapeSection
+                    pathSection
+                    advancedSection
+                    nothingActiveHint
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -153,6 +152,7 @@ struct QuickAdjustView: View {
                 unitLabel("px")
             }
         }
+        .inspectorFieldIndent(20)
     }
 
     private var canvasSection: some View {
@@ -581,8 +581,7 @@ struct QuickAdjustView: View {
         return InspectorSection("CAMERA", isCollapsed: $cameraCollapsed) {
 
             // ── PAN ──────────────────────────────────────────────
-            Text("PAN")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("PAN")
                 .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: $ctrl.camera.pan.mode) {
@@ -691,8 +690,7 @@ struct QuickAdjustView: View {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── ZOOM ─────────────────────────────────────────────
-            Text("ZOOM")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("ZOOM")
                 .padding(.horizontal, 12).padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: $ctrl.camera.zoom.mode) {
@@ -779,8 +777,7 @@ struct QuickAdjustView: View {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── ROTATION ─────────────────────────────────────────
-            Text("ROTATION")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("ROTATION")
                 .padding(.horizontal, 12).padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: $ctrl.camera.rotation.mode) {
@@ -872,6 +869,7 @@ struct QuickAdjustView: View {
                 .disabled(ctrl.camera == .identity)
             }
         }
+        .inspectorFieldIndent(20)
     }
 
     // MARK: - Keyframe inspector
@@ -2099,6 +2097,20 @@ struct QuickAdjustView: View {
                 .labelsHidden()
                 .font(.system(size: 11))
             }
+            // Sprite Set (animated geometry) picker
+            InspectorField("Sprite Set") {
+                Picker("", selection: Binding(
+                    get: { sprite.wrappedValue.animatedGeometryID },
+                    set: { sprite.wrappedValue.animatedGeometryID = $0 }
+                )) {
+                    Text("None").tag(UUID?.none)
+                    ForEach(controller.projectAnimatedGeometries) { geo in
+                        Text(geo.name).tag(Optional(geo.id))
+                    }
+                }
+                .labelsHidden()
+                .font(.system(size: 11))
+            }
             // Phase offset
             InspectorField("Phase") {
                 FloatEntryField(value: Binding(
@@ -2110,9 +2122,7 @@ struct QuickAdjustView: View {
 
             // MARK: Position driver
             Divider().padding(.vertical, 4)
-            Text("POSITION DRIVER")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.quaternary)
+            InspectorSubheading("POSITION DRIVER")
                 .padding(.horizontal, 12)
                 .padding(.bottom, 2)
             InspectorField("Mode") {
@@ -2239,9 +2249,7 @@ struct QuickAdjustView: View {
             let polygonIDs = sprite.wrappedValue.shapeID.flatMap { controller.shapePolygonIDMap[$0] } ?? []
             if !polygons.isEmpty {
                 Divider().padding(.vertical, 4)
-                Text("POLYGON OVERRIDES")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.quaternary)
+                InspectorSubheading("POLYGON OVERRIDES")
                     .padding(.horizontal, 12)
                     .padding(.bottom, 2)
                 ForEach(Array(polygons.indices), id: \.self) { polyIdx in
@@ -2318,6 +2326,7 @@ struct QuickAdjustView: View {
                 }
             }
         }
+        .inspectorFieldIndent(20)
         .padding(.bottom, 4)
     }
 
@@ -2389,8 +2398,7 @@ struct QuickAdjustView: View {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── Grid distortion ───────────────────────────────────
-            Text("DISTORTION")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("DISTORTION")
                 .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
             InspectorField("Mode") {
                 let distortionModeBinding = Binding<String>(
@@ -2490,8 +2498,7 @@ struct QuickAdjustView: View {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── Opacity ──────────────────────────────────────────
-            Text("OPACITY")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("OPACITY")
                 .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: Binding(
@@ -2577,8 +2584,7 @@ struct QuickAdjustView: View {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── Layer offset ──────────────────────────────────────
-            Text("OFFSET")
-                .font(.system(size: 9, weight: .semibold)).foregroundStyle(.quaternary)
+            InspectorSubheading("OFFSET")
                 .padding(.horizontal, 12).padding(.bottom, 2)
             InspectorField("Mode") {
                 Picker("", selection: Binding(
@@ -2694,6 +2700,7 @@ struct QuickAdjustView: View {
                     .padding(.horizontal, 12).padding(.vertical, 3)
             }
         }
+        .inspectorFieldIndent(20)
     }
 
     // MARK: - Advanced section

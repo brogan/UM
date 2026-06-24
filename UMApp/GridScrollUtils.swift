@@ -30,6 +30,36 @@ func resolveSequenceShapeID(
     }
 }
 
+/// Returns the effective shapeID for a sprite, checking for an assigned animated geometry
+/// first (which overrides shapeID and SEQUENCE cycling), then falling back to SEQUENCE,
+/// then to the sprite's own shapeID.
+func resolveEffectiveSpriteShapeID(
+    sprite: UMSprite,
+    motionSet: UMMotionSet?,
+    animatedGeometries: [UMAnimatedGeometry],
+    frame: Int
+) -> UUID? {
+    if let geoID = sprite.animatedGeometryID,
+       let geo = animatedGeometries.first(where: { $0.id == geoID }) {
+        return geo.resolveShapeID(atFrame: frame + sprite.phaseOffset)
+    }
+    return resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                  frame: frame, phaseOffset: sprite.phaseOffset)
+}
+
+/// Returns the effective style override for a sprite from its animated geometry (if assigned),
+/// or nil if there is no animated geometry or it carries no style at this frame.
+func resolveEffectiveSpriteStyleID(
+    sprite: UMSprite,
+    animatedGeometries: [UMAnimatedGeometry],
+    frame: Int
+) -> UUID? {
+    guard let geoID = sprite.animatedGeometryID,
+          let geo = animatedGeometries.first(where: { $0.id == geoID })
+    else { return nil }
+    return geo.resolveStyleID(atFrame: frame + sprite.phaseOffset)
+}
+
 // MARK: - Grid-scroll render spec
 
 /// Describes which source cell to draw and at which display grid position.

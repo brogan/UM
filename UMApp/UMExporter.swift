@@ -48,6 +48,7 @@ private struct UMExportFrameCapture: View {
     let shapePolygonIDMap: [UUID: [UUID]]
     let fallbackPolygons: [Polygon2D]
     let projectMotionSets: [UMMotionSet]
+    let projectAnimatedGeometries: [UMAnimatedGeometry]
     let colorMapEngines: [UUID: UMColorMapEngine]
     let stretchSprites: Bool
     let frame: Int
@@ -105,8 +106,11 @@ private struct UMExportFrameCapture: View {
         let styleMap = Dictionary(uniqueKeysWithValues: layer.document.styles.map { ($0.id, $0) })
         let spriteRef = min(gridW, gridH) / 8.0
         for (idx, sprite) in layer.sprites.enumerated() {
-            let style = sprite.styleID.flatMap { styleMap[$0] }
             let motionSet = sprite.motionID.flatMap { motionMap[$0] }
+            let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
+                                                                 animatedGeometries: projectAnimatedGeometries,
+                                                                 frame: frame)
+            let style = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
             let motion = computeMotion(motionSet: motionSet, style: style, path: nil,
                                        frame: frame,
                                        phaseOffset: sprite.phaseOffset,
@@ -117,10 +121,9 @@ private struct UMExportFrameCapture: View {
             let mx = sprite.x * gridW + motion.dx + driverPos.x
             let my = sprite.y * gridH + motion.dy + driverPos.y
             let rot = sprite.rotation + motion.rotation
-            let effectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
-                                                          cellShapeID: sprite.shapeID,
-                                                          frame: frame,
-                                                          phaseOffset: sprite.phaseOffset)
+            let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
+                                                                  animatedGeometries: projectAnimatedGeometries,
+                                                                  frame: frame)
             let polygons = resolvePolygons(shapeID: effectiveShapeID,
                                            shapeMap: shapePolygonMap,
                                            fallback: fallbackPolygons)
@@ -260,6 +263,7 @@ enum UMVideoExporter {
         shapePolygonIDMap: [UUID: [UUID]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
+        projectAnimatedGeometries: [UMAnimatedGeometry] = [],
         colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -309,22 +313,23 @@ enum UMVideoExporter {
             let animationFrame = startFrame + outputIndex
 
             let cgImage = renderComposited(
-                layers:            visibleLayers,
-                backgroundColor:   backgroundColor,
-                backgroundImage:   backgroundImage,
-                shapePolygonMap:   shapePolygonMap,
-                shapePolygonIDMap: shapePolygonIDMap,
-                fallbackPolygons:  fallbackPolygons,
-                projectMotionSets: projectMotionSets,
-                colorMapEngines:   colorMapEngines,
-                backgroundDraw:    backgroundDraw,
-                stretchSprites:    stretchSprites,
-                frame:             animationFrame,
-                exportW:           exportW,
-                exportH:           exportH,
-                strokeScale:       strokeScale,
-                camera:            camera,
-                accumulationBuffer: accum
+                layers:                    visibleLayers,
+                backgroundColor:           backgroundColor,
+                backgroundImage:           backgroundImage,
+                shapePolygonMap:           shapePolygonMap,
+                shapePolygonIDMap:         shapePolygonIDMap,
+                fallbackPolygons:          fallbackPolygons,
+                projectMotionSets:         projectMotionSets,
+                projectAnimatedGeometries: projectAnimatedGeometries,
+                colorMapEngines:           colorMapEngines,
+                backgroundDraw:            backgroundDraw,
+                stretchSprites:            stretchSprites,
+                frame:                     animationFrame,
+                exportW:                   exportW,
+                exportH:                   exportH,
+                strokeScale:               strokeScale,
+                camera:                    camera,
+                accumulationBuffer:        accum
             )
 
             if !backgroundDraw { accum = cgImage }
@@ -379,6 +384,7 @@ enum UMVideoExporter {
         shapePolygonIDMap: [UUID: [UUID]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
+        projectAnimatedGeometries: [UMAnimatedGeometry] = [],
         colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -392,21 +398,22 @@ enum UMVideoExporter {
         let w = Int(exportW); let h = Int(exportH)
         guard w > 0, h > 0 else { return nil }
         let renderer = ImageRenderer(content: UMExportFrameCapture(
-            existingBuffer:    backgroundDraw ? nil : accumulationBuffer,
-            backgroundColor:   backgroundColor,
-            backgroundImage:   backgroundImage,
-            layers:            layers,
-            shapePolygonMap:   shapePolygonMap,
-            shapePolygonIDMap: shapePolygonIDMap,
-            fallbackPolygons:  fallbackPolygons,
-            projectMotionSets: projectMotionSets,
-            colorMapEngines:   colorMapEngines,
-            stretchSprites:    stretchSprites,
-            frame:             frame,
-            gridW:             exportW,
-            gridH:             exportH,
-            strokeScale:       strokeScale,
-            camera:            camera
+            existingBuffer:            backgroundDraw ? nil : accumulationBuffer,
+            backgroundColor:           backgroundColor,
+            backgroundImage:           backgroundImage,
+            layers:                    layers,
+            shapePolygonMap:           shapePolygonMap,
+            shapePolygonIDMap:         shapePolygonIDMap,
+            fallbackPolygons:          fallbackPolygons,
+            projectMotionSets:         projectMotionSets,
+            projectAnimatedGeometries: projectAnimatedGeometries,
+            colorMapEngines:           colorMapEngines,
+            stretchSprites:            stretchSprites,
+            frame:                     frame,
+            gridW:                     exportW,
+            gridH:                     exportH,
+            strokeScale:               strokeScale,
+            camera:                    camera
         )
         .saturation(umExportPreviewMatchSaturation)
         .brightness(umExportPreviewMatchBrightness))
@@ -438,16 +445,17 @@ enum UMVideoExporter {
 
         if layer.layerMode == .sprite {
             let renderer = ImageRenderer(content: SpriteCapture(
-                sprites:           layer.sprites,
-                projectStyles:     layer.document.styles,
-                projectMotionSets: projectMotionSets,
-                shapePolygonMap:   shapePolygonMap,
-                shapePolygonIDMap: shapePolygonIDMap,
-                fallbackPolygons:  fallbackPolygons,
-                currentFrame:      frame,
+                sprites:                    layer.sprites,
+                projectStyles:              layer.document.styles,
+                projectMotionSets:          projectMotionSets,
+                projectAnimatedGeometries:  [],
+                shapePolygonMap:            shapePolygonMap,
+                shapePolygonIDMap:          shapePolygonIDMap,
+                fallbackPolygons:           fallbackPolygons,
+                currentFrame:               frame,
                 gridW: exportW, gridH: exportH,
-                strokeScale:       strokeScale,
-                layerTransform:    layerXF
+                strokeScale:                strokeScale,
+                layerTransform:             layerXF
             ))
             renderer.scale = 1.0
             renderer.colorMode = .nonLinear
@@ -509,6 +517,7 @@ enum UMVideoExporter {
         shapePolygonIDMap: [UUID: [UUID]],
         fallbackPolygons: [Polygon2D],
         projectMotionSets: [UMMotionSet],
+        projectAnimatedGeometries: [UMAnimatedGeometry] = [],
         colorMapEngines: [UUID: UMColorMapEngine],
         backgroundDraw: Bool,
         stretchSprites: Bool,
@@ -576,22 +585,23 @@ enum UMVideoExporter {
                 let visibleLayers = allLayers.filter(\.isVisible)
 
                 let cgImage = renderComposited(
-                    layers:            visibleLayers,
-                    backgroundColor:   backgroundColor,
-                    backgroundImage:   backgroundImage,
-                    shapePolygonMap:   shapePolygonMap,
-                    shapePolygonIDMap: shapePolygonIDMap,
-                    fallbackPolygons:  fallbackPolygons,
-                    projectMotionSets: projectMotionSets,
-                    colorMapEngines:   colorMapEngines,
-                    backgroundDraw:    backgroundDraw,
-                    stretchSprites:    stretchSprites,
-                    frame:             animFrame,
-                    exportW:           exportW,
-                    exportH:           exportH,
-                    strokeScale:       strokeScale,
-                    camera:            camera,
-                    accumulationBuffer: accum)
+                    layers:                    visibleLayers,
+                    backgroundColor:           backgroundColor,
+                    backgroundImage:           backgroundImage,
+                    shapePolygonMap:           shapePolygonMap,
+                    shapePolygonIDMap:         shapePolygonIDMap,
+                    fallbackPolygons:          fallbackPolygons,
+                    projectMotionSets:         projectMotionSets,
+                    projectAnimatedGeometries: projectAnimatedGeometries,
+                    colorMapEngines:           colorMapEngines,
+                    backgroundDraw:            backgroundDraw,
+                    stretchSprites:            stretchSprites,
+                    frame:                     animFrame,
+                    exportW:                   exportW,
+                    exportH:                   exportH,
+                    strokeScale:               strokeScale,
+                    camera:                    camera,
+                    accumulationBuffer:        accum)
 
                 if !backgroundDraw { accum = cgImage }
 

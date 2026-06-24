@@ -316,6 +316,7 @@ final class AppController {
     var activeColorPaletteID:       UUID? = nil
     var projectResolutionPresets:   [UMResolutionPreset] = []
     var globalResolutionPresets:    [UMResolutionPreset] = []
+    var projectAnimatedGeometries:  [UMAnimatedGeometry] = []
 
     // MARK: Camera
     var camera: UMCamera = .identity
@@ -624,6 +625,7 @@ final class AppController {
         projectColorPalettes      = []
         activeColorPaletteID      = nil
         projectResolutionPresets  = []
+        projectAnimatedGeometries = []
         activeStyleID             = doc.styles.first?.id
         activeMotionID            = nil
         layerColorMapEngines.removeAll()
@@ -723,6 +725,7 @@ final class AppController {
         var projectMotionSets: [UMMotionSet]
         var projectColorPalettes: [UMColorPalette]
         var projectResolutionPresets: [UMResolutionPreset]
+        var projectAnimatedGeometries: [UMAnimatedGeometry]?   // Added in v10; nil → []
         var layers: [LayerRecord]
         var camera: UMCamera?             // Added in v4; nil → .identity
         var timelineMarkers: [UMTimelineMarker]?  // Added in v5; nil → []
@@ -732,7 +735,8 @@ final class AppController {
 
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
-            case projectMotionSets, projectColorPalettes, projectResolutionPresets, layers
+            case projectMotionSets, projectColorPalettes, projectResolutionPresets
+            case projectAnimatedGeometries, layers
             case camera, timelineMarkers, backgroundImageRelPath, backgroundColor, backgroundDraw
         }
 
@@ -740,41 +744,44 @@ final class AppController {
              projectShapes: [ShapeRecord], projectMotionSets: [UMMotionSet],
              projectColorPalettes: [UMColorPalette],
              projectResolutionPresets: [UMResolutionPreset],
+             projectAnimatedGeometries: [UMAnimatedGeometry],
              layers: [LayerRecord], camera: UMCamera?,
              timelineMarkers: [UMTimelineMarker]?,
              backgroundImageRelPath: String?,
              backgroundColor: UMColor?,
              backgroundDraw: Bool?) {
-            self.version                  = version
-            self.activeLayerIndex         = activeLayerIndex
-            self.projectStyles            = projectStyles
-            self.projectShapes            = projectShapes
-            self.projectMotionSets        = projectMotionSets
-            self.projectColorPalettes     = projectColorPalettes
-            self.projectResolutionPresets = projectResolutionPresets
-            self.layers                   = layers
-            self.camera                   = camera
-            self.timelineMarkers          = timelineMarkers
-            self.backgroundImageRelPath   = backgroundImageRelPath
-            self.backgroundColor          = backgroundColor
-            self.backgroundDraw           = backgroundDraw
+            self.version                    = version
+            self.activeLayerIndex           = activeLayerIndex
+            self.projectStyles              = projectStyles
+            self.projectShapes              = projectShapes
+            self.projectMotionSets          = projectMotionSets
+            self.projectColorPalettes       = projectColorPalettes
+            self.projectResolutionPresets   = projectResolutionPresets
+            self.projectAnimatedGeometries  = projectAnimatedGeometries.isEmpty ? nil : projectAnimatedGeometries
+            self.layers                     = layers
+            self.camera                     = camera
+            self.timelineMarkers            = timelineMarkers
+            self.backgroundImageRelPath     = backgroundImageRelPath
+            self.backgroundColor            = backgroundColor
+            self.backgroundDraw             = backgroundDraw
         }
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            version                  = try  c.decode(Int.self,             forKey: .version)
-            activeLayerIndex         = try  c.decode(Int.self,             forKey: .activeLayerIndex)
-            projectStyles            = try  c.decode([CellStyle].self,     forKey: .projectStyles)
-            projectShapes            = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
-            projectMotionSets        = (try? c.decodeIfPresent([UMMotionSet].self,            forKey: .projectMotionSets))        ?? []
-            projectColorPalettes     = (try? c.decodeIfPresent([UMColorPalette].self,         forKey: .projectColorPalettes))     ?? []
-            projectResolutionPresets = (try? c.decodeIfPresent([UMResolutionPreset].self,     forKey: .projectResolutionPresets)) ?? []
-            layers                   = try  c.decode([LayerRecord].self,   forKey: .layers)
-            camera                   = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
-            timelineMarkers          = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
-            backgroundImageRelPath   = try? c.decodeIfPresent(String.self,                forKey: .backgroundImageRelPath)
-            backgroundColor          = try? c.decodeIfPresent(UMColor.self,               forKey: .backgroundColor)
-            backgroundDraw           = try? c.decodeIfPresent(Bool.self,                  forKey: .backgroundDraw)
+            version                     = try  c.decode(Int.self,             forKey: .version)
+            activeLayerIndex            = try  c.decode(Int.self,             forKey: .activeLayerIndex)
+            projectStyles               = try  c.decode([CellStyle].self,     forKey: .projectStyles)
+            projectShapes               = try  c.decode([ShapeRecord].self,   forKey: .projectShapes)
+            projectMotionSets           = (try? c.decodeIfPresent([UMMotionSet].self,               forKey: .projectMotionSets))          ?? []
+            projectColorPalettes        = (try? c.decodeIfPresent([UMColorPalette].self,            forKey: .projectColorPalettes))       ?? []
+            projectResolutionPresets    = (try? c.decodeIfPresent([UMResolutionPreset].self,        forKey: .projectResolutionPresets))   ?? []
+            projectAnimatedGeometries   = try? c.decodeIfPresent([UMAnimatedGeometry].self,         forKey: .projectAnimatedGeometries)
+            layers                      = try  c.decode([LayerRecord].self,   forKey: .layers)
+            camera                      = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
+            timelineMarkers             = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
+            backgroundImageRelPath      = try? c.decodeIfPresent(String.self,                forKey: .backgroundImageRelPath)
+            backgroundColor             = try? c.decodeIfPresent(UMColor.self,               forKey: .backgroundColor)
+            backgroundDraw              = try? c.decodeIfPresent(Bool.self,                  forKey: .backgroundDraw)
         }
     }
 
@@ -911,7 +918,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 9,
+            version: 10,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -920,6 +927,7 @@ final class AppController {
             projectMotionSets: projectMotionSets,
             projectColorPalettes: projectColorPalettes,
             projectResolutionPresets: projectResolutionPresets,
+            projectAnimatedGeometries: projectAnimatedGeometries,
             layers: layerStates.map { ls in
                 ProjectConfig.LayerRecord(
                     id:            ls.id,
@@ -1031,6 +1039,7 @@ final class AppController {
         projectColorPalettes      = config.projectColorPalettes
         activeColorPaletteID      = config.projectColorPalettes.first?.id
         projectResolutionPresets  = config.projectResolutionPresets
+        projectAnimatedGeometries = config.projectAnimatedGeometries ?? []
         activeStyleID             = layerStates[idx].activeStyleID ?? styles.first?.id
         activeMotionID    = projectMotionSets.first?.id
         activeShapeID     = nil
@@ -1603,6 +1612,29 @@ final class AppController {
         globalShapes.removeAll { $0.id == id }
     }
 
+    // MARK: Animated geometry management
+
+    @discardableResult
+    func addAnimatedGeometry(name: String? = nil) -> UMAnimatedGeometry {
+        let geo = UMAnimatedGeometry(name: name ?? "Sprite Set \(projectAnimatedGeometries.count + 1)")
+        projectAnimatedGeometries.append(geo)
+        return geo
+    }
+
+    func removeAnimatedGeometry(id: UUID) {
+        projectAnimatedGeometries.removeAll { $0.id == id }
+        for ls in layerStates {
+            for i in ls.sprites.indices where ls.sprites[i].animatedGeometryID == id {
+                ls.sprites[i].animatedGeometryID = nil
+            }
+        }
+    }
+
+    func updateAnimatedGeometry(_ geo: UMAnimatedGeometry) {
+        guard let i = projectAnimatedGeometries.firstIndex(where: { $0.id == geo.id }) else { return }
+        projectAnimatedGeometries[i] = geo
+    }
+
     private func uniqueURL(in directory: URL, for filename: String) -> URL {
         let base = (filename as NSString).deletingPathExtension
         let ext  = (filename as NSString).pathExtension
@@ -1740,22 +1772,23 @@ final class AppController {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let cgImage = umRenderComposited(
-                    layerStates:       self.layerStates,
-                    backgroundColor:   self.backgroundColor,
-                    backgroundImage:   self.backgroundCGImage,
-                    shapePolygonMap:   self.shapePolygonMap,
-                    shapePolygonIDMap: self.shapePolygonIDMap,
-                    fallbackPolygons:  self.shapePolygons,
-                    projectMotionSets: self.projectMotionSets,
-                    colorMapEngines:   self.layerColorMapEngines,
-                    backgroundDraw:    self.backgroundDraw,
-                    stretchSprites:    self.stretchSpritesToCell,
-                    frame:             self.engine.currentFrame,
-                    exportW:           exportW,
-                    exportH:           exportH,
-                    strokeScale:       strokeScale,
-                    accumulationBuffer: self.backgroundDraw ? nil : self.frameBuffer,
-                    camera:            self.camera
+                    layerStates:               self.layerStates,
+                    backgroundColor:           self.backgroundColor,
+                    backgroundImage:           self.backgroundCGImage,
+                    shapePolygonMap:           self.shapePolygonMap,
+                    shapePolygonIDMap:         self.shapePolygonIDMap,
+                    fallbackPolygons:          self.shapePolygons,
+                    projectMotionSets:         self.projectMotionSets,
+                    projectAnimatedGeometries: self.projectAnimatedGeometries,
+                    colorMapEngines:           self.layerColorMapEngines,
+                    backgroundDraw:            self.backgroundDraw,
+                    stretchSprites:            self.stretchSpritesToCell,
+                    frame:                     self.engine.currentFrame,
+                    exportW:                   exportW,
+                    exportH:                   exportH,
+                    strokeScale:               strokeScale,
+                    accumulationBuffer:        self.backgroundDraw ? nil : self.frameBuffer,
+                    camera:                    self.camera
                 ) else { return }
 
                 guard let dest = CGImageDestinationCreateWithURL(
@@ -1804,25 +1837,26 @@ final class AppController {
                 guard let self else { return }
                 do {
                     try await UMVideoExporter.export(
-                        layers:            layers,
-                        backgroundColor:   bg,
-                        backgroundImage:   self.backgroundCGImage,
-                        shapePolygonMap:   polyMap,
-                        shapePolygonIDMap: polyIDMap,
-                        fallbackPolygons:  polys,
-                        projectMotionSets: self.projectMotionSets,
-                        colorMapEngines:   cmEngines,
-                        backgroundDraw:    bgDraw,
-                        stretchSprites:    stretch,
-                        startFrame:        start,
-                        frameCount:        frames,
-                        fps:               fps,
-                        exportW:           exportW,
-                        exportH:           exportH,
-                        strokeScale:       strokeScale,
-                        camera:            camSnap,
-                        to:                url,
-                        progress:          { [weak self] p in self?.exportProgress = p }
+                        layers:                    layers,
+                        backgroundColor:           bg,
+                        backgroundImage:           self.backgroundCGImage,
+                        shapePolygonMap:           polyMap,
+                        shapePolygonIDMap:         polyIDMap,
+                        fallbackPolygons:          polys,
+                        projectMotionSets:         self.projectMotionSets,
+                        projectAnimatedGeometries: self.projectAnimatedGeometries,
+                        colorMapEngines:           cmEngines,
+                        backgroundDraw:            bgDraw,
+                        stretchSprites:            stretch,
+                        startFrame:                start,
+                        frameCount:                frames,
+                        fps:                       fps,
+                        exportW:                   exportW,
+                        exportH:                   exportH,
+                        strokeScale:               strokeScale,
+                        camera:                    camSnap,
+                        to:                        url,
+                        progress:                  { [weak self] p in self?.exportProgress = p }
                     )
                 } catch { }
                 self.isExporting = false
@@ -1874,25 +1908,26 @@ final class AppController {
                 guard let self else { return }
                 do {
                     try await UMVideoExporter.exportCuts(
-                        baseLayer:         baseLayer,
-                        otherLayers:       otherLayers,
-                        timeline:          tlSnap,
-                        backgroundColor:   bg,
-                        backgroundImage:   self.backgroundCGImage,
-                        shapePolygonMap:   polyMap,
-                        shapePolygonIDMap: polyIDMap,
-                        fallbackPolygons:  polys,
-                        projectMotionSets: self.projectMotionSets,
-                        colorMapEngines:   cmEngines,
-                        backgroundDraw:    bgDraw,
-                        stretchSprites:    stretch,
-                        fps:               fps,
-                        exportW:           exportW,
-                        exportH:           exportH,
-                        strokeScale:       strokeScale,
-                        camera:            camSnap,
-                        to:                url,
-                        progress:          { [weak self] p in self?.exportProgress = p }
+                        baseLayer:                 baseLayer,
+                        otherLayers:               otherLayers,
+                        timeline:                  tlSnap,
+                        backgroundColor:           bg,
+                        backgroundImage:           self.backgroundCGImage,
+                        shapePolygonMap:           polyMap,
+                        shapePolygonIDMap:         polyIDMap,
+                        fallbackPolygons:          polys,
+                        projectMotionSets:         self.projectMotionSets,
+                        projectAnimatedGeometries: self.projectAnimatedGeometries,
+                        colorMapEngines:           cmEngines,
+                        backgroundDraw:            bgDraw,
+                        stretchSprites:            stretch,
+                        fps:                       fps,
+                        exportW:                   exportW,
+                        exportH:                   exportH,
+                        strokeScale:               strokeScale,
+                        camera:                    camSnap,
+                        to:                        url,
+                        progress:                  { [weak self] p in self?.exportProgress = p }
                     )
                 } catch { }
                 self.isExporting = false

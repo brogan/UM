@@ -38,38 +38,43 @@ public struct UMSprite: Codable, Identifiable, Sendable {
     public var shapeID:          UUID?
     public var motionID:         UUID?
     public var phaseOffset:      Int
-    public var polygonOverrides: [String: UMPolygonOverride]
+    public var polygonOverrides:    [String: UMPolygonOverride]
     /// Animated position offset added on top of (x*gridW + motion.dx). Output units are canvas pixels.
-    public var positionDriver:   UMVectorDriver
+    public var positionDriver:      UMVectorDriver
+    /// When set, shape cycling is driven by the referenced UMAnimatedGeometry instead of
+    /// the sprite's own shapeID and any Motion Set SEQUENCE cycling.
+    public var animatedGeometryID:  UUID?
 
     public init(
-        id:               UUID                     = UUID(),
-        name:             String                   = "Sprite",
-        x:                Double                   = 0,
-        y:                Double                   = 0,
-        rotation:         Double                   = 0,
-        scaleX:           Double                   = 1.0,
-        scaleY:           Double                   = 1.0,
-        styleID:          UUID?                    = nil,
-        shapeID:          UUID?                    = nil,
-        motionID:         UUID?                    = nil,
-        phaseOffset:      Int                      = 0,
-        polygonOverrides: [String: UMPolygonOverride] = [:],
-        positionDriver:   UMVectorDriver            = .zero
+        id:                  UUID                        = UUID(),
+        name:                String                      = "Sprite",
+        x:                   Double                      = 0,
+        y:                   Double                      = 0,
+        rotation:            Double                      = 0,
+        scaleX:              Double                      = 1.0,
+        scaleY:              Double                      = 1.0,
+        styleID:             UUID?                       = nil,
+        shapeID:             UUID?                       = nil,
+        motionID:            UUID?                       = nil,
+        phaseOffset:         Int                         = 0,
+        polygonOverrides:    [String: UMPolygonOverride] = [:],
+        positionDriver:      UMVectorDriver               = .zero,
+        animatedGeometryID:  UUID?                       = nil
     ) {
-        self.id               = id
-        self.name             = name
-        self.x                = x
-        self.y                = y
-        self.rotation         = rotation
-        self.scaleX           = scaleX
-        self.scaleY           = scaleY
-        self.styleID          = styleID
-        self.shapeID          = shapeID
-        self.motionID         = motionID
-        self.phaseOffset      = phaseOffset
-        self.polygonOverrides = polygonOverrides
-        self.positionDriver   = positionDriver
+        self.id                 = id
+        self.name               = name
+        self.x                  = x
+        self.y                  = y
+        self.rotation           = rotation
+        self.scaleX             = scaleX
+        self.scaleY             = scaleY
+        self.styleID            = styleID
+        self.shapeID            = shapeID
+        self.motionID           = motionID
+        self.phaseOffset        = phaseOffset
+        self.polygonOverrides   = polygonOverrides
+        self.positionDriver     = positionDriver
+        self.animatedGeometryID = animatedGeometryID
     }
 
     // MARK: Codable — [Int: T] keys need String bridging
@@ -77,23 +82,24 @@ public struct UMSprite: Codable, Identifiable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, name, x, y, rotation, scaleX, scaleY
         case styleID, shapeID, motionID, phaseOffset, polygonOverrides
-        case positionDriver
+        case positionDriver, animatedGeometryID
     }
 
     public init(from decoder: Decoder) throws {
-        let c         = try decoder.container(keyedBy: CodingKeys.self)
-        id            = try  c.decode(UUID.self,   forKey: .id)
-        name          = try  c.decode(String.self, forKey: .name)
-        x             = (try? c.decodeIfPresent(Double.self, forKey: .x))        ?? 0
-        y             = (try? c.decodeIfPresent(Double.self, forKey: .y))        ?? 0
-        rotation      = (try? c.decodeIfPresent(Double.self, forKey: .rotation)) ?? 0
-        scaleX        = (try? c.decodeIfPresent(Double.self, forKey: .scaleX))   ?? 1.0
-        scaleY        = (try? c.decodeIfPresent(Double.self, forKey: .scaleY))   ?? 1.0
-        styleID       = try? c.decodeIfPresent(UUID.self, forKey: .styleID)
-        shapeID       = try? c.decodeIfPresent(UUID.self, forKey: .shapeID)
-        motionID      = try? c.decodeIfPresent(UUID.self, forKey: .motionID)
-        phaseOffset   = (try? c.decodeIfPresent(Int.self,              forKey: .phaseOffset))    ?? 0
-        positionDriver = (try? c.decodeIfPresent(UMVectorDriver.self,  forKey: .positionDriver)) ?? .zero
+        let c               = try decoder.container(keyedBy: CodingKeys.self)
+        id                  = try  c.decode(UUID.self,   forKey: .id)
+        name                = try  c.decode(String.self, forKey: .name)
+        x                   = (try? c.decodeIfPresent(Double.self, forKey: .x))        ?? 0
+        y                   = (try? c.decodeIfPresent(Double.self, forKey: .y))        ?? 0
+        rotation            = (try? c.decodeIfPresent(Double.self, forKey: .rotation)) ?? 0
+        scaleX              = (try? c.decodeIfPresent(Double.self, forKey: .scaleX))   ?? 1.0
+        scaleY              = (try? c.decodeIfPresent(Double.self, forKey: .scaleY))   ?? 1.0
+        styleID             = try? c.decodeIfPresent(UUID.self, forKey: .styleID)
+        shapeID             = try? c.decodeIfPresent(UUID.self, forKey: .shapeID)
+        motionID            = try? c.decodeIfPresent(UUID.self, forKey: .motionID)
+        animatedGeometryID  = try? c.decodeIfPresent(UUID.self, forKey: .animatedGeometryID)
+        phaseOffset         = (try? c.decodeIfPresent(Int.self,              forKey: .phaseOffset))    ?? 0
+        positionDriver      = (try? c.decodeIfPresent(UMVectorDriver.self,   forKey: .positionDriver)) ?? .zero
         // [String: UMPolygonOverride] — keyed by EditableClosedPolygon.id.uuidString.
         // Legacy files used numeric strings ("0","1",...) which won't match any UUID
         // and are safely dropped on first load.
@@ -109,9 +115,10 @@ public struct UMSprite: Codable, Identifiable, Sendable {
         if rotation  != 0   { try c.encode(rotation,  forKey: .rotation) }
         if scaleX    != 1.0 { try c.encode(scaleX,    forKey: .scaleX) }
         if scaleY    != 1.0 { try c.encode(scaleY,    forKey: .scaleY) }
-        if let v = styleID   { try c.encode(v, forKey: .styleID) }
-        if let v = shapeID   { try c.encode(v, forKey: .shapeID) }
-        if let v = motionID  { try c.encode(v, forKey: .motionID) }
+        if let v = styleID             { try c.encode(v, forKey: .styleID) }
+        if let v = shapeID             { try c.encode(v, forKey: .shapeID) }
+        if let v = motionID            { try c.encode(v, forKey: .motionID) }
+        if let v = animatedGeometryID  { try c.encode(v, forKey: .animatedGeometryID) }
         if phaseOffset != 0  { try c.encode(phaseOffset, forKey: .phaseOffset) }
         if positionDriver != .zero { try c.encode(positionDriver, forKey: .positionDriver) }
         if !polygonOverrides.isEmpty {
