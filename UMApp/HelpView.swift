@@ -515,7 +515,7 @@ private let layersBody = #"""
 
 <h2>Adding and removing layers</h2>
 <ul>
-  <li>Click <strong>+ New Layer</strong> below the layer list — a small menu appears. Choose <strong>Grid Layer</strong> for a standard grid layer or <strong>Sprite Layer</strong> for free-placement (see Sprite Layers below). The new layer becomes active.</li>
+  <li>Click <strong>+ New Layer</strong> below the layer list — a small menu appears. Choose <strong>Grid Layer</strong> for a standard grid layer or <strong>Open Layer</strong> for free-placement (see Open Layers below). The new layer becomes active.</li>
   <li>Right-click a layer row → <strong>Duplicate</strong> to copy the layer including all its cells, styles, and paths.</li>
   <li>Right-click → <strong>Delete Layer</strong> to remove it. Disabled when only one layer remains.</li>
 </ul>
@@ -553,7 +553,7 @@ private let layersBody = #"""
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
 
 <h2>LAYER DRIVERS — blend mode, animated opacity and offset</h2>
-<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) controls how a layer composites and moves independently of the camera. <strong>All three controls — Blend, Opacity, and Offset — apply to both grid layers and sprite layers.</strong> The DISTORTION subsection is grid-only and does not appear when a sprite layer is active.</p>
+<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) controls how a layer composites and moves independently of the camera. <strong>All three controls — Blend, Opacity, and Offset — apply to both grid layers and open layers.</strong> The DISTORTION subsection is grid-only and does not appear when an open layer is active.</p>
 
 <h3>Blend mode</h3>
 <p>The <strong>Blend</strong> picker at the top of LAYER DRIVERS sets how this layer composites with all layers below it:</p>
@@ -595,7 +595,7 @@ private let layersBody = #"""
   <tr><td><strong>Keyframe</strong></td><td>Driven by keyframes in the timeline's <strong>Offset</strong> lane.</td></tr>
 </table>
 <div class="tip">Use oscillator offset on a background layer to create a subtle breathing or drifting effect without touching the camera.</div>
-<div class="tip"><strong>Fading up a morph target animation</strong> — place your morph-target sprites on their own sprite layer, then open LAYER DRIVERS → Opacity. Use <strong>Keyframe</strong> mode to draw a fade-in curve on the timeline Opacity lane, or <strong>Oscillator</strong> mode to pulse the whole layer in and out. The morph continues to interpolate underneath regardless of layer opacity.</div>
+<div class="tip"><strong>Fading up a morph target animation</strong> — place your morph-target sprites on their own open layer, then open LAYER DRIVERS → Opacity. Use <strong>Keyframe</strong> mode to draw a fade-in curve on the timeline Opacity lane, or <strong>Oscillator</strong> mode to pulse the whole layer in and out. The morph continues to interpolate underneath regardless of layer opacity.</div>
 
 <h2>Right-panel context sections</h2>
 <p>The Quick Adjust right panel shows context sections that reflect the active palette item:</p>
@@ -605,19 +605,19 @@ private let layersBody = #"""
   <li>When a <strong>motion set</strong> is active, the <strong>MOTION — [name]</strong> section appears as before.</li>
 </ul>
 
-<h2>Sprite Layers</h2>
-<p>A <strong>sprite layer</strong> is a special layer type where you freely place individual shapes anywhere on the canvas, rather than filling a grid. Use sprite layers for accent elements, floating logos, or any shape that shouldn't follow a regular grid rhythm.</p>
+<h2>Open Layers</h2>
+<p>An <strong>open layer</strong> is a special layer type where you freely place individual shapes anywhere on the canvas, rather than filling a grid. Use open layers for accent elements, floating logos, or any shape that shouldn't follow a regular grid rhythm.</p>
 
-<h3>Creating a sprite layer</h3>
+<h3>Creating an open layer</h3>
 <ol class="steps">
   <li>Click the <strong>+ New Layer</strong> button below the layer list — it opens a small menu.</li>
-  <li>Choose <strong>Sprite Layer</strong>. The new layer appears in the list with a <strong>✦</strong> icon to distinguish it from grid layers.</li>
-  <li>Click the sprite layer row to make it active.</li>
+  <li>Choose <strong>Open Layer</strong>. The new layer appears in the list with a <strong>✦</strong> icon to distinguish it from grid layers.</li>
+  <li>Click the open layer row to make it active.</li>
 </ol>
 
 <h3>Placing sprites</h3>
 <ol class="steps">
-  <li>With a sprite layer active, click anywhere on the canvas. A new sprite appears at that position, using the currently selected style, shape, and motion.</li>
+  <li>With an open layer active, click anywhere on the canvas. A new sprite appears at that position, using the currently selected style, shape, and motion.</li>
   <li>Alternatively, open <strong>Quick Adjust</strong> and click <strong>+ Place at Centre</strong> in the SPRITES section to place a sprite at the canvas midpoint.</li>
 </ol>
 <div class="note">To control which style, shape, and motion a new sprite gets, select those items in the left palette before clicking to place.</div>
@@ -640,7 +640,7 @@ private let layersBody = #"""
 </ul>
 
 <h3>The SPRITES inspector (Quick Adjust)</h3>
-<p>When a sprite layer is active, Quick Adjust shows the <strong>SPRITES section</strong> in place of the usual grid controls. At the top is a list of all sprites on that layer. Click a row to select a sprite; click <strong>&times;</strong> to remove it.</p>
+<p>When an open layer is active, Quick Adjust shows the <strong>SPRITES section</strong> in place of the usual grid controls. At the top is a list of all sprites on that layer. Click a row to select a sprite; click <strong>&times;</strong> to remove it.</p>
 <p>When a sprite is selected, the inspector below the list shows:</p>
 <table>
   <tr><th>Field</th><th>Description</th></tr>
@@ -686,18 +686,18 @@ private let layersBody = #"""
 </ul>
 <div class="note">Polygon indices are positional. If you re-import a shape from Loom with a different polygon ordering, existing overrides will shift to different polygons. Clear all overrides before re-importing if you want a clean slate.</div>
 
-<h3>Sprite layers and LAYER DRIVERS</h3>
-<p>The full <strong>LAYER DRIVERS</strong> section is available for sprite layers. When a sprite layer is active, LAYER DRIVERS shows:</p>
+<h3>Open layers and LAYER DRIVERS</h3>
+<p>The full <strong>LAYER DRIVERS</strong> section is available for open layers. When an open layer is active, LAYER DRIVERS shows:</p>
 <ul>
-  <li><strong>Blend</strong> — composite mode for the whole sprite layer against layers below it.</li>
-  <li><strong>Opacity</strong> — animate the entire layer's opacity via Constant, Oscillator, Jitter, Noise, or Keyframe mode. The Keyframe Opacity lane in the timeline is the most direct way to fade a sprite layer up or down at a specific moment.</li>
-  <li><strong>Offset</strong> — shift the entire sprite layer (all sprites together) by an animated canvas-pixel amount, independent of individual sprite positions or the camera.</li>
+  <li><strong>Blend</strong> — composite mode for the whole open layer against layers below it.</li>
+  <li><strong>Opacity</strong> — animate the entire layer's opacity via Constant, Oscillator, Jitter, Noise, or Keyframe mode. The Keyframe Opacity lane in the timeline is the most direct way to fade an open layer up or down at a specific moment.</li>
+  <li><strong>Offset</strong> — shift the entire open layer (all sprites together) by an animated canvas-pixel amount, independent of individual sprite positions or the camera.</li>
 </ul>
-<p>DISTORTION does not appear for sprite layers — it has no effect on free-placed shapes.</p>
+<p>DISTORTION does not appear for open layers — it has no effect on free-placed shapes.</p>
 <div class="note">These are <em>layer-level</em> controls — they apply uniformly to every sprite in the layer. To animate an individual sprite's position, use the sprite's own Position Driver instead.</div>
 
-<h3>Sprite layers and export</h3>
-<p>Sprite layers export identically to grid layers — they composite into the PNG or video output with the layer's configured opacity, offset, blend mode, and parallax factor all applied. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution. The Position Driver animation, SEQUENCE shape cycling, Sprite Set morph/cross-fade, and all LAYER DRIVERS values are applied at export time.</p>
+<h3>Open layers and export</h3>
+<p>Open layers export identically to grid layers — they composite into the PNG or video output with the layer's configured opacity, offset, blend mode, and parallax factor all applied. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution. The Position Driver animation, SEQUENCE shape cycling, Sprite Set morph/cross-fade, and all LAYER DRIVERS values are applied at export time.</p>
 
 <h3>Limitations in this version</h3>
 <ul>
@@ -1004,10 +1004,10 @@ private let playbackBody = #"""
 <p>Each <strong>grid layer</strong> has three driver lanes. <strong>Sprite layers</strong> have two layer-level lanes plus one per-sprite position lane. The camera has three additional lanes:</p>
 <table>
   <tr><th>Lane</th><th>Colour</th><th>Controls</th></tr>
-  <tr><td>Opacity</td><td>Pink</td><td>Layer opacity over time (0–1). Grid and sprite layers.</td></tr>
-  <tr><td>Offset</td><td>Blue</td><td>Layer canvas-pixel position offset (X, Y). Grid and sprite layers.</td></tr>
+  <tr><td>Opacity</td><td>Pink</td><td>Layer opacity over time (0–1). Grid and open layers.</td></tr>
+  <tr><td>Offset</td><td>Blue</td><td>Layer canvas-pixel position offset (X, Y). Grid and open layers.</td></tr>
   <tr><td>Grid Scroll</td><td>Orange</td><td>Per-layer grid scroll amount (X, Y in cell units). Grid layers only.</td></tr>
-  <tr><td>↑ [Sprite name]</td><td>Purple</td><td>Position Driver offset for that sprite (X, Y in canvas pixels). One lane per sprite; sprite layers only.</td></tr>
+  <tr><td>↑ [Sprite name]</td><td>Purple</td><td>Position Driver offset for that sprite (X, Y in canvas pixels). One lane per sprite; open layers only.</td></tr>
   <tr><td>Camera Pan</td><td>Teal</td><td>Camera pan offset (X, Y in pixels)</td></tr>
   <tr><td>Camera Zoom</td><td>Green</td><td>Camera zoom factor</td></tr>
   <tr><td>Camera Rotation</td><td>Cyan</td><td>Camera rotation in degrees</td></tr>
@@ -1115,7 +1115,7 @@ private let qaProjectBody = #"""
   <li>Intermediate offsets are linearly interpolated through the hue spectrum.</li>
 </ul>
 <p>The overlay is drawn at 50% opacity and is view-only — it does not appear in PNG or video export. Use it to verify that your phase policy produced the expected timing structure, or to diagnose unexpected clusters of cells that are in sync.</p>
-<div class="note">The phase heat-map only draws when the active layer is a <strong>grid</strong> layer. Switching to a sprite layer hides the overlay automatically.</div>
+<div class="note">The phase heat-map only draws when the active layer is a <strong>grid</strong> layer. Switching to an open layer hides the overlay automatically.</div>
 
 <h2>Canvas Zoom &amp; Pan</h2>
 <p>The canvas can be zoomed and panned independently of the project's output resolution. Zoom and pan are view-only — they do not affect PNG or video export.</p>
@@ -1580,7 +1580,7 @@ private let paletteBody = #"""
 <div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
 
 <h3>SPRITE SETS</h3>
-<p>Sprite Sets are reusable shape-animation cycles that can be assigned to any sprite. Each set holds an ordered list of <em>states</em>: a shape, an optional style override, and a hold-frame count. The set steps through those states at playback time, independently of the sprite's motion set.</p>
+<p>Sprite Sets are reusable shape-animation cycles that can be assigned to sprites on open layers <strong>and to individual grid cells on grid layers</strong>. Each set holds an ordered list of <em>states</em>: a shape, an optional style override, and a hold-frame count. The set steps through those states at playback time, independently of the motion set.</p>
 <ul>
   <li><strong>+ New Sprite Set</strong> — creates an empty set ready to be filled with states in the editor.</li>
   <li><strong>+ Import Layers as Shapes…</strong> — in the SHAPES section above. Select a multi-layer Loom geometry file; each visible, non-empty layer becomes a separate shape and a Sprite Set containing all of them in layer order is created automatically.</li>
@@ -1588,9 +1588,14 @@ private let paletteBody = #"""
   <li><strong>Right-click</strong> — Edit…, Delete.</li>
 </ul>
 <h4>Direct drawing with a Sprite Set</h4>
-<p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active, any sprite you place on a sprite layer — by clicking the canvas or using <strong>+ Place at Centre</strong> — is automatically assigned that Sprite Set. No need to place the sprite first and assign afterwards.</p>
-<div class="tip">Select a Sprite Set in the palette, then click the canvas repeatedly to scatter multiple sprites that all share the same animation cycle. Each sprite inherits the active style, shape, and motion as usual — the Sprite Set adds the shape-animation layer on top.</div>
-<p>To assign a Sprite Set to an existing sprite, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust. See <a href="um-help://help/sprite-sets">Sprite Sets</a> for the full guide.</p>
+<p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active:</p>
+<ul>
+  <li><strong>On an open layer</strong> — clicking the canvas or using <strong>+ Place at Centre</strong> places a sprite that is automatically assigned the active Sprite Set. No need to place first and assign afterwards.</li>
+  <li><strong>On a grid layer</strong> — drawing or flood-filling cells automatically assigns the active Sprite Set to each cell. The cells animate through the Sprite Set's states independently (each cell's phase offset staggers the cycle). Morph and cross-fade transitions are supported exactly as on open-layer sprites.</li>
+</ul>
+<div class="tip">Select a Sprite Set in the palette, then draw across a grid to scatter many cells that all share the same animation cycle. Each cell inherits the active style, shape, and motion — the Sprite Set adds the shape-animation layer on top, with per-cell phase staggering for variety.</div>
+<p>To assign a Sprite Set to an <strong>existing sprite</strong>, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust.</p>
+<p>To assign a Sprite Set to <strong>existing grid cells</strong>, select the cells and use the <strong>Anim. Set</strong> picker in the <strong>PLACE &amp; TIME</strong> section of Quick Adjust. Choose <strong>—</strong> to remove the assignment and revert the cell to its static shape.</p>
 
 <h2>Library tab</h2>
 <p>Shows your global user library — resolution presets, styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
@@ -1604,9 +1609,9 @@ private let paletteBody = #"""
 
 private let spriteSetsBody = #"""
 <h1>Sprite Sets</h1>
-<p class="subtitle">Reusable shape-animation cycles for sprites — independent of motion sets.</p>
+<p class="subtitle">Reusable shape-animation cycles for sprites and grid cells — independent of motion sets.</p>
 
-<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, a hold-frame count, and an optional cross-fade into the next state. When a sprite has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the sprite's shape (and optionally its style) on a per-frame schedule. Between states, an opacity blend can be applied over a configurable number of frames using any easing curve. The cycle runs independently of the sprite's motion set.</p>
+<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, a hold-frame count, and an optional cross-fade into the next state. When a sprite or grid cell has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the shape (and optionally the style) on a per-frame schedule. Between states, an opacity blend can be applied over a configurable number of frames using any easing curve. The cycle runs independently of the element's motion set.</p>
 
 <h2>Concepts</h2>
 
@@ -1724,25 +1729,35 @@ private let spriteSetsBody = #"""
   <li>Adjust Hold and Trans values per state to control the rhythm of the animation.</li>
 </ol>
 
-<h3>Step 4 — Assign to a sprite and play back</h3>
+<h3>Step 4 — Assign and play back</h3>
 <ol class="steps">
-  <li>Select the sprite on the canvas. In the <strong>SPRITES inspector</strong> (right panel), set the <strong>Sprite Set</strong> picker to the imported set.</li>
-  <li>Press play in the Transport Bar. The sprite's shape deforms smoothly between poses on schedule.</li>
-  <li>Use the sprite's <strong>Phase offset</strong> to stagger multiple sprites sharing the same Sprite Set so they are at different points in the cycle.</li>
+  <li><strong>On an open layer</strong> — select the sprite on the canvas. In the <strong>SPRITES inspector</strong> (right panel), set the <strong>Sprite Set</strong> picker to the imported set.</li>
+  <li><strong>On a grid layer</strong> — select one or more cells, then use the <strong>Anim. Set</strong> picker in PLACE &amp; TIME (Quick Adjust) to assign the Sprite Set.</li>
+  <li>Press play in the Transport Bar. The shape deforms smoothly between poses on schedule.</li>
+  <li>Use the element's <strong>Phase offset</strong> to stagger multiple sprites or cells sharing the same Sprite Set so they are at different points in the cycle.</li>
 </ol>
 <div class="tip">Position, rotation, and scale also interpolate smoothly during a morph transition — set per-state Δx/Δy/°/Sx/Sy values on each state to combine shape morphing with positional animation in a single pass.</div>
 
-<h2>Assigning a Sprite Set to a sprite</h2>
+<h2>Assigning a Sprite Set to a sprite (open layer)</h2>
 <ol class="steps">
-  <li>Select the sprite layer in the left palette, then click the sprite on the canvas to select it.</li>
+  <li>Select the open layer in the left palette, then click the sprite on the canvas to select it.</li>
   <li>In the <strong>SPRITES inspector</strong> in Quick Adjust (right panel), find the <strong>Sprite Set</strong> picker between Motion and Phase offset.</li>
   <li>Choose the Sprite Set from the list. The picker shows <em>None</em> when no set is assigned.</li>
   <li>Play back the animation — the sprite's shape changes on schedule.</li>
 </ol>
 <div class="tip">Set <strong>None</strong> to restore the sprite's static shape (or SEQUENCE cycling from its motion set).</div>
 
+<h2>Assigning a Sprite Set to grid cells</h2>
+<ol class="steps">
+  <li>Select one or more drawn cells on a grid layer (click or rubber-band select).</li>
+  <li>In the <strong>PLACE &amp; TIME</strong> section of Quick Adjust (right panel), find the <strong>Anim. Set</strong> picker — it appears after the Shape picker.</li>
+  <li>Choose the Sprite Set from the list. Choose <strong>—</strong> to remove any existing assignment.</li>
+  <li>Play back the animation — each selected cell animates through the Sprite Set's states. Each cell's phase offset staggers the cycle for natural variety.</li>
+</ol>
+<div class="note">When a Sprite Set is assigned to a grid cell, the cell's static Shape assignment is ignored at render time. The Sprite Set drives the shape. To revert to the static shape, set Anim. Set to —.</div>
+
 <h2>Priority and overrides</h2>
-<p>When a Sprite Set is assigned, it takes priority over the sprite's static <strong>Shape</strong> field and over any SEQUENCE cycling from the sprite's motion set. Both cannot be active simultaneously — the Sprite Set wins. Remove the Sprite Set assignment (set to None) to revert to SEQUENCE-driven or static shape behaviour.</p>
+<p>When a Sprite Set is assigned, it takes priority over the element's static <strong>Shape</strong> field and over any SEQUENCE cycling from the motion set. Both cannot be active simultaneously — the Sprite Set wins. Remove the Sprite Set assignment (set to None / —) to revert to SEQUENCE-driven or static shape behaviour.</p>
 <p>Style overrides work similarly: if the active state has a style override set, that style is used for the entire frame including motion parameters derived from the style. If the state's style is set to – (dash), the sprite's own global style is used as normal.</p>
 
 <h2>Editing a Sprite Set</h2>
