@@ -7,6 +7,7 @@ struct StylePaletteView: View {
     @Environment(AppController.self) private var controller
     @State private var tab: PaletteTab = .project
     @State private var renamingLayerID:   UUID? = nil
+    @State private var expandedLayerIDs:  Set<UUID> = []
     @State private var renamingStyleID:   UUID? = nil
     @State private var renamingMotionID:  UUID? = nil
     @State private var renamingPathID:    UUID? = nil
@@ -55,7 +56,30 @@ struct StylePaletteView: View {
     private var projectTab: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                sectionHeader("LAYERS")
+                let allLayerIDs = Set(controller.layerStates.map(\.id))
+                let allExpanded = allLayerIDs.isSubset(of: expandedLayerIDs)
+                HStack(spacing: 0) {
+                    Text("LAYERS")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Button {
+                        if allExpanded {
+                            expandedLayerIDs.subtract(allLayerIDs)
+                        } else {
+                            expandedLayerIDs.formUnion(allLayerIDs)
+                        }
+                    } label: {
+                        Image(systemName: allExpanded ? "chevron.up.chevron.down" : "chevron.down.chevron.up")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(allExpanded ? "Collapse all layers" : "Expand all layers")
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
 
                 ForEach(Array(controller.layerStates.enumerated()), id: \.element.id) { idx, ls in
                     layerRow(ls, index: idx)
@@ -324,9 +348,10 @@ struct StylePaletteView: View {
     // MARK: - Row views
 
     private func layerRow(_ ls: UMLayerState, index: Int) -> some View {
-        let active = (index == controller.activeLayerIndex)
+        let active   = (index == controller.activeLayerIndex)
+        let expanded = expandedLayerIDs.contains(ls.id)
         return VStack(alignment: .leading, spacing: 3) {
-            // Row 1: visibility, active dot, name
+            // Row 1: visibility, expand chevron, active dot, name
             HStack(spacing: 5) {
                 Button {
                     ls.isVisible.toggle()
@@ -335,6 +360,20 @@ struct StylePaletteView: View {
                         .font(.system(size: 10))
                         .foregroundStyle(ls.isVisible ? Color.primary.opacity(0.7) : Color.secondary.opacity(0.4))
                         .frame(width: 14)
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    if expanded {
+                        expandedLayerIDs.remove(ls.id)
+                    } else {
+                        expandedLayerIDs.insert(ls.id)
+                    }
+                } label: {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.system(size: 8))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 10)
                 }
                 .buttonStyle(.plain)
 
@@ -364,38 +403,40 @@ struct StylePaletteView: View {
                 }
             }
 
-            // Row 2: opacity
-            HStack(spacing: 4) {
-                Image(systemName: "circle.lefthalf.filled")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12)
-                    .help("Opacity")
-                Slider(value: Binding(
-                    get: { ls.opacity },
-                    set: { ls.opacity = $0; ls.opacityDriver.base = $0 }
-                ), in: 0...1)
-                    .controlSize(.mini)
-                Text("\(Int((ls.opacity * 100).rounded()))%")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.quaternary)
-                    .frame(width: 28, alignment: .trailing)
-            }
+            if expanded {
+                // Row 2: opacity
+                HStack(spacing: 4) {
+                    Image(systemName: "circle.lefthalf.filled")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 12)
+                        .help("Opacity")
+                    Slider(value: Binding(
+                        get: { ls.opacity },
+                        set: { ls.opacity = $0; ls.opacityDriver.base = $0 }
+                    ), in: 0...1)
+                        .controlSize(.mini)
+                    Text("\(Int((ls.opacity * 100).rounded()))%")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.quaternary)
+                        .frame(width: 28, alignment: .trailing)
+                }
 
-            // Row 3: parallax
-            HStack(spacing: 4) {
-                Image(systemName: "camera")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 12)
-                    .help("Parallax factor: 0 = background-fixed, 1 = full camera tracking")
-                Slider(value: Binding(get: { ls.parallaxFactor }, set: { ls.parallaxFactor = $0 }), in: 0...1)
-                    .controlSize(.mini)
-                    .help("Parallax factor")
-                Text("\(Int((ls.parallaxFactor * 100).rounded()))%")
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.quaternary)
-                    .frame(width: 28, alignment: .trailing)
+                // Row 3: parallax
+                HStack(spacing: 4) {
+                    Image(systemName: "camera")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 12)
+                        .help("Parallax factor: 0 = background-fixed, 1 = full camera tracking")
+                    Slider(value: Binding(get: { ls.parallaxFactor }, set: { ls.parallaxFactor = $0 }), in: 0...1)
+                        .controlSize(.mini)
+                        .help("Parallax factor")
+                    Text("\(Int((ls.parallaxFactor * 100).rounded()))%")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.quaternary)
+                        .frame(width: 28, alignment: .trailing)
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -443,8 +484,10 @@ struct StylePaletteView: View {
 
     // MARK: - Resolution section
 
-    private static let resolutionMultipliers: [(label: String, factor: Double)] = [
-        ("1/5", 0.2), ("1/4", 0.25), ("1/3", 1.0/3), ("1/2", 0.5),
+    private static let fractionalMultipliers: [(label: String, factor: Double)] = [
+        ("1/5", 0.2), ("1/4", 0.25), ("1/3", 1.0/3), ("1/2", 0.5)
+    ]
+    private static let wholeMultipliers: [(label: String, factor: Double)] = [
         ("2", 2), ("3", 3), ("4", 4), ("5", 5)
     ]
 
@@ -479,22 +522,10 @@ struct StylePaletteView: View {
             let currentRows = controller.engine.document.gridConfig.rows
             let currentCols = controller.engine.document.gridConfig.cols
 
-            // Multiplier buttons
-            HStack(spacing: 3) {
-                ForEach(Self.resolutionMultipliers, id: \.label) { m in
-                    let newR = max(1, Int((Double(currentRows) * m.factor).rounded()))
-                    let newC = max(1, Int((Double(currentCols) * m.factor).rounded()))
-                    Button(m.label) {
-                        controller.resample(toRows: newR, cols: newC)
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10, design: .monospaced))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                    .help("→ \(newR)×\(newC)")
-                }
+            // Multiplier buttons — two rows filling full width
+            VStack(spacing: 3) {
+                multiplierRow(Self.fractionalMultipliers, currentRows: currentRows, currentCols: currentCols)
+                multiplierRow(Self.wholeMultipliers,      currentRows: currentRows, currentCols: currentCols)
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 6)
@@ -529,6 +560,26 @@ struct StylePaletteView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 6)
+            }
+        }
+    }
+
+    private func multiplierRow(_ items: [(label: String, factor: Double)],
+                               currentRows: Int, currentCols: Int) -> some View {
+        HStack(spacing: 3) {
+            ForEach(items, id: \.label) { m in
+                let newR = max(1, Int((Double(currentRows) * m.factor).rounded()))
+                let newC = max(1, Int((Double(currentCols) * m.factor).rounded()))
+                Button(m.label) {
+                    controller.resample(toRows: newR, cols: newC)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, design: .monospaced))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .help("→ \(newR)×\(newC)")
             }
         }
     }
