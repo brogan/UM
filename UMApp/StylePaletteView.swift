@@ -443,8 +443,9 @@ struct StylePaletteView: View {
 
     // MARK: - Resolution section
 
-    private static let builtInPresets: [(rows: Int, cols: Int)] = [
-        (4, 4), (6, 6), (8, 8), (12, 12), (16, 16), (20, 20), (32, 32)
+    private static let resolutionMultipliers: [(label: String, factor: Double)] = [
+        ("1/5", 0.2), ("1/4", 0.25), ("1/3", 1.0/3), ("1/2", 0.5),
+        ("2", 2), ("3", 3), ("4", 4), ("5", 5)
     ]
 
     private var resolutionSection: some View {
@@ -478,46 +479,74 @@ struct StylePaletteView: View {
             let currentRows = controller.engine.document.gridConfig.rows
             let currentCols = controller.engine.document.gridConfig.cols
 
-            FlowLayout(spacing: 4) {
-                ForEach(Self.builtInPresets, id: \.rows) { p in
-                    resolutionChip(rows: p.rows, cols: p.cols,
-                                   active: currentRows == p.rows && currentCols == p.cols,
-                                   removable: false)
-                }
-                ForEach(controller.projectResolutionPresets) { preset in
-                    resolutionChip(rows: preset.rows, cols: preset.cols,
-                                   active: currentRows == preset.rows && currentCols == preset.cols,
-                                   removable: true,
-                                   onRemove: { controller.deleteResolutionPreset(preset.id) })
-                    .contextMenu {
-                        let inLibrary = controller.globalResolutionPresets.contains { $0.rows == preset.rows && $0.cols == preset.cols }
-                        Button("Save to Library") {
-                            controller.addResolutionPreset(rows: preset.rows, cols: preset.cols, global: true)
-                        }
-                        .disabled(inLibrary)
-                        Button("Remove", role: .destructive) {
-                            controller.deleteResolutionPreset(preset.id)
-                        }
+            // Multiplier buttons
+            HStack(spacing: 3) {
+                ForEach(Self.resolutionMultipliers, id: \.label) { m in
+                    let newR = max(1, Int((Double(currentRows) * m.factor).rounded()))
+                    let newC = max(1, Int((Double(currentCols) * m.factor).rounded()))
+                    Button(m.label) {
+                        controller.resample(toRows: newR, cols: newC)
                     }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, design: .monospaced))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                    .help("→ \(newR)×\(newC)")
                 }
-                Button {
-                    controller.addResolutionPreset(rows: currentRows, cols: currentCols)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color.accentColor)
-                        .frame(width: 24, height: 20)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                }
-                .buttonStyle(.plain)
-                .help("Save \(currentRows)×\(currentCols) as a project preset")
-                .disabled(Self.builtInPresets.contains(where: { $0.rows == currentRows && $0.cols == currentCols })
-                          || controller.projectResolutionPresets.contains(where: { $0.rows == currentRows && $0.cols == currentCols }))
             }
             .padding(.horizontal, 10)
             .padding(.bottom, 6)
+
+            // Custom project presets
+            if !controller.projectResolutionPresets.isEmpty {
+                FlowLayout(spacing: 4) {
+                    ForEach(controller.projectResolutionPresets) { preset in
+                        resolutionChip(rows: preset.rows, cols: preset.cols,
+                                       active: currentRows == preset.rows && currentCols == preset.cols,
+                                       removable: true,
+                                       onRemove: { controller.deleteResolutionPreset(preset.id) })
+                        .contextMenu {
+                            let inLibrary = controller.globalResolutionPresets.contains { $0.rows == preset.rows && $0.cols == preset.cols }
+                            Button("Save to Library") {
+                                controller.addResolutionPreset(rows: preset.rows, cols: preset.cols, global: true)
+                            }
+                            .disabled(inLibrary)
+                            Button("Remove", role: .destructive) {
+                                controller.deleteResolutionPreset(preset.id)
+                            }
+                        }
+                    }
+                    saveAsPresetButton(currentRows: currentRows, currentCols: currentCols)
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
+            } else {
+                HStack {
+                    saveAsPresetButton(currentRows: currentRows, currentCols: currentCols)
+                    Spacer()
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 6)
+            }
         }
+    }
+
+    private func saveAsPresetButton(currentRows: Int, currentCols: Int) -> some View {
+        Button {
+            controller.addResolutionPreset(rows: currentRows, cols: currentCols)
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 10))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 24, height: 20)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .help("Save \(currentRows)×\(currentCols) as a project preset")
+        .disabled(controller.projectResolutionPresets.contains(where: { $0.rows == currentRows && $0.cols == currentCols }))
     }
 
     private func resolutionChip(rows: Int, cols: Int, active: Bool, removable: Bool,

@@ -1493,6 +1493,18 @@ struct QuickAdjustView: View {
                         .frame(width: 38, alignment: .trailing)
                 }
 
+                if ms.motionPreset == .colorCycle {
+                    HStack(spacing: 4) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 10))
+                        Text("Requires a style with a non-grey fill colour.")
+                            .font(.system(size: 10))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 2)
+                }
+
                 // Axis mix — show only the axes the current preset actually uses
                 let showXY  = ms.motionPreset == .wave || ms.motionPreset == .wander || ms.motionPreset == .jitter
                 let showRot = ms.motionPreset == .spin || ms.motionPreset == .jitter
