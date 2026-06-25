@@ -244,9 +244,36 @@ struct AnimatedGeometryEditorView: View {
             let polygons = (controller.shapePolygonMap[shapeID] ?? controller.shapePolygons)
                            .filter(\.visible)
 
-            let zoom = min(size.width, size.height) * 0.38
-            let cx   = size.width  / 2 + stateT.offsetX
-            let cy   = size.height / 2 + stateT.offsetY
+            // Auto-fit: compute the bounding box of all polygon control points
+            // and scale so the shape fills ~85% of the shorter preview dimension.
+            var minX = Double.infinity, maxX = -Double.infinity
+            var minY = Double.infinity, maxY = -Double.infinity
+            for poly in polygons {
+                for pt in poly.points {
+                    minX = min(minX, pt.x); maxX = max(maxX, pt.x)
+                    minY = min(minY, pt.y); maxY = max(maxY, pt.y)
+                }
+            }
+            let shapeW = maxX - minX
+            let shapeH = maxY - minY
+            let fitZoom: Double
+            let shapeCX: Double
+            let shapeCY: Double
+            if shapeW > 0 && shapeH > 0 {
+                let margin = 0.65
+                fitZoom  = min(size.width * margin / shapeW, size.height * margin / shapeH)
+                shapeCX  = (minX + maxX) / 2
+                shapeCY  = (minY + maxY) / 2
+            } else {
+                fitZoom  = min(size.width, size.height) * 0.38
+                shapeCX  = 0
+                shapeCY  = 0
+            }
+
+            let zoom = fitZoom
+            // Centre the shape in the canvas; note buildPolygonPath uses cy - v.y*zoom (Y flipped)
+            let cx   = size.width  / 2 - shapeCX * fitZoom + stateT.offsetX
+            let cy   = size.height / 2 + shapeCY * fitZoom + stateT.offsetY
             let zx   = zoom * stateT.scaleX
             let zy   = zoom * stateT.scaleY
             let rot  = stateT.rotation
