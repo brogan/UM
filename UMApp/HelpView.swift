@@ -92,52 +92,55 @@ document.querySelectorAll('nav a[href]').forEach(function(a){
 // MARK: - Pages registry
 
 private let helpPages: [String: String] = [
-    "intro":      page("Introduction",            introBody),
-    "layout":     page("Interface Layout",        layoutBody),
-    "layers":     page("Working with Layers",     layersBody),
-    "painting":   page("Painting Tools",          paintingBody),
-    "transforms": page("Grid Transforms",         transformsBody),
-    "phase":      page("Phase Policy & Scatter",  phaseBody),
-    "playback":   page("Playback & Recording",    playbackBody),
-    "qa-project": page("PROJECT / CANVAS / CAMERA", qaProjectBody),
-    "qa-style":   page("Style (RENDER section)",    qaStyleBody),
-    "qa-motion":  page("Motion Palette",           qaMotionBody),
-    "qa-path":    page("PATH EDITOR",             qaPathBody),
-    "qa-place":   page("PLACE & TIME",            qaPlaceBody),
-    "palette":    page("Style Palette",           paletteBody),
-    "export":     page("Export",                  exportBody),
-    "resample":   page("Resample Grid",           resampleBody),
-    "save":       page("Save, Load & Undo",       saveBody),
-    "shortcuts":  page("Keyboard Shortcuts",      shortcutsBody),
-    "pending":    page("Not Yet Built",           pendingBody),
+    "intro":       page("Introduction",              introBody),
+    "layout":      page("Interface Layout",          layoutBody),
+    "layers":      page("Working with Layers",       layersBody),
+    "painting":    page("Painting Tools",            paintingBody),
+    "transforms":  page("Grid Transforms",           transformsBody),
+    "phase":       page("Phase Policy & Scatter",    phaseBody),
+    "playback":    page("Playback & Recording",      playbackBody),
+    "qa-project":  page("PROJECT / CANVAS / CAMERA", qaProjectBody),
+    "qa-style":    page("Style (RENDER section)",    qaStyleBody),
+    "qa-motion":   page("Motion Palette",            qaMotionBody),
+    "qa-path":     page("PATH EDITOR",               qaPathBody),
+    "qa-place":    page("PLACE & TIME",              qaPlaceBody),
+    "palette":     page("Style Palette",             paletteBody),
+    "sprite-sets": page("Sprite Sets",               spriteSetsBody),
+    "export":      page("Export",                    exportBody),
+    "resample":    page("Resample Grid",             resampleBody),
+    "save":        page("Save, Load & Undo",         saveBody),
+    "shortcuts":   page("Keyboard Shortcuts",        shortcutsBody),
+    "pending":     page("Not Yet Built",             pendingBody),
 ]
 
 // MARK: - Search helpers
 
 // Body-only content indexed for search (no nav/CSS noise).
 private let helpBodies: [String: String] = [
-    "intro":      introBody,
-    "layout":     layoutBody,
-    "layers":     layersBody,
-    "painting":   paintingBody,
-    "transforms": transformsBody,
-    "phase":      phaseBody,
-    "playback":   playbackBody,
-    "qa-project": qaProjectBody,
-    "qa-style":   qaStyleBody,
-    "qa-motion":  qaMotionBody,
-    "qa-path":    qaPathBody,
-    "qa-place":   qaPlaceBody,
-    "palette":    paletteBody,
-    "export":     exportBody,
-    "resample":   resampleBody,
-    "save":       saveBody,
-    "shortcuts":  shortcutsBody,
-    "pending":    pendingBody,
+    "intro":       introBody,
+    "layout":      layoutBody,
+    "layers":      layersBody,
+    "painting":    paintingBody,
+    "transforms":  transformsBody,
+    "phase":       phaseBody,
+    "playback":    playbackBody,
+    "qa-project":  qaProjectBody,
+    "qa-style":    qaStyleBody,
+    "qa-motion":   qaMotionBody,
+    "qa-path":     qaPathBody,
+    "qa-place":    qaPlaceBody,
+    "palette":     paletteBody,
+    "sprite-sets": spriteSetsBody,
+    "export":      exportBody,
+    "resample":    resampleBody,
+    "save":        saveBody,
+    "shortcuts":   shortcutsBody,
+    "pending":     pendingBody,
 ]
 
 private let pageTitles: [String: String] = [
-    "intro":      "Introduction",
+    "sprite-sets": "Sprite Sets",
+    "intro":       "Introduction",
     "layout":     "Interface Layout",
     "layers":     "Working with Layers",
     "painting":   "Painting Tools",
@@ -648,6 +651,7 @@ private let layersBody = #"""
   <tr><td>Shape</td><td>Loom shape. Picks from the project&apos;s shape library.</td></tr>
   <tr><td>Motion</td><td>Motion set driving animated offset, rotation, and scale. Picks from the project&apos;s motion palette.</td></tr>
   <tr><td>Phase offset</td><td>Frame offset into the motion cycle, same as grid cells. Lets sprites animate out of phase with each other.</td></tr>
+  <tr><td>Sprite Set</td><td>Optional animated geometry cycle. When assigned, the sprite steps through a sequence of shapes (and optional per-state style overrides) on a per-frame schedule, overriding its static Shape assignment and any SEQUENCE cycling from the motion set. See <a href="um-help://help/sprite-sets">Sprite Sets</a>.</td></tr>
 </table>
 
 <h3>Animated position (Position Driver)</h3>
@@ -663,14 +667,12 @@ private let layersBody = #"""
 <div class="tip"><strong>Drag-to-keyframe workflow</strong> — click the purple lane in the timeline once to plant the first keyframe, then drag the sprite to each position at the appropriate frame. No need to touch the KF inspector unless you want to fine-tune values or easing.</div>
 <div class="tip"><strong>Position Driver + Motion Set</strong> — both contribute independently. The motion set&apos;s oscillation is driven by its preset and speed/amount parameters; the Position Driver runs its own separate waveform. Stacking an Oscillator motion set (slow, large arc) with a Noise Position Driver (fast, small amplitude) gives organic floating motion with a directional bias.</div>
 
-<h3>SEQUENCE shape cycling</h3>
-<p>Sprites honour the <strong>SEQUENCE</strong> setting on their assigned motion set, exactly like grid cells. If the motion set has a sequence mode other than <strong>Off</strong> and a list of shapes, the sprite cycles through those shapes over time at the configured frames-per-step rate.</p>
-<p>To set up shape cycling on a sprite:</p>
-<ol class="steps">
-  <li>Open the motion palette and select (or create) the motion set assigned to the sprite.</li>
-  <li>In the SEQUENCE section of Quick Adjust (visible when a grid layer is active), set <strong>Mode</strong> to <strong>Sequential</strong> or <strong>Random</strong> and add shapes to the list.</li>
-  <li>Switch back to the sprite layer — the sprite will cycle through those shapes at the configured step rate.</li>
-</ol>
+<h3>Shape cycling on sprites</h3>
+<p>There are two ways to cycle shapes on a sprite over time:</p>
+<ul>
+  <li><strong>Sprite Sets (recommended)</strong> — assign a Sprite Set via the <strong>Sprite Set</strong> picker in the inspector. A Sprite Set is a dedicated animation cycle that specifies an ordered list of shapes, a hold-frame count per shape, a loop mode, and optional per-state style overrides. It is self-contained and completely independent of the motion set. This is the preferred method for any multi-state shape animation (walking cycles, swimming poses, etc.). See <a href="um-help://help/sprite-sets">Sprite Sets</a>.</li>
+  <li><strong>SEQUENCE (motion set)</strong> — sprites also honour the SEQUENCE setting on their assigned motion set, exactly like grid cells. When a motion set has SEQUENCE mode set to Sequential or Random and a list of shapes, the sprite cycles through those shapes at the configured frames-per-step rate. A Sprite Set assignment overrides SEQUENCE — both cannot be active at once.</li>
+</ul>
 <div class="note">SEQUENCE settings appear in the MOTION section in Quick Adjust. Select the sprite to bring up its motion set, then scroll down to the Sequence row.</div>
 
 <h3>Per-polygon colour overrides</h3>
@@ -1487,7 +1489,7 @@ private let paletteBody = #"""
 <p>The Style Palette sits on the left side of the window. It has two tabs: <strong>Project</strong> and <strong>Library</strong>.</p>
 
 <h2>Project tab</h2>
-<p>Lists everything owned by the current document. Organised into six sections: LAYERS, STYLES, MOTIONS, PATHS, SHAPES, and PALETTES.</p>
+<p>Lists everything owned by the current document. Organised into seven sections: LAYERS, STYLES, MOTIONS, PATHS, SHAPES, PALETTES, and SPRITE SETS.</p>
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
@@ -1562,6 +1564,16 @@ private let paletteBody = #"""
 
 <div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
 
+<h3>SPRITE SETS</h3>
+<p>Sprite Sets are reusable shape-animation cycles that can be assigned to any sprite. Each set holds an ordered list of <em>states</em>: a shape, an optional style override, and a hold-frame count. The set steps through those states at playback time, independently of the sprite's motion set.</p>
+<ul>
+  <li><strong>+ New Sprite Set</strong> — creates an empty set ready to be filled with states in the editor.</li>
+  <li><strong>+ Import Layers as Shapes…</strong> — in the SHAPES section above. Select a multi-layer Loom geometry file; each visible, non-empty layer becomes a separate shape and a Sprite Set containing all of them in layer order is created automatically.</li>
+  <li><strong>Pencil icon</strong> — opens the Sprite Set editor for that set.</li>
+  <li><strong>Right-click</strong> — Edit…, Delete.</li>
+</ul>
+<p>To assign a Sprite Set to a sprite, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust. See <a href="um-help://help/sprite-sets">Sprite Sets</a> for the full guide.</p>
+
 <h2>Library tab</h2>
 <p>Shows your global user library — resolution presets, styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
 <ul>
@@ -1570,6 +1582,87 @@ private let paletteBody = #"""
   <li>Library is stored at <code>~/Library/Application Support/UM/library.json</code> (styles/paths/motions/palettes), <code>~/Library/Application Support/UM/shapes/</code> (shapes), and <code>~/Library/Application Support/UM/resolutionPresets.json</code> (resolution presets).</li>
   <li>Right-click any library row or chip to remove it from the library.</li>
 </ul>
+"""#
+
+private let spriteSetsBody = #"""
+<h1>Sprite Sets</h1>
+<p class="subtitle">Reusable shape-animation cycles for sprites — independent of motion sets.</p>
+
+<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, and a hold-frame count. When a sprite has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the sprite's shape (and optionally its style) on a per-frame schedule. The cycle runs independently of the sprite's motion set.</p>
+
+<h2>Concepts</h2>
+
+<h3>States</h3>
+<p>Each state in a Sprite Set represents one phase of the animation cycle:</p>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td>Shape</td><td>The Loom shape to display during this state. Picked from the project's shape library.</td></tr>
+  <tr><td>Style override</td><td>Optional. When set, this style is used instead of the sprite's own style for the duration of this state. Set to – (dash) to use the sprite's global style.</td></tr>
+  <tr><td>Hold frames</td><td>How many animation frames to stay on this state before advancing to the next. Minimum 1.</td></tr>
+</table>
+
+<h3>Loop modes</h3>
+<table>
+  <tr><th>Mode</th><th>Behaviour</th></tr>
+  <tr><td><strong>Loop</strong></td><td>Cycles forward through all states continuously. After the last state, wraps back to the first.</td></tr>
+  <tr><td><strong>Ping Pong</strong></td><td>Plays forward through all states, then backward through the intermediate states (not repeating the endpoints), and repeats. Gives a smooth back-and-forth without a hard jump.</td></tr>
+  <tr><td><strong>Once</strong></td><td>Plays through all states once, then stops and shows nothing (sprite becomes invisible after the cycle ends).</td></tr>
+  <tr><td><strong>Hold Last</strong></td><td>Plays through all states once, then holds on the final state indefinitely.</td></tr>
+</table>
+
+<h3>Phase offset</h3>
+<p>The sprite's <strong>Phase offset</strong> (set in the SPRITES inspector) is added to the current frame before resolving which state is active. This means two sprites sharing the same Sprite Set but with different phase offsets will be at different points in the cycle — useful for staggering an animated crowd or making repeated elements feel less mechanical.</p>
+
+<h2>Creating Sprite Sets</h2>
+
+<h3>From scratch</h3>
+<ol class="steps">
+  <li>In the left palette → Project tab → <strong>SPRITE SETS</strong> section, click <strong>+ New Sprite Set</strong>.</li>
+  <li>The new set appears in the list. Click the <strong>pencil icon</strong> to open the editor.</li>
+  <li>Give the set a name and choose a loop mode in the header.</li>
+  <li>Click <strong>Add State</strong> and choose a shape from the menu. Repeat for each phase of the animation.</li>
+  <li>For each state, set the <strong>Hold</strong> value (frames to stay on this shape) and optionally pick a style override.</li>
+  <li>Use the up/down chevrons to reorder states. The minus (−) button removes a state.</li>
+  <li>Use the <strong>preview scrubber</strong> at the bottom to step through the cycle and verify the active state indicator moves as expected.</li>
+</ol>
+
+<h3>From a multi-layer Loom geometry file (Import Layers as Shapes)</h3>
+<p>If your animation states are separate layers inside one Loom geometry file (e.g. a swimming cycle spread across layers named Swim01, Swim02, Swim03), UM can extract them automatically:</p>
+<ol class="steps">
+  <li>In the left palette → SHAPES section, click <strong>+ Import Layers as Shapes…</strong></li>
+  <li>Select the Loom .json geometry file. UM reads every layer that is both <strong>visible</strong> and <strong>non-empty</strong>.</li>
+  <li>Each qualifying layer is saved as an individual shape (named after the layer) and added to the project shape library.</li>
+  <li>A new Sprite Set named after the geometry file is created automatically, containing all the extracted shapes in layer order with a default hold of 2 frames each.</li>
+  <li>Open the Sprite Set editor to adjust hold-frame counts, loop mode, or style overrides.</li>
+</ol>
+<div class="note">Hidden layers and layers with no polygons are skipped. If a layer was a reference or guide in Loom, it will not produce a shape.</div>
+
+<h2>Assigning a Sprite Set to a sprite</h2>
+<ol class="steps">
+  <li>Select the sprite layer in the left palette, then click the sprite on the canvas to select it.</li>
+  <li>In the <strong>SPRITES inspector</strong> in Quick Adjust (right panel), find the <strong>Sprite Set</strong> picker between Motion and Phase offset.</li>
+  <li>Choose the Sprite Set from the list. The picker shows <em>None</em> when no set is assigned.</li>
+  <li>Play back the animation — the sprite's shape changes on schedule.</li>
+</ol>
+<div class="tip">Set <strong>None</strong> to restore the sprite's static shape (or SEQUENCE cycling from its motion set).</div>
+
+<h2>Priority and overrides</h2>
+<p>When a Sprite Set is assigned, it takes priority over the sprite's static <strong>Shape</strong> field and over any SEQUENCE cycling from the sprite's motion set. Both cannot be active simultaneously — the Sprite Set wins. Remove the Sprite Set assignment (set to None) to revert to SEQUENCE-driven or static shape behaviour.</p>
+<p>Style overrides work similarly: if the active state has a style override set, that style is used for the entire frame including motion parameters derived from the style. If the state's style is set to – (dash), the sprite's own global style is used as normal.</p>
+
+<h2>Editing a Sprite Set</h2>
+<p>Click the <strong>pencil icon</strong> next to a Sprite Set row in the palette (or choose <strong>Edit…</strong> from the right-click context menu) to open the editor sheet:</p>
+<table>
+  <tr><th>Control</th><th>Action</th></tr>
+  <tr><td>Name field</td><td>Rename the set. Changes apply immediately.</td></tr>
+  <tr><td>Loop mode picker</td><td>Switch between Loop, Ping Pong, Once, Hold Last.</td></tr>
+  <tr><td>State list</td><td>Each row: shape picker, style override picker, Hold field, − remove button, ↑/↓ reorder. The coloured dot indicates which state is active at the current preview frame.</td></tr>
+  <tr><td>Add State menu</td><td>Shows all shapes in the project. Choose one to append a new state.</td></tr>
+  <tr><td>Preview scrubber</td><td>Slider over the full cycle length (double for Ping Pong). Drag to step through states and see which shape is active.</td></tr>
+</table>
+
+<h2>Deleting a Sprite Set</h2>
+<p>Right-click the Sprite Set row in the palette → <strong>Delete</strong>. Any sprites that had this set assigned revert to their static shape (or SEQUENCE cycling). The deletion cannot be undone.</p>
 """#
 
 private let exportBody = #"""
@@ -1791,6 +1884,7 @@ private let pendingBody = #"""
   <tr><td>Canvas</td><td>Hover preview</td><td>No visual feedback on undrawn cells before committing a stroke. A faint style preview on hover is planned.</td></tr>
   <tr><td>Export</td><td>SVG export</td><td>The SVG button in the Transport Bar is present but has no action yet.</td></tr>
   <tr><td>Export</td><td>Timeline video export</td><td>The Video button exports live animation (parametric + keyframe motion). A separate mode that renders the recorded timeline states as discrete cuts is planned.</td></tr>
+  <tr><td>Sprites</td><td>Animated geometry / Sprite Sets</td><td>✓ Built — <strong>Sprite Sets</strong> are reusable shape-animation cycles assignable to any sprite. Each set holds an ordered list of states (shape + optional style override + hold frames) and steps through them at playback time. Use the SPRITE SETS section in the left palette to create or import sets, and the Sprite Set picker in the SPRITES inspector (Quick Adjust) to assign one to a sprite. Multi-layer Loom geometry files can be split into individual per-layer shapes automatically via <strong>+ Import Layers as Shapes…</strong>. See <a href="um-help://help/sprite-sets">Sprite Sets</a>.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>✓ Built — <strong>Phase map</strong> checkbox in the CANVAS section of Quick Adjust. Colours each drawn cell in the active grid layer by phaseOffset: blue (0) → red (max), 50% opacity. See <a href="um-help://help/layers">Layers</a>.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
