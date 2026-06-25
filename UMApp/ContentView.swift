@@ -1445,8 +1445,10 @@ struct GridCanvasPlaceholder: View {
                                                           frame: frame)
         let sx = sprite.x * gridW + motion.dx + dOff.x + stateT.offsetX
         let sy = sprite.y * gridH + motion.dy + dOff.y + stateT.offsetY
-        let hw = max(6, (ref / 2) * sprite.scaleX * abs(motion.scaleX) * stateT.scaleX)
-        let hh = max(6, (ref / 2) * sprite.scaleY * abs(motion.scaleY) * stateT.scaleY)
+        let zoom = controller.canvasZoom
+        let minHit = 10.0 / zoom  // minimum hit radius in canvas px, stays ≥10 view px at any zoom
+        let hw = max(minHit, (ref / 2) * sprite.scaleX * abs(motion.scaleX) * stateT.scaleX)
+        let hh = max(minHit, (ref / 2) * sprite.scaleY * abs(motion.scaleY) * stateT.scaleY)
         let fallback = CGRect(x: sx - hw, y: sy - hh, width: hw * 2, height: hh * 2)
         let style = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
         let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
@@ -1467,7 +1469,8 @@ struct GridCanvasPlaceholder: View {
                                                 rotation: rot)).boundingRect)
         }
         let strokeW = CGFloat(style?.strokeWidth ?? 1.5)
-        return bounds.isNull ? fallback : bounds.insetBy(dx: -max(8, strokeW), dy: -max(8, strokeW))
+        let pad = max(minHit, Double(strokeW))
+        return bounds.isNull ? fallback : bounds.insetBy(dx: -pad, dy: -pad)
     }
 
     private func spriteCenter(for sprite: UMSprite, index: Int, frame: Int,
