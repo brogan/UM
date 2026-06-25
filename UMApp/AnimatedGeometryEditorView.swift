@@ -14,6 +14,7 @@ struct AnimatedGeometryEditorView: View {
     @State private var editingName: String = ""
     @State private var addingState: Bool = false
     @State private var expandedStateIDs: Set<UUID> = []
+    @State private var isPlaying: Bool = false
 
     private var geoIndex: Int? {
         controller.projectAnimatedGeometries.firstIndex { $0.id == geoID }
@@ -28,11 +29,18 @@ struct AnimatedGeometryEditorView: View {
             Divider()
             stateList
             Divider()
+            previewCanvas
+            Divider()
             previewScrubber
         }
-        .frame(width: 400, height: 520)
+        .frame(width: 400, height: 680)
         .onAppear {
             editingName = geo?.name ?? ""
+        }
+        .onReceive(Timer.publish(every: 1.0 / 24.0, on: .main, in: .common).autoconnect()) { _ in
+            guard isPlaying, let g = geo else { return }
+            let total = g.totalCycleFrames
+            previewFrame = (previewFrame + 1) % max(1, total)
         }
     }
 
@@ -221,31 +229,91 @@ struct AnimatedGeometryEditorView: View {
         }
     }
 
+    // MARK: - Preview canvas
+
+    private var previewCanvas: some View {
+        Canvas { ctx, size in
+            guard let g = geo,
+                  let shapeID = g.resolveShapeID(atFrame: previewFrame)
+            else { return }
+
+            let stateT   = g.resolveStateTransform(atFrame: previewFrame)
+            let styleID  = g.resolveStyleID(atFrame: previewFrame)
+            let style    = styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
+                        ?? controller.projectStyles.first
+            let polygons = (controller.shapePolygonMap[shapeID] ?? controller.shapePolygons)
+                           .filter(\.visible)
+
+            let zoom = min(size.width, size.height) * 0.38
+            let cx   = size.width  / 2 + stateT.offsetX
+            let cy   = size.height / 2 + stateT.offsetY
+            let zx   = zoom * stateT.scaleX
+            let zy   = zoom * stateT.scaleY
+            let rot  = stateT.rotation
+
+            let fillC   = style?.fillColor   ?? .defaultFill
+            let strokeC = style?.strokeColor ?? .defaultStroke
+            let strokeW = style?.strokeWidth ?? 1.5
+            let mode    = style?.renderMode  ?? .filledStroked
+
+            if polygons.isEmpty {
+                let rect = CGRect(x: cx - zx, y: cy - zy, width: zx * 2, height: zy * 2)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 4),
+                         with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
+            } else {
+                for polygon in polygons {
+                    let cgp = buildPolygonPath(polygon, cx: cx, cy: cy,
+                                               zoomX: zx, zoomY: zy,
+                                               scaleX: 1.0, scaleY: 1.0, rotation: rot)
+                    if mode == .filled || mode == .filledStroked {
+                        ctx.fill(Path(cgp),
+                                 with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
+                    }
+                    if mode == .stroked || mode == .filledStroked {
+                        ctx.stroke(Path(cgp),
+                                   with: .color(Color(red: strokeC.r, green: strokeC.g, blue: strokeC.b, opacity: strokeC.a)),
+                                   lineWidth: strokeW)
+                    }
+                }
+            }
+        }
+        .frame(height: 160)
+        .background(Color(white: 0.1))
+    }
+
     // MARK: - Preview scrubber
 
     private var previewScrubber: some View {
         VStack(spacing: 4) {
-            HStack {
-                Text("Preview frame")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Frame \(previewFrame)")
+            HStack(spacing: 8) {
+                Button {
+                    isPlaying.toggle()
+                } label: {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11))
+                        .frame(width: 16)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+
+                let total = max(1, geo?.totalCycleFrames ?? 1)
+                Slider(value: Binding(
+                    get: { Double(previewFrame) },
+                    set: { previewFrame = Int($0); isPlaying = false }
+                ), in: 0...Double(max(1, total - 1)), step: 1)
+
+                Text("\(previewFrame)")
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.secondary)
+                    .frame(width: 30, alignment: .trailing)
             }
-
-            let total = max(1, geo?.totalForwardFrames ?? 1) * (geo?.loopMode == .pingPong ? 2 : 1)
-            Slider(value: Binding(
-                get: { Double(previewFrame) },
-                set: { previewFrame = Int($0) }
-            ), in: 0...Double(max(1, total - 1)), step: 1)
 
             if let g = geo, let resolvedID = g.resolveShapeID(atFrame: previewFrame),
                let shape = controller.projectShapes.first(where: { $0.id == resolvedID }) {
-                Text("Active: \(shape.name)")
+                Text(shape.name)
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(.horizontal, 14)

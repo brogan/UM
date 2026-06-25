@@ -59,6 +59,20 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
         states.reduce(0) { $0 + max(1, $1.holdFrames) }
     }
 
+    /// Returns the full cycle length including the reverse pass for pingPong.
+    public var totalCycleFrames: Int {
+        let fwd = totalForwardFrames
+        guard fwd > 0 else { return 1 }
+        switch loopMode {
+        case .loop, .once, .holdLast:
+            return fwd
+        case .pingPong:
+            guard states.count > 1 else { return fwd }
+            let back = states.dropLast().reduce(0) { $0 + max(1, $1.holdFrames) }
+            return fwd + back
+        }
+    }
+
     // MARK: - Private helpers
 
     private func effectiveFrame(_ frame: Int) -> Int? {
