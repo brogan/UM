@@ -118,9 +118,12 @@ private struct UMExportFrameCapture: View {
                                        cellW: spriteRef * sprite.scaleX,
                                        cellH: spriteRef * sprite.scaleY)
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: idx)
-            let mx = sprite.x * gridW + motion.dx + driverPos.x
-            let my = sprite.y * gridH + motion.dy + driverPos.y
-            let rot = sprite.rotation + motion.rotation
+            let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
+                                                              animatedGeometries: projectAnimatedGeometries,
+                                                              frame: frame)
+            let mx = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
+            let my = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
+            let rot = sprite.rotation + motion.rotation + stateT.rotation
             let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
                                                                   animatedGeometries: projectAnimatedGeometries,
                                                                   frame: frame)
@@ -128,8 +131,8 @@ private struct UMExportFrameCapture: View {
                                            shapeMap: shapePolygonMap,
                                            fallback: fallbackPolygons)
             let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
-            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
-            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
+            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
             let fillC = style?.fillColor ?? .defaultFill
             let strokeC = style?.strokeColor ?? .defaultStroke
             let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale

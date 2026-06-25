@@ -28,6 +28,17 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
 
     // MARK: - Frame resolution (Phase 1: hard-cut only)
 
+    /// Returns the per-state transform for the active state at the given frame.
+    public func resolveStateTransform(atFrame frame: Int) -> UMAnimatedGeometryStateTransform {
+        guard !states.isEmpty else { return .identity }
+        let s = effectiveFrame(frame).flatMap { state(atEffectiveFrame: $0) } ?? states.last
+        guard let s else { return .identity }
+        return UMAnimatedGeometryStateTransform(
+            offsetX: s.offsetX, offsetY: s.offsetY,
+            rotation: s.rotation,
+            scaleX: s.scaleX, scaleY: s.scaleY)
+    }
+
     /// Returns the shapeID that should be displayed at the given animation frame.
     /// Phase 1 ignores `transitionFrames` — all cuts are hard.
     public func resolveShapeID(atFrame frame: Int) -> UUID? {
@@ -176,6 +187,22 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
         if scaleX    != 1 { try c.encode(scaleX,   forKey: .scaleX) }
         if scaleY    != 1 { try c.encode(scaleY,   forKey: .scaleY) }
     }
+}
+
+// MARK: - UMAnimatedGeometryLoopMode
+
+// MARK: - UMAnimatedGeometryStateTransform
+
+/// The resolved per-state transform offsets for a sprite at a given frame.
+public struct UMAnimatedGeometryStateTransform: Sendable {
+    public var offsetX:  Double
+    public var offsetY:  Double
+    public var rotation: Double
+    public var scaleX:   Double
+    public var scaleY:   Double
+
+    public static let identity = UMAnimatedGeometryStateTransform(
+        offsetX: 0, offsetY: 0, rotation: 0, scaleX: 1, scaleY: 1)
 }
 
 // MARK: - UMAnimatedGeometryLoopMode

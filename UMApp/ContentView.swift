@@ -385,8 +385,11 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                                           cellW: spriteRef * sprite.scaleX,
                                           cellH: spriteRef * sprite.scaleY)
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: snap.frame, spriteIndex: idx)
-            let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x) * dsf
-            let my = (sprite.y * layer.gridH + motion.dy + driverPos.y) * dsf
+            let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
+                                                              animatedGeometries: snap.projectAnimatedGeometries,
+                                                              frame: snap.frame)
+            let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x + stateT.offsetX) * dsf
+            let my = (sprite.y * layer.gridH + motion.dy + driverPos.y + stateT.offsetY) * dsf
             let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
                                                                   animatedGeometries: snap.projectAnimatedGeometries,
                                                                   frame: snap.frame)
@@ -394,9 +397,9 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                                              shapeMap: snap.shapePolygonMap,
                                              fallback: snap.fallbackPolygons)
             let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: snap.shapePolygonIDMap)
-            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * dsf
-            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * dsf
-            let rot   = sprite.rotation + motion.rotation
+            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX * dsf
+            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY * dsf
+            let rot   = sprite.rotation + motion.rotation + stateT.rotation
             let fillC   = style?.fillColor   ?? .defaultFill
             let strokeC = style?.strokeColor ?? .defaultStroke
             let strokeW = (style?.strokeWidth ?? 1.5) * dsf
@@ -710,9 +713,12 @@ struct GridCanvasPlaceholder: View {
                                                                   cellW: spriteRef * sprite.scaleX,
                                                                   cellH: spriteRef * sprite.scaleY)
                                     let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
-                                    let mx  = sprite.x * gridW + motion.dx + driverPos.x
-                                    let my  = sprite.y * gridH + motion.dy + driverPos.y
-                                    let rot = sprite.rotation + motion.rotation
+                                    let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
+                                                                                       animatedGeometries: controller.projectAnimatedGeometries,
+                                                                                       frame: currentFrame)
+                                    let mx  = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
+                                    let my  = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
+                                    let rot = sprite.rotation + motion.rotation + stateT.rotation
                                     let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
                                                                                           animatedGeometries: controller.projectAnimatedGeometries,
                                                                                           frame: currentFrame)
@@ -720,8 +726,8 @@ struct GridCanvasPlaceholder: View {
                                                                      shapeMap: shapePolyMap,
                                                                      fallback: fallbackPolys)
                                     let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolyIDMap)
-                                    let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
-                                    let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+                                    let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
+                                    let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
                                     let isSelected = sprite.id == controller.activeSpriteID
 
                                     if polygons.isEmpty {
@@ -1434,10 +1440,13 @@ struct GridCanvasPlaceholder: View {
         let ref = min(gridW, gridH) / 8.0
         let motion = spriteMotion(for: sprite, index: index, frame: frame, gridW: gridW, gridH: gridH)
         let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: index)
-        let sx = sprite.x * gridW + motion.dx + dOff.x
-        let sy = sprite.y * gridH + motion.dy + dOff.y
-        let hw = max(6, (ref / 2) * sprite.scaleX * abs(motion.scaleX))
-        let hh = max(6, (ref / 2) * sprite.scaleY * abs(motion.scaleY))
+        let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
+                                                          animatedGeometries: controller.projectAnimatedGeometries,
+                                                          frame: frame)
+        let sx = sprite.x * gridW + motion.dx + dOff.x + stateT.offsetX
+        let sy = sprite.y * gridH + motion.dy + dOff.y + stateT.offsetY
+        let hw = max(6, (ref / 2) * sprite.scaleX * abs(motion.scaleX) * stateT.scaleX)
+        let hh = max(6, (ref / 2) * sprite.scaleY * abs(motion.scaleY) * stateT.scaleY)
         let fallback = CGRect(x: sx - hw, y: sy - hh, width: hw * 2, height: hh * 2)
         let style = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
         let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
@@ -1448,9 +1457,9 @@ struct GridCanvasPlaceholder: View {
                                        shapeMap: controller.shapePolygonMap,
                                        fallback: controller.shapePolygons)
         guard !polygons.isEmpty else { return fallback }
-        let zoomX = (ref / 2) * sprite.scaleX * motion.scaleX
-        let zoomY = (ref / 2) * sprite.scaleY * motion.scaleY
-        let rot = sprite.rotation + motion.rotation
+        let zoomX = (ref / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
+        let zoomY = (ref / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
+        let rot = sprite.rotation + motion.rotation + stateT.rotation
         let bounds = polygons.filter(\.visible).reduce(CGRect.null) { partial, polygon in
             partial.union(Path(buildPolygonPath(polygon, cx: sx, cy: sy,
                                                 zoomX: zoomX, zoomY: zoomY,
@@ -2064,9 +2073,12 @@ struct SpriteCapture: View {
                                               cellW: spriteRef * sprite.scaleX,
                                               cellH: spriteRef * sprite.scaleY)
                 let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
-                let mx  = sprite.x * gridW + motion.dx + driverPos.x
-                let my  = sprite.y * gridH + motion.dy + driverPos.y
-                let rot = sprite.rotation + motion.rotation
+                let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
+                                                                   animatedGeometries: projectAnimatedGeometries,
+                                                                   frame: currentFrame)
+                let mx  = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
+                let my  = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
+                let rot = sprite.rotation + motion.rotation + stateT.rotation
                 let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
                                                                       animatedGeometries: projectAnimatedGeometries,
                                                                       frame: currentFrame)
@@ -2074,8 +2086,8 @@ struct SpriteCapture: View {
                                                  shapeMap: shapePolygonMap,
                                                  fallback: fallbackPolygons)
                 let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
-                let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX
-                let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY
+                let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
+                let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
 
                 if polygons.isEmpty {
                     let fc = style?.fillColor ?? .defaultFill

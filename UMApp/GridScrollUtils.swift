@@ -60,6 +60,19 @@ func resolveEffectiveSpriteStyleID(
     return geo.resolveStyleID(atFrame: frame + sprite.phaseOffset)
 }
 
+/// Returns the per-state transform for the active animated geometry state at the given frame,
+/// or .identity if the sprite has no animated geometry assigned.
+func resolveEffectiveSpriteStateTransform(
+    sprite: UMSprite,
+    animatedGeometries: [UMAnimatedGeometry],
+    frame: Int
+) -> UMAnimatedGeometryStateTransform {
+    guard let geoID = sprite.animatedGeometryID,
+          let geo = animatedGeometries.first(where: { $0.id == geoID })
+    else { return .identity }
+    return geo.resolveStateTransform(atFrame: frame + sprite.phaseOffset)
+}
+
 // MARK: - Grid-scroll render spec
 
 /// Describes which source cell to draw and at which display grid position.
