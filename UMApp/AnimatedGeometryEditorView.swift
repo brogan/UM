@@ -481,6 +481,18 @@ struct AnimatedGeometryEditorView: View {
                 .frame(maxWidth: 110)
                 .opacity(state.transitionFrames > 0 ? 1 : 0.35)
                 Spacer()
+                Toggle("Style Tween", isOn: Binding(
+                    get: { state.styleTween },
+                    set: { v in updateState(at: index) { $0.styleTween = v } }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.system(size: 10))
+                .labelsHidden()
+                .opacity(state.transitionFrames > 0 ? 1 : 0.35)
+                .disabled(state.transitionFrames == 0)
+                .help("Lerp fill and stroke colours between this state's style and the next")
+                Text("Style↔").font(.system(size: 10)).foregroundStyle(.secondary)
+                    .opacity(state.transitionFrames > 0 ? 1 : 0.35)
             }
         }
         .padding(.leading, 30)

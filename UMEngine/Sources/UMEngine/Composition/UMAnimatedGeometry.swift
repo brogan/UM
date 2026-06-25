@@ -42,11 +42,14 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
         }
         let (primary, secondary, progress) = stateAtFrame(f)
         if let next = secondary, progress > 0 {
+            let tween = primary.styleTween
             return [
                 UMRenderLayer(shapeID: primary.shapeID, styleID: primary.styleID,
-                              alpha: 1.0 - progress, transform: makeTransform(primary)),
+                              alpha: 1.0 - progress, transform: makeTransform(primary),
+                              styleTween: tween),
                 UMRenderLayer(shapeID: next.shapeID,    styleID: next.styleID,
-                              alpha: progress,           transform: makeTransform(next))
+                              alpha: progress,           transform: makeTransform(next),
+                              styleTween: tween)
             ]
         }
         return [UMRenderLayer(shapeID: primary.shapeID, styleID: primary.styleID,
@@ -166,17 +169,23 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
 /// During a cross-fade: two layers at complementary alphas.
 /// Host apps look up the shape and style/rendererSet by their UUIDs.
 public struct UMRenderLayer: Sendable {
-    public let shapeID:   UUID
-    public let styleID:   UUID?
-    public let alpha:     Double   // draw opacity 0...1
-    public let transform: UMAnimatedGeometryStateTransform
+    public let shapeID:    UUID
+    public let styleID:    UUID?
+    public let alpha:      Double   // draw opacity 0...1
+    public let transform:  UMAnimatedGeometryStateTransform
+    /// When true, the render site should lerp fill/stroke colors between
+    /// geoLayers[0].styleID and geoLayers[1].styleID at t = geoLayers[1].alpha,
+    /// instead of drawing each layer at its own style.
+    public let styleTween: Bool
 
     public init(shapeID: UUID, styleID: UUID?, alpha: Double,
-                transform: UMAnimatedGeometryStateTransform) {
-        self.shapeID   = shapeID
-        self.styleID   = styleID
-        self.alpha     = alpha
-        self.transform = transform
+                transform: UMAnimatedGeometryStateTransform,
+                styleTween: Bool = false) {
+        self.shapeID    = shapeID
+        self.styleID    = styleID
+        self.alpha      = alpha
+        self.transform  = transform
+        self.styleTween = styleTween
     }
 }
 
@@ -190,6 +199,9 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
     public var holdFrames:        Int             // frames this state is fully shown
     public var transitionFrames:  Int             // frames to cross-fade into the next state (0 = hard cut)
     public var easing:            PathEasing      // easing applied during transitionFrames
+    /// When true and Trans > 0, render sites lerp fill/stroke between the FROM and TO styles
+    /// instead of drawing each layer at its own style colour.
+    public var styleTween:        Bool            // false = hard style cut; true = colour interpolation
     public var offsetX:           Double          // per-state registration offset (canvas px)
     public var offsetY:           Double
     public var rotation:          Double          // per-state rotation offset (degrees)
@@ -203,6 +215,7 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
         holdFrames:       Int        = 2,
         transitionFrames: Int        = 0,
         easing:           PathEasing = .easeInOut,
+        styleTween:       Bool       = false,
         offsetX:          Double     = 0,
         offsetY:          Double     = 0,
         rotation:         Double     = 0,
@@ -215,6 +228,7 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
         self.holdFrames       = holdFrames
         self.transitionFrames = transitionFrames
         self.easing           = easing
+        self.styleTween       = styleTween
         self.offsetX          = offsetX
         self.offsetY          = offsetY
         self.rotation         = rotation
@@ -223,7 +237,7 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, shapeID, styleID, holdFrames, transitionFrames, easing
+        case id, shapeID, styleID, holdFrames, transitionFrames, easing, styleTween
         case offsetX, offsetY, rotation, scaleX, scaleY
     }
 
@@ -235,6 +249,7 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
         holdFrames        = (try? c.decodeIfPresent(Int.self,       forKey: .holdFrames))        ?? 2
         transitionFrames  = (try? c.decodeIfPresent(Int.self,       forKey: .transitionFrames))  ?? 0
         easing            = (try? c.decodeIfPresent(PathEasing.self, forKey: .easing))           ?? .easeInOut
+        styleTween        = (try? c.decodeIfPresent(Bool.self,      forKey: .styleTween))        ?? false
         offsetX           = (try? c.decodeIfPresent(Double.self,    forKey: .offsetX))           ?? 0
         offsetY           = (try? c.decodeIfPresent(Double.self,    forKey: .offsetY))           ?? 0
         rotation          = (try? c.decodeIfPresent(Double.self,    forKey: .rotation))          ?? 0
@@ -250,6 +265,7 @@ public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
         try c.encode(holdFrames,     forKey: .holdFrames)
         if transitionFrames != 0     { try c.encode(transitionFrames, forKey: .transitionFrames) }
         if easing != .easeInOut      { try c.encode(easing,           forKey: .easing) }
+        if styleTween                { try c.encode(styleTween,       forKey: .styleTween) }
         if offsetX   != 0 { try c.encode(offsetX,  forKey: .offsetX) }
         if offsetY   != 0 { try c.encode(offsetY,  forKey: .offsetY) }
         if rotation  != 0 { try c.encode(rotation, forKey: .rotation) }

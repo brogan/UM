@@ -1688,6 +1688,15 @@ final class AppController {
         return geo
     }
 
+    func duplicateAnimatedGeometry(id: UUID) {
+        guard let original = projectAnimatedGeometries.first(where: { $0.id == id }),
+              let idx      = projectAnimatedGeometries.firstIndex(where: { $0.id == id }) else { return }
+        var copy      = original
+        copy.id       = UUID()
+        copy.name     = "Copy of \(original.name)"
+        projectAnimatedGeometries.insert(copy, at: idx + 1)
+    }
+
     func removeAnimatedGeometry(id: UUID) {
         projectAnimatedGeometries.removeAll { $0.id == id }
         for ls in layerStates {

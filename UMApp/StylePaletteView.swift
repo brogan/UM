@@ -16,6 +16,7 @@ struct StylePaletteView: View {
     @State private var showGeneratePalette:  Bool  = false
     @State private var renamingPaletteID:    UUID? = nil
     @State private var editingGeoID:         UUID? = nil
+    @State private var renamingGeoID:        UUID? = nil
 
     private enum PaletteTab { case project, library }
 
@@ -1082,11 +1083,26 @@ struct StylePaletteView: View {
                 .foregroundStyle(isActive ? Color.accentColor : .secondary)
                 .frame(width: 16)
 
-            Text(geo.name)
+            if renamingGeoID == geo.id {
+                TextField("Set name", text: Binding(
+                    get: { controller.projectAnimatedGeometries.first { $0.id == geo.id }?.name ?? geo.name },
+                    set: { newName in
+                        if let i = controller.projectAnimatedGeometries.firstIndex(where: { $0.id == geo.id }) {
+                            controller.projectAnimatedGeometries[i].name = newName
+                        }
+                    }
+                ))
+                .textFieldStyle(.plain)
                 .font(.system(size: 12))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+                .onSubmit { renamingGeoID = nil }
+            } else {
+                Text(geo.name)
+                    .font(.system(size: 12))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(isActive ? Color.accentColor : Color.primary)
+                    .onTapGesture(count: 2) { renamingGeoID = geo.id }
+            }
 
             Spacer()
 
@@ -1108,10 +1124,13 @@ struct StylePaletteView: View {
         .background(isActive ? Color.accentColor.opacity(0.08) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture {
+            renamingGeoID = nil
             controller.activeAnimatedGeometryID = isActive ? nil : geo.id
         }
         .contextMenu {
-            Button("Edit…") { editingGeoID = geo.id }
+            Button("Edit…")    { editingGeoID   = geo.id }
+            Button("Rename")   { renamingGeoID  = geo.id }
+            Button("Duplicate") { controller.duplicateAnimatedGeometry(id: geo.id) }
             Divider()
             Button("Delete", role: .destructive) {
                 controller.removeAnimatedGeometry(id: geo.id)

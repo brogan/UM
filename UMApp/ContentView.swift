@@ -744,12 +744,26 @@ struct GridCanvasPlaceholder: View {
                                     var morphOverride2: [UUID: [Polygon2D]] = [:]
                                     if let (morphPolys, morphTransform) = morphResult2 {
                                         let synth = UMRenderLayer(shapeID: geoLayers[0].shapeID, styleID: geoLayers[0].styleID,
-                                                                   alpha: 1.0, transform: morphTransform)
+                                                                   alpha: 1.0, transform: morphTransform,
+                                                                   styleTween: geoLayers[0].styleTween)
                                         resolvedLayers2 = [synth]
                                         morphOverride2 = [geoLayers[0].shapeID: morphPolys]
                                     } else {
                                         resolvedLayers2 = geoLayers
                                     }
+                                    // Style tween: lerp fill/stroke between the two states' styles.
+                                    let spriteTweenActive = geoLayers.count == 2 && geoLayers[0].styleTween
+                                    let spriteTweenT      = spriteTweenActive ? geoLayers[1].alpha : 0.0
+                                    let spriteTweenFill: UMColor? = spriteTweenActive ? {
+                                        let fa = (geoLayers[0].styleID ?? sprite.styleID).flatMap { styleMap[$0] }?.fillColor   ?? .defaultFill
+                                        let fb = (geoLayers[1].styleID ?? sprite.styleID).flatMap { styleMap[$0] }?.fillColor   ?? .defaultFill
+                                        return lerpUMColor(fa, fb, t: spriteTweenT)
+                                    }() : nil
+                                    let spriteTweenStroke: UMColor? = spriteTweenActive ? {
+                                        let sa = (geoLayers[0].styleID ?? sprite.styleID).flatMap { styleMap[$0] }?.strokeColor ?? .defaultStroke
+                                        let sb = (geoLayers[1].styleID ?? sprite.styleID).flatMap { styleMap[$0] }?.strokeColor ?? .defaultStroke
+                                        return lerpUMColor(sa, sb, t: spriteTweenT)
+                                    }() : nil
                                     for (li, geoLayer) in resolvedLayers2.enumerated() {
                                         let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
                                         let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
@@ -764,7 +778,7 @@ struct GridCanvasPlaceholder: View {
                                         let la      = geoLayer.alpha
                                         if polygons.isEmpty {
                                             let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
-                                            let fc   = style?.fillColor ?? .defaultFill
+                                            let fc   = spriteTweenFill ?? style?.fillColor ?? .defaultFill
                                             layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
                                                           with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a * la)))
                                             if isSelected && li == 0 {
@@ -772,8 +786,8 @@ struct GridCanvasPlaceholder: View {
                                                                 with: .color(.accentColor), lineWidth: 1.5)
                                             }
                                         } else {
-                                            let fillC   = style?.fillColor   ?? .defaultFill
-                                            let strokeC = style?.strokeColor ?? .defaultStroke
+                                            let fillC   = spriteTweenFill   ?? style?.fillColor   ?? .defaultFill
+                                            let strokeC = spriteTweenStroke ?? style?.strokeColor ?? .defaultStroke
                                             let strokeW = style?.strokeWidth ?? 1.5
                                             let mode    = style?.renderMode  ?? .filledStroked
                                             let paths   = polygons.filter(\.visible).enumerated().map { (_, polygon) -> CGPath in
@@ -882,7 +896,8 @@ struct GridCanvasPlaceholder: View {
                                 var lMorphOverride: [UUID: [Polygon2D]] = [:]
                                 if let (morphPolys, morphTransform) = lMorphResult {
                                     let synth = UMRenderLayer(shapeID: lGeoLayers[0].shapeID, styleID: lGeoLayers[0].styleID,
-                                                               alpha: 1.0, transform: morphTransform)
+                                                               alpha: 1.0, transform: morphTransform,
+                                                               styleTween: lGeoLayers[0].styleTween)
                                     lResolvedLayers = [synth]
                                     lMorphOverride  = [lGeoLayers[0].shapeID: morphPolys]
                                 } else {
@@ -890,6 +905,20 @@ struct GridCanvasPlaceholder: View {
                                         ? [UMRenderLayer(shapeID: UUID(), styleID: nil, alpha: 1.0, transform: .identity)]
                                         : lGeoLayers
                                 }
+
+                                // Style tween: lerp fill/stroke between the two states' styles.
+                                let cellTweenActive = lGeoLayers.count == 2 && lGeoLayers[0].styleTween
+                                let cellTweenT      = cellTweenActive ? lGeoLayers[1].alpha : 0.0
+                                let cellTweenFill: UMColor? = cellTweenActive ? {
+                                    let fa = lGeoLayers[0].styleID.flatMap { lStyleMap[$0] }?.fillColor   ?? style?.fillColor   ?? .defaultFill
+                                    let fb = lGeoLayers[1].styleID.flatMap { lStyleMap[$0] }?.fillColor   ?? style?.fillColor   ?? .defaultFill
+                                    return lerpUMColor(fa, fb, t: cellTweenT)
+                                }() : nil
+                                let cellTweenStroke: UMColor? = cellTweenActive ? {
+                                    let sa = lGeoLayers[0].styleID.flatMap { lStyleMap[$0] }?.strokeColor ?? style?.strokeColor ?? .defaultStroke
+                                    let sb = lGeoLayers[1].styleID.flatMap { lStyleMap[$0] }?.strokeColor ?? style?.strokeColor ?? .defaultStroke
+                                    return lerpUMColor(sa, sb, t: cellTweenT)
+                                }() : nil
 
                                 for lGeoLayer in lResolvedLayers {
                                 let la       = lGeoLayer.alpha
@@ -909,7 +938,7 @@ struct GridCanvasPlaceholder: View {
                                     let rw   = (dCellW - 4) / 2 * motion.scaleX
                                     let rh   = (dCellH - 4) / 2 * motion.scaleY
                                     let rect = CGRect(x: lxm - rw, y: lym - rh, width: rw * 2, height: rh * 2)
-                                    let fc   = motion.fillOverride ?? lStyle?.fillColor ?? .defaultFill
+                                    let fc   = motion.fillOverride ?? cellTweenFill ?? lStyle?.fillColor ?? .defaultFill
                                     layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
                                                   with: .color(Color(red: fc.r, green: fc.g, blue: fc.b)
                                                       .opacity((isSelected ? min(1, fc.a * 1.3) : fc.a) * la)))
@@ -921,8 +950,8 @@ struct GridCanvasPlaceholder: View {
                                     let dCellHalf = min(dCellW, dCellH)
                                     let zoomX   = (stretch ? dCellW : dCellHalf) * motion.scaleX * lSX
                                     let zoomY   = (stretch ? dCellH : dCellHalf) * motion.scaleY * lSY
-                                    let fillC   = motion.fillOverride   ?? lStyle?.fillColor   ?? .defaultFill
-                                    let strokeC = motion.strokeOverride ?? lStyle?.strokeColor ?? .defaultStroke
+                                    let fillC   = motion.fillOverride   ?? cellTweenFill   ?? lStyle?.fillColor   ?? .defaultFill
+                                    let strokeC = motion.strokeOverride ?? cellTweenStroke ?? lStyle?.strokeColor ?? .defaultStroke
                                     let strokeW = lStyle?.strokeWidth ?? 1.5
                                     let mode    = lStyle?.renderMode  ?? .filledStroked
 
@@ -1775,6 +1804,13 @@ struct GridCanvasPlaceholder: View {
 }
 
 // MARK: - Polygon path builder (file scope — shared by canvas and frame buffer renderer)
+
+private func lerpUMColor(_ a: UMColor, _ b: UMColor, t: Double) -> UMColor {
+    UMColor(r: a.r + (b.r - a.r) * t,
+            g: a.g + (b.g - a.g) * t,
+            b: a.b + (b.b - a.b) * t,
+            a: a.a + (b.a - a.a) * t)
+}
 
 func buildPolygonPath(_ polygon: Polygon2D,
                       cx: Double, cy: Double,
