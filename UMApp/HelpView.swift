@@ -950,12 +950,15 @@ private let playbackBody = #"""
   <tr><th>Control</th><th>Key</th><th>Function</th></tr>
   <tr><td>⏮ Rewind</td><td>—</td><td>Stop playback, return to frame 0, and exit timeline navigation (returns to live mode).</td></tr>
   <tr><td>▶ / ⏸ Play/Pause</td><td><kbd>Space</kbd></td><td>Toggle animation at 24 fps. Pausing holds the current frame.</td></tr>
+  <tr><td>↺ Loop</td><td>—</td><td>Toggle loop playback. When on (accent colour), playback wraps from the End frame back to the Start frame automatically. Loop mode and the Start/End fields together define both the playback loop and the export render range — set them once and both uses follow.</td></tr>
   <tr><td>● / ■ Record/Stop</td><td>—</td><td>Begin or end timeline recording. See below.</td></tr>
   <tr><td>Frame counter</td><td>—</td><td>Shows the current frame. Animation cycles because styles loop. The counter is unbounded.</td></tr>
+  <tr><td>S / E fields</td><td>—</td><td>Start and End frame of the playback/render region. These fields are shared with the Export panel — changing either updates both places. <strong>⌘-drag in the timeline ruler</strong> is the fastest way to sweep both fields at once: the anchor frame fixes Start and the cursor sets End (or vice versa if you drag left).</td></tr>
   <tr><td>PNG</td><td>—</td><td>Export the current frame as a PNG still. See <a href="um-help://help/export">Export</a>.</td></tr>
   <tr><td>SVG</td><td>—</td><td>SVG export — not yet implemented.</td></tr>
   <tr><td>Video</td><td>—</td><td>Export an animation as a .mov video. See <a href="um-help://help/export">Export</a>.</td></tr>
 </table>
+<div class="tip"><strong>Workflow: set region, loop, export.</strong> ⌘-drag in the ruler to sweep a region, toggle Loop on, press Play to audition it, then export — the S/E values already define the export range so no re-entry needed.</div>
 
 <h2>Recording a timeline</h2>
 <p>UM can capture a sequence of grid-state snapshots as you paint — forming a <strong>timeline</strong> that drives cut-based animation, where the composition changes over time.</p>
@@ -995,7 +998,7 @@ private let playbackBody = #"""
 <p><strong>Clear All</strong> removes all states and closes the editor. States are saved in the .umproj file.</p>
 
 <h2>Keyframe Timeline panel</h2>
-<p>The <strong>Keyframe Timeline</strong> panel sits below the canvas (drag the handle at the top edge to resize; tap it to collapse). It controls <em>driver-based</em> animation — smooth interpolated motion that uses the same frame clock as parametric animation, distinct from the cut-based recording timeline above.</p>
+<p>The <strong>Keyframe Timeline</strong> panel sits below the canvas. Drag the handle at the top edge to resize — a full-width accent line previews where the new boundary will land without reflowing the canvas. Tap the handle to collapse or expand the panel. It controls <em>driver-based</em> animation — smooth interpolated motion that uses the same frame clock as parametric animation, distinct from the cut-based recording timeline above.</p>
 
 <h3>Lanes</h3>
 <p>Each <strong>grid layer</strong> has three driver lanes. <strong>Sprite layers</strong> have two layer-level lanes plus one per-sprite position lane. The camera has three additional lanes:</p>
@@ -1028,7 +1031,8 @@ private let playbackBody = #"""
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
   <tr><td>Click ruler</td><td>Seek playhead to that frame</td></tr>
-  <tr><td>Drag ruler</td><td>Scrub playhead</td></tr>
+  <tr><td>Drag ruler</td><td>Scrub playhead continuously</td></tr>
+  <tr><td>⌘-drag ruler</td><td>Sweep render/loop region — sets Start and End simultaneously. Anchor frame stays fixed; cursor frame moves the other boundary. Release to commit.</td></tr>
   <tr><td>Click on lane (not on a KF)</td><td>Add a keyframe at that frame, capturing the current evaluated value</td></tr>
   <tr><td>Click a KF diamond</td><td>Select it; seek playhead to its frame</td></tr>
   <tr><td>Drag a KF diamond</td><td>Move keyframe to a new frame (live preview while dragging)</td></tr>
@@ -1583,7 +1587,10 @@ private let paletteBody = #"""
   <li><strong>Pencil icon</strong> — opens the Sprite Set editor for that set.</li>
   <li><strong>Right-click</strong> — Edit…, Delete.</li>
 </ul>
-<p>To assign a Sprite Set to a sprite, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust. See <a href="um-help://help/sprite-sets">Sprite Sets</a> for the full guide.</p>
+<h4>Direct drawing with a Sprite Set</h4>
+<p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active, any sprite you place on a sprite layer — by clicking the canvas or using <strong>+ Place at Centre</strong> — is automatically assigned that Sprite Set. No need to place the sprite first and assign afterwards.</p>
+<div class="tip">Select a Sprite Set in the palette, then click the canvas repeatedly to scatter multiple sprites that all share the same animation cycle. Each sprite inherits the active style, shape, and motion as usual — the Sprite Set adds the shape-animation layer on top.</div>
+<p>To assign a Sprite Set to an existing sprite, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust. See <a href="um-help://help/sprite-sets">Sprite Sets</a> for the full guide.</p>
 
 <h2>Library tab</h2>
 <p>Shows your global user library — resolution presets, styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
