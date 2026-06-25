@@ -1677,6 +1677,43 @@ private let spriteSetsBody = #"""
 <div class="note">Hidden layers and layers with no polygons are skipped. If a layer was a reference or guide in Loom, it will not produce a shape.</div>
 <div class="tip">If the source file is a morph-target geometry file from Loom (topology-locked with the lock icon), all extracted shapes have the same vertex count and will automatically morph — no cross-fade fallback — when Trans &gt; 0 in the Sprite Set editor.</div>
 
+<h2>Morph target animation (Loom → UM workflow)</h2>
+<p>Morph target animation smoothly deforms a shape's vertices from one configuration to another — like a character's body moving between a rest pose and a walk pose. Unlike a cross-fade (which blends two shapes by opacity), a morph physically moves each vertex, producing fluid organic motion.</p>
+<p>UM detects morph compatibility automatically: if two adjacent Sprite Set states have the same number of polygons and the same number of vertices per polygon, UM morphs them. Otherwise it cross-fades. Topology is authored and locked in Loom — UM trusts it without re-checking.</p>
+
+<h3>Step 1 — Author the morph targets in Loom</h3>
+<ol class="steps">
+  <li>Open Loom and create or open a geometry file. Add one layer per animation pose (e.g. Rest, MidSwing, FullSwing). All layers must share the same polygon count and vertex count per polygon — Loom shows a vertex-mismatch warning in the layer list if they diverge.</li>
+  <li>Once all poses are drawn and the vertex counts match, click the <strong>lock icon</strong> in the geometry editor toolbar to designate the file as a morph target. The icon turns orange and the file becomes topology-locked: vertex positions can still be tweaked, but adding or removing vertices or polygons is blocked.</li>
+  <li>Save the file. The lock is stored in the file; it persists across sessions. To unlock (and break morph identity), click the lock icon again.</li>
+</ol>
+<div class="note">Each layer in a locked morph target file is a valid morph destination. A single file can hold many poses — you do not need separate files per target.</div>
+
+<h3>Step 2 — Import into UM</h3>
+<ol class="steps">
+  <li>In the UM left palette → Project tab → <strong>SHAPES</strong> section, click <strong>+ Import Layers as Shapes…</strong></li>
+  <li>Select the locked Loom geometry file. UM extracts each visible, non-empty layer as an individual shape and adds them all to the project shape library.</li>
+  <li>A Sprite Set named after the geometry file is created automatically, containing all the extracted shapes in layer order with Hold = 2 frames and Trans = 0.</li>
+</ol>
+
+<h3>Step 3 — Set up transitions in the Sprite Set editor</h3>
+<ol class="steps">
+  <li>Click the <strong>pencil icon</strong> next to the Sprite Set to open the editor.</li>
+  <li>Confirm the states are in the correct order (use ↑↓ to reorder).</li>
+  <li>Expand the <strong>▸ chevron</strong> on each state to show the transform sub-row.</li>
+  <li>Set <strong>Trans</strong> to the number of frames you want the morph to take (e.g. 4). Set <strong>Ease</strong> to your preferred curve (Ease In/Out is a good default).</li>
+  <li>Scrub the preview slider through the transition window (the frames immediately after the Hold period). You should see the shape physically deforming — if you see two overlapping shapes fading instead, the topology doesn't match (check vertex counts in Loom).</li>
+  <li>Adjust Hold and Trans values per state to control the rhythm of the animation.</li>
+</ol>
+
+<h3>Step 4 — Assign to a sprite and play back</h3>
+<ol class="steps">
+  <li>Select the sprite on the canvas. In the <strong>SPRITES inspector</strong> (right panel), set the <strong>Sprite Set</strong> picker to the imported set.</li>
+  <li>Press play in the Transport Bar. The sprite's shape deforms smoothly between poses on schedule.</li>
+  <li>Use the sprite's <strong>Phase offset</strong> to stagger multiple sprites sharing the same Sprite Set so they are at different points in the cycle.</li>
+</ol>
+<div class="tip">Position, rotation, and scale also interpolate smoothly during a morph transition — set per-state Δx/Δy/°/Sx/Sy values on each state to combine shape morphing with positional animation in a single pass.</div>
+
 <h2>Assigning a Sprite Set to a sprite</h2>
 <ol class="steps">
   <li>Select the sprite layer in the left palette, then click the sprite on the canvas to select it.</li>
