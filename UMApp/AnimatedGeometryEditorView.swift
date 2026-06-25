@@ -8,6 +8,7 @@ import UMEngine
 /// scrubber that highlights the active state at the current frame.
 struct AnimatedGeometryEditorView: View {
     @Environment(AppController.self) private var controller
+    @Environment(\.dismiss) private var dismiss
     let geoID: UUID
     @State private var previewFrame: Int = 0
     @State private var editingName: String = ""
@@ -63,6 +64,13 @@ struct AnimatedGeometryEditorView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: 110)
             }
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 16))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
