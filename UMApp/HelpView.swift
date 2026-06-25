@@ -1588,7 +1588,7 @@ private let spriteSetsBody = #"""
 <h1>Sprite Sets</h1>
 <p class="subtitle">Reusable shape-animation cycles for sprites — independent of motion sets.</p>
 
-<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, and a hold-frame count. When a sprite has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the sprite's shape (and optionally its style) on a per-frame schedule. The cycle runs independently of the sprite's motion set.</p>
+<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, a hold-frame count, and an optional cross-fade into the next state. When a sprite has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the sprite's shape (and optionally its style) on a per-frame schedule. Between states, an opacity blend can be applied over a configurable number of frames using any easing curve. The cycle runs independently of the sprite's motion set.</p>
 
 <h2>Concepts</h2>
 
@@ -1599,10 +1599,13 @@ private let spriteSetsBody = #"""
   <tr><td>Shape</td><td>The Loom shape to display during this state. Picked from the project's shape library.</td></tr>
   <tr><td>Style override</td><td>Optional. When set, this style is used instead of the sprite's own style for the duration of this state. Set to – (dash) to use the sprite's global style.</td></tr>
   <tr><td>Hold frames</td><td>How many animation frames to stay on this state before advancing to the next. Minimum 1.</td></tr>
+  <tr><td>Trans</td><td>Transition frames. After the Hold period ends, the sprite cross-fades from this state to the next over this many frames. Set to 0 (default) for an instant hard cut. See <strong>Cross-fade</strong> below.</td></tr>
+  <tr><td>Ease</td><td>Easing curve applied to the cross-fade progress. Only relevant when Trans &gt; 0. Options include Linear, Ease In/Out, Back In/Out, Bounce Out, and others. The picker is dimmed when Trans is 0.</td></tr>
 </table>
 
 <h3>Per-state transforms</h3>
-<p>Click the <strong>▸ chevron</strong> on any state row to expand a transform sub-row. These five fields are applied on top of the sprite's own transform while that state is active:</p>
+<p>Click the <strong>▸ chevron</strong> on any state row to expand a transform sub-row with two lines of controls:</p>
+<p><strong>Row 1 — position, rotation, scale</strong> (applied on top of the sprite's own transform while this state is active):</p>
 <table>
   <tr><th>Field</th><th>Description</th></tr>
   <tr><td><strong>Δx</strong></td><td>Horizontal position offset in canvas pixels. Positive shifts the sprite right.</td></tr>
@@ -1611,7 +1614,26 @@ private let spriteSetsBody = #"""
   <tr><td><strong>Sx</strong></td><td>Horizontal scale multiplier (1.0 = no change). Applied on top of the sprite's own scale.</td></tr>
   <tr><td><strong>Sy</strong></td><td>Vertical scale multiplier (1.0 = no change). Applied on top of the sprite's own scale.</td></tr>
 </table>
-<p>All five default to identity (0 / 0 / 0 / 1 / 1). The preview canvas updates immediately when you edit any value, so you can tweak registration offsets and see the result without needing to place the sprite on the main canvas first.</p>
+<p><strong>Row 2 — transition</strong>:</p>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><strong>Trans</strong></td><td>Number of cross-fade frames after this state's Hold period. 0 = instant cut to next state.</td></tr>
+  <tr><td><strong>Ease</strong></td><td>Easing curve for the cross-fade (dimmed when Trans = 0).</td></tr>
+</table>
+<p>All transform fields default to identity (0 / 0 / 0 / 1 / 1). Trans defaults to 0. The preview canvas updates immediately and shows the cross-fade live when scrubbing through a transition window.</p>
+
+<h3>Cross-fade between states</h3>
+<p>When <strong>Trans</strong> is greater than 0, UM draws <em>two</em> shapes simultaneously at the state boundary: the outgoing shape fades out and the incoming shape fades in over the specified number of frames. This is sometimes called an opacity blend or morph — it works across shapes of any topology (no vertex-count matching required).</p>
+<p>The easing curve (Ease) controls the feel of the fade:</p>
+<ul>
+  <li><strong>Linear</strong> — constant opacity change throughout.</li>
+  <li><strong>Ease In/Out</strong> (default) — slow start and end, fast in the middle. Usually the most natural.</li>
+  <li><strong>Back In/Out</strong> — briefly overshoots before settling, giving a snappy elastic feel.</li>
+  <li><strong>Bounce Out</strong> — incoming shape bounces into position at the end of the transition.</li>
+  <li><strong>Step</strong> — hard cut at exactly the midpoint (equivalent to Trans = 0 but centred differently).</li>
+</ul>
+<div class="note">Trans frames extend the state's total on-screen time. A state with Hold = 4 and Trans = 2 occupies 6 frames in the cycle before the next state begins its Hold period.</div>
+<div class="tip">For Ping-Pong loop mode, transitions only play during the forward pass. The reverse pass is hold-only, so the cycle length is shorter on the way back.</div>
 
 <h3>Loop modes</h3>
 <table>
@@ -1633,7 +1655,7 @@ private let spriteSetsBody = #"""
   <li>The new set appears in the list. Click the <strong>pencil icon</strong> to open the editor.</li>
   <li>Give the set a name and choose a loop mode in the header.</li>
   <li>Click <strong>Add State</strong> and choose a shape from the menu. Repeat for each phase of the animation.</li>
-  <li>For each state, set the <strong>Hold</strong> value (frames to stay on this shape) and optionally pick a style override.</li>
+  <li>For each state, set the <strong>Hold</strong> value (frames to stay on this shape at full opacity) and optionally pick a style override. To add a cross-fade into the next state, expand the ▸ chevron and set <strong>Trans</strong> &gt; 0.</li>
   <li>Use the up/down chevrons to reorder states. The minus (−) button removes a state.</li>
   <li>Use the <strong>preview scrubber</strong> at the bottom to step through the cycle and verify the active state indicator moves as expected.</li>
 </ol>
@@ -1669,14 +1691,16 @@ private let spriteSetsBody = #"""
   <tr><td><strong>Header</strong>: Name field</td><td>Rename the set. Changes apply immediately.</td></tr>
   <tr><td><strong>Header</strong>: Loop mode picker</td><td>Switch between Loop, Ping Pong, Once, Hold Last.</td></tr>
   <tr><td><strong>Header</strong>: ✕ button</td><td>Close the editor. Escape also works.</td></tr>
-  <tr><td><strong>State list</strong>: ▸ chevron</td><td>Expand the per-state transform sub-row (Δx, Δy, °, Sx, Sy).</td></tr>
+  <tr><td><strong>State list</strong>: ▸ chevron</td><td>Expand two transform rows: row 1 = Δx, Δy, °, Sx, Sy; row 2 = Trans (cross-fade frames) + Ease (easing curve).</td></tr>
   <tr><td><strong>State list</strong>: shape picker</td><td>Which shape from the project library this state displays.</td></tr>
   <tr><td><strong>State list</strong>: style picker</td><td>Optional style override for this state. – means use the sprite's own style.</td></tr>
-  <tr><td><strong>State list</strong>: Hold field</td><td>How many frames to stay on this state.</td></tr>
+  <tr><td><strong>State list</strong>: Hold field</td><td>How many frames to stay on this state (at full opacity) before any transition begins.</td></tr>
+  <tr><td><strong>State list</strong>: Trans field</td><td>Cross-fade frames after Hold. 0 = instant cut. See <strong>Cross-fade between states</strong> above.</td></tr>
+  <tr><td><strong>State list</strong>: Ease picker</td><td>Easing curve applied to the cross-fade. Dimmed when Trans = 0.</td></tr>
   <tr><td><strong>State list</strong>: − button</td><td>Remove this state.</td></tr>
   <tr><td><strong>State list</strong>: ↑ / ↓ buttons</td><td>Reorder states. The coloured dot indicates which state is active at the current preview frame.</td></tr>
   <tr><td><strong>State list</strong>: Add State menu</td><td>Append a new state using a shape from the project library.</td></tr>
-  <tr><td><strong>Preview canvas</strong></td><td>Dark 160px canvas that renders the active shape at the current frame, with the state's style and all per-state transforms (offset, rotation, scale) applied. Updates in real time as you edit values.</td></tr>
+  <tr><td><strong>Preview canvas</strong></td><td>Dark 160px canvas. Renders via the same cross-fade engine as the main canvas — scrub through a transition window (after the Hold period, before the next state) to see the two shapes blended live. Drag the sprite to adjust Δx/Δy for the focused state; ghost states at ±1 are shown at 22% opacity as onion skins.</td></tr>
   <tr><td><strong>Scrubber</strong>: ▶ / ⏸ button</td><td>Play or pause the animation preview at 24fps. Dragging the slider pauses playback automatically.</td></tr>
   <tr><td><strong>Scrubber</strong>: slider</td><td>Step to a specific frame across the full cycle (including the reverse pass for Ping Pong).</td></tr>
   <tr><td><strong>Scrubber</strong>: shape name</td><td>Shows the name of the shape currently active at the scrubber position.</td></tr>
