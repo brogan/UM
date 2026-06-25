@@ -278,7 +278,7 @@ struct AnimatedGeometryEditorView: View {
             }
         }
         .frame(height: 160)
-        .background(Color(white: 0.1))
+        .background(Color(white: 0.82))
     }
 
     // MARK: - Preview scrubber
