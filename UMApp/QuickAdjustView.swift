@@ -2395,6 +2395,7 @@ struct QuickAdjustView: View {
                 .labelsHidden().pickerStyle(.menu).frame(maxWidth: 110)
             }
 
+            if ls?.layerMode != .sprite {
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
             // ── Grid distortion ───────────────────────────────────
@@ -2494,6 +2495,7 @@ struct QuickAdjustView: View {
                     }.buttonStyle(.borderless).font(.system(size: 11))
                 }
             }
+            } // end grid-only distortion block
 
             Divider().padding(.horizontal, 12).padding(.vertical, 3)
 
