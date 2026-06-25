@@ -1585,7 +1585,8 @@ private let paletteBody = #"""
   <li><strong>+ New Sprite Set</strong> — creates an empty set ready to be filled with states in the editor.</li>
   <li><strong>+ Import Layers as Shapes…</strong> — in the SHAPES section above. Select a multi-layer Loom geometry file; each visible, non-empty layer becomes a separate shape and a Sprite Set containing all of them in layer order is created automatically.</li>
   <li><strong>Pencil icon</strong> — opens the Sprite Set editor for that set.</li>
-  <li><strong>Right-click</strong> — Edit…, Delete.</li>
+  <li><strong>Right-click</strong> — Edit…, Rename, Duplicate, Delete.</li>
+  <li><strong>Double-click the name</strong> — inline rename field. Press Return to confirm.</li>
 </ul>
 <h4>Direct drawing with a Sprite Set</h4>
 <p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active:</p>
@@ -1611,7 +1612,7 @@ private let spriteSetsBody = #"""
 <h1>Sprite Sets</h1>
 <p class="subtitle">Reusable shape-animation cycles for sprites and grid cells — independent of motion sets.</p>
 
-<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, a hold-frame count, and an optional cross-fade into the next state. When a sprite or grid cell has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the shape (and optionally the style) on a per-frame schedule. Between states, an opacity blend can be applied over a configurable number of frames using any easing curve. The cycle runs independently of the element's motion set.</p>
+<p>A <strong>Sprite Set</strong> is an ordered list of <em>states</em>. Each state specifies a shape, an optional style override, a hold-frame count, and an optional cross-fade into the next state. When a sprite or grid cell has a Sprite Set assigned, UM steps through those states as the animation plays, cycling the shape (and optionally its fill/stroke colours) on a per-frame schedule. Between states, an opacity blend — or smooth colour interpolation when <strong>Style Tween</strong> is on — can play over a configurable number of frames with a chosen easing curve. The cycle runs independently of the element's motion set.</p>
 
 <h2>Concepts</h2>
 
@@ -1624,6 +1625,7 @@ private let spriteSetsBody = #"""
   <tr><td>Hold frames</td><td>How many animation frames to stay on this state before advancing to the next. Minimum 1.</td></tr>
   <tr><td>Trans</td><td>Transition frames. After the Hold period ends, the sprite cross-fades from this state to the next over this many frames. Set to 0 (default) for an instant hard cut. See <strong>Cross-fade</strong> below.</td></tr>
   <tr><td>Ease</td><td>Easing curve applied to the cross-fade progress. Only relevant when Trans &gt; 0. Options include Linear, Ease In/Out, Back In/Out, Bounce Out, and others. The picker is dimmed when Trans is 0.</td></tr>
+  <tr><td>Style Tween</td><td>When enabled (and Trans &gt; 0), the fill and stroke colours are linearly interpolated between this state's style and the next state's style over the transition window, instead of cross-fading two separate shapes at their own colours. Works with both cross-fade and morph transitions. Dimmed when Trans is 0.</td></tr>
 </table>
 
 <h3>Per-state transforms</h3>
@@ -1642,8 +1644,9 @@ private let spriteSetsBody = #"""
   <tr><th>Field</th><th>Description</th></tr>
   <tr><td><strong>Trans</strong></td><td>Number of cross-fade frames after this state's Hold period. 0 = instant cut to next state.</td></tr>
   <tr><td><strong>Ease</strong></td><td>Easing curve for the cross-fade (dimmed when Trans = 0).</td></tr>
+  <tr><td><strong>Style↔</strong></td><td>Style Tween checkbox. When checked and Trans &gt; 0, fill and stroke colours are lerped between this state's style and the next state's style over the transition window. See <strong>Style tweening</strong> below.</td></tr>
 </table>
-<p>All transform fields default to identity (0 / 0 / 0 / 1 / 1). Trans defaults to 0. The preview canvas updates immediately and shows the cross-fade live when scrubbing through a transition window.</p>
+<p>All transform fields default to identity (0 / 0 / 0 / 1 / 1). Trans defaults to 0. The preview canvas updates immediately and shows the cross-fade or style tween live when scrubbing through a transition window.</p>
 
 <h3>Transitions: cross-fade and morph</h3>
 <p>When <strong>Trans</strong> is greater than 0, UM transitions between states over the specified number of frames. The method it uses depends on whether the two shapes are topology-compatible:</p>
@@ -1662,6 +1665,17 @@ private let spriteSetsBody = #"""
 </ul>
 <div class="note">Trans frames extend the state's total on-screen time. A state with Hold = 4 and Trans = 2 occupies 6 frames in the cycle before the next state begins its Hold period.</div>
 <div class="tip">For Ping-Pong loop mode, transitions only play during the forward pass. The reverse pass is hold-only, so the cycle length is shorter on the way back.</div>
+
+<h3>Style tweening</h3>
+<p>By default, when a state transition has a style override, the colour changes abruptly at the boundary even during a cross-fade or morph — the shape blends but the colour is drawn from each state's own style. <strong>Style Tween</strong> replaces this with true colour interpolation:</p>
+<ul>
+  <li>Enable <strong>Style↔</strong> in the expand sub-row for a state (requires Trans &gt; 0).</li>
+  <li>During the transition window, UM linearly interpolates the <strong>fill colour</strong> and <strong>stroke colour</strong> between the FROM state's style and the TO state's style at the eased progress value.</li>
+  <li>The interpolated colour is applied to both the outgoing and incoming shapes during a cross-fade, and to the single morphed shape during a morph transition. In both cases the result is a smooth colour shift that tracks exactly with the shape transition.</li>
+  <li>If a state has no style override (the — dash option), the element's own global style colour is used as that end of the interpolation.</li>
+</ul>
+<div class="note">Style Tween is per-state: it applies to the transition out of that state, not to the state itself. A 3-state cycle could have tween on state 0 → 1 but a hard cut on state 1 → 2, for example.</div>
+<div class="tip">Combining Style Tween with morph gives the smoothest possible animation: the shape vertices physically deform between poses while the fill and stroke colours flow simultaneously from one palette to another — all in a single pass.</div>
 
 <h3>Loop modes</h3>
 <table>
@@ -1767,12 +1781,13 @@ private let spriteSetsBody = #"""
   <tr><td><strong>Header</strong>: Name field</td><td>Rename the set. Changes apply immediately.</td></tr>
   <tr><td><strong>Header</strong>: Loop mode picker</td><td>Switch between Loop, Ping Pong, Once, Hold Last.</td></tr>
   <tr><td><strong>Header</strong>: ✕ button</td><td>Close the editor. Escape also works.</td></tr>
-  <tr><td><strong>State list</strong>: ▸ chevron</td><td>Expand two transform rows: row 1 = Δx, Δy, °, Sx, Sy; row 2 = Trans (cross-fade frames) + Ease (easing curve).</td></tr>
+  <tr><td><strong>State list</strong>: ▸ chevron</td><td>Expand two transform rows: row 1 = Δx, Δy, °, Sx, Sy; row 2 = Trans (cross-fade frames) + Ease (easing curve) + Style↔ (style tween toggle).</td></tr>
   <tr><td><strong>State list</strong>: shape picker</td><td>Which shape from the project library this state displays.</td></tr>
   <tr><td><strong>State list</strong>: style picker</td><td>Optional style override for this state. – means use the sprite's own style.</td></tr>
   <tr><td><strong>State list</strong>: Hold field</td><td>How many frames to stay on this state (at full opacity) before any transition begins.</td></tr>
   <tr><td><strong>State list</strong>: Trans field</td><td>Cross-fade frames after Hold. 0 = instant cut. See <strong>Cross-fade between states</strong> above.</td></tr>
   <tr><td><strong>State list</strong>: Ease picker</td><td>Easing curve applied to the cross-fade. Dimmed when Trans = 0.</td></tr>
+  <tr><td><strong>State list</strong>: Style↔ checkbox</td><td>Style Tween toggle. When checked, fill/stroke colours are linearly interpolated during the transition. Dimmed when Trans = 0. See <strong>Style tweening</strong>.</td></tr>
   <tr><td><strong>State list</strong>: − button</td><td>Remove this state.</td></tr>
   <tr><td><strong>State list</strong>: ↑ / ↓ buttons</td><td>Reorder states. The coloured dot indicates which state is active at the current preview frame.</td></tr>
   <tr><td><strong>State list</strong>: Add State menu</td><td>Append a new state using a shape from the project library.</td></tr>
@@ -1782,8 +1797,19 @@ private let spriteSetsBody = #"""
   <tr><td><strong>Scrubber</strong>: shape name</td><td>Shows the name of the shape currently active at the scrubber position.</td></tr>
 </table>
 
+<h2>Renaming a Sprite Set</h2>
+<p>Two ways:</p>
+<ul>
+  <li><strong>Double-click</strong> the Sprite Set name in the palette. An inline text field appears — edit and press Return.</li>
+  <li><strong>Right-click</strong> the row → <strong>Rename</strong>. Same inline field.</li>
+  <li>The <strong>name field</strong> in the Sprite Set editor sheet also renames the set.</li>
+</ul>
+
+<h2>Duplicating a Sprite Set</h2>
+<p>Right-click the Sprite Set row → <strong>Duplicate</strong>. A copy is inserted directly below the original, named <em>Copy of [name]</em>. The copy is fully independent — editing one does not affect the other. Use this to create variations with different style overrides, shape sequences, or morph target configurations without rebuilding from scratch.</p>
+
 <h2>Deleting a Sprite Set</h2>
-<p>Right-click the Sprite Set row in the palette → <strong>Delete</strong>. Any sprites that had this set assigned revert to their static shape (or SEQUENCE cycling). The deletion cannot be undone.</p>
+<p>Right-click the Sprite Set row in the palette → <strong>Delete</strong>. Any sprites or grid cells that had this set assigned revert to their static shape (or SEQUENCE cycling). The deletion cannot be undone.</p>
 """#
 
 private let exportBody = #"""
