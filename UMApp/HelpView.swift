@@ -1508,7 +1508,13 @@ private let paletteBody = #"""
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
-<p>Below the layer list, the LAYERS section also shows <strong>resolution preset chips</strong> — click any chip to instantly resample the active layer to that grid size. Built-in sizes (4×4 through 32×32) are always present. To save the current resolution as a project preset, click the <strong>+</strong> button at the end of the chip row. To save a project preset to your global library, right-click it and choose <strong>Save to Library</strong>. To remove a project preset, right-click → <strong>Remove</strong>.</p>
+<p>Below the layer list, the LAYERS section shows a <strong>resolution row</strong> for quick resizing:</p>
+<ul>
+  <li><strong>Multiplier buttons</strong> — a single row of eight buttons: <code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>. Each multiplies the current rows and columns by that factor (rounded to the nearest integer, minimum 1) and resamples immediately. Hover over a button to see the resulting dimensions as a tooltip.</li>
+  <li><strong>Custom preset chips</strong> — any resolution you have saved appears below the multiplier row as a <code>rows×cols</code> chip. Click to resample to that size. Right-click for <strong>Save to Library</strong> or <strong>Remove</strong>.</li>
+  <li><strong>+ button</strong> — saves the current resolution as a project preset.</li>
+  <li><strong>Other…</strong> — opens the full <a href="um-help://help/resample">Resample Grid</a> sheet for arbitrary dimensions and resize policies.</li>
+</ul>
 
 <h3>STYLES</h3>
 <p>A style controls rendering only: fill colour, stroke colour, stroke width, and render mode. Click a style row to make it the <strong>active style</strong> — new cells you draw will carry this style. The active style is highlighted with an accent indicator.</p>
@@ -1867,8 +1873,13 @@ private let resampleBody = #"""
 <h1>Resample Grid</h1>
 <p class="subtitle">Change the grid resolution while preserving the composition's spatial and temporal nuance.</p>
 
-<p>Click the <strong>resolution label</strong> (e.g. <strong>6×6</strong>) at the far right of the Tool Strip to open the Resample Grid sheet.</p>
 <p>The grid always fills the full output canvas — columns divide the canvas width equally, rows divide the canvas height equally. Changing resolution changes cell size, not canvas size.</p>
+
+<h2>Quick resize — multiplier buttons</h2>
+<p>The LAYERS section of the palette shows a row of eight multiplier buttons: <code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>. Each scales the active layer's current rows and columns by the chosen factor (rounded, minimum 1) and resamples immediately using the default policies (Preserve offsets, Inherit phase). Hover any button to preview the resulting dimensions. This is the fastest path for common size changes.</p>
+
+<h2>Full resample sheet</h2>
+<p>Click <strong>Other…</strong> in the RESOLUTION header (or the resolution label in the Tool Strip) to open this sheet when you need arbitrary dimensions or non-default resize policies.</p>
 
 <h2>Setting the target size</h2>
 <ul>
