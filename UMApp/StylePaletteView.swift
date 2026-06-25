@@ -1075,16 +1075,18 @@ struct StylePaletteView: View {
     // MARK: - Sprite Sets row
 
     private func spriteSetsRow(_ geo: UMAnimatedGeometry) -> some View {
-        HStack(spacing: 6) {
+        let isActive = controller.activeAnimatedGeometryID == geo.id
+        return HStack(spacing: 6) {
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isActive ? Color.accentColor : .secondary)
                 .frame(width: 16)
 
             Text(geo.name)
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(isActive ? Color.accentColor : Color.primary)
 
             Spacer()
 
@@ -1103,7 +1105,11 @@ struct StylePaletteView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+        .background(isActive ? Color.accentColor.opacity(0.08) : Color.clear)
         .contentShape(Rectangle())
+        .onTapGesture {
+            controller.activeAnimatedGeometryID = isActive ? nil : geo.id
+        }
         .contextMenu {
             Button("Edit…") { editingGeoID = geo.id }
             Divider()

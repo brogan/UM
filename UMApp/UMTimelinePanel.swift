@@ -25,7 +25,7 @@ private enum TLSelection: Hashable {
     case sprite(layerIndex: Int, spriteID: UUID, keyframeIdx: Int)
 }
 
-private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, spriteKF, rubberBand, markerStrip, startHandle, endHandle }
+private enum TLDragKind { case none, seek, pan, layerKF, cameraKF, spriteKF, rubberBand, markerStrip, startHandle, endHandle, regionDrag }
 
 private struct LayerKFHit: Equatable {
     var layerIndex: Int; var lane: UMTimelineLane; var keyframeIdx: Int
@@ -174,7 +174,9 @@ struct UMTimelinePanel: View {
                     }
                     let start = resizeStartH ?? panelHeight
                     resizeStartH = start
-                    resizePreviewH = clampedPanelHeight(start - v.translation.height)
+                    let h = clampedPanelHeight(start - v.translation.height)
+                    resizePreviewH = h
+                    controller.timelineResizePreviewH = h
                 }
                 .onEnded { _ in
                     if let h = resizePreviewH {
@@ -182,6 +184,7 @@ struct UMTimelinePanel: View {
                     }
                     resizeStartH = nil
                     resizePreviewH = nil
+                    controller.timelineResizePreviewH = nil
                 }
         )
         .simultaneousGesture(
@@ -779,6 +782,11 @@ struct UMTimelinePanel: View {
                 dragKind = .markerStrip
             } else if let handleKind = hitTestRulerHandle(at: v.startLocation) {
                 dragKind = handleKind
+            } else if v.startLocation.y < totalRulerH && commandDown {
+                dragKind = .regionDrag
+                let f = max(0, Int(((v.startLocation.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+                controller.startFrame = f
+                controller.endFrame   = max(f + 1, controller.endFrame)
             } else if v.startLocation.y < totalRulerH {
                 dragKind  = .seek
                 wasPlaying = controller.isPlaying
@@ -825,6 +833,11 @@ struct UMTimelinePanel: View {
             let f = max(controller.startFrame + 1,
                         Int(((v.location.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
             controller.endFrame = f
+        case .regionDrag:
+            let anchor = max(0, Int(((v.startLocation.x + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            let cursor = max(0, Int(((v.location.x     + CGFloat(hOffset)) / CGFloat(zoom)).rounded()))
+            controller.startFrame = min(anchor, cursor)
+            controller.endFrame   = max(anchor + 1, cursor)
         case .pan:
             let delta = v.translation.width - prevDragTX
             hOffset   = max(0, hOffset - Double(delta))
@@ -856,6 +869,8 @@ struct UMTimelinePanel: View {
             if !isTap, let s = spriteKFDrag { commitSpriteKFDrag(s) }
             if isTap { seekToKF(spriteKFDrag?.previewFrame) }
             spriteKFDrag = nil
+        case .regionDrag:
+            if isTap { controller.seekToFrame(controller.startFrame) }
         case .startHandle:
             if isTap { controller.seekToFrame(controller.startFrame) }
         case .endHandle:
@@ -1575,8 +1590,9 @@ struct UMTimelinePanel: View {
         return sprite.positionDriver.keyframes[hit.keyframeIdx].frame
     }
 
-    private var shiftDown:  Bool { NSEvent.modifierFlags.contains(.shift) }
-    private var optionDown: Bool { NSEvent.modifierFlags.contains(.option) }
+    private var shiftDown:   Bool { NSEvent.modifierFlags.contains(.shift) }
+    private var optionDown:  Bool { NSEvent.modifierFlags.contains(.option) }
+    private var commandDown: Bool { NSEvent.modifierFlags.contains(.command) }
 
     private func installScrollMonitor() {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [self] ev in

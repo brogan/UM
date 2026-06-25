@@ -37,6 +37,20 @@ struct ContentView: View {
                 .padding(.vertical, 5)
                 .background(.bar)
         }
+        .overlay(alignment: .bottom) {
+            // Timeline resize preview line — full-width accent line showing new panel boundary.
+            // Drawn over the canvas using a fixed offset from the bottom, with no layout impact.
+            if let ph = controller.timelineResizePreviewH {
+                GeometryReader { geo in
+                    Rectangle()
+                        .fill(Color.accentColor.opacity(0.65))
+                        .frame(height: 2)
+                        .frame(maxWidth: .infinity)
+                        .position(x: geo.size.width / 2, y: geo.size.height - ph - 32)
+                }
+                .allowsHitTesting(false)
+            }
+        }
     }
 }
 
@@ -2397,6 +2411,18 @@ struct TransportBarView: View {
             .frame(minWidth: 22, minHeight: 22)
             .contentShape(Rectangle())
             .foregroundStyle(controller.isPlaying ? Color.accentColor : Color.primary)
+
+            // Loop
+            Button(action: { controller.isLooping.toggle() }) {
+                Image(systemName: "repeat")
+                    .font(.system(size: 11))
+                    .frame(width: 16)
+            }
+            .buttonStyle(.plain)
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
+            .foregroundStyle(controller.isLooping ? Color.accentColor : Color.primary)
+            .help(controller.isLooping ? "Loop playback: on" : "Loop playback: off")
 
             // Record
             Button(action: { controller.toggleRecording() }) {

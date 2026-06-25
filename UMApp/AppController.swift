@@ -215,7 +215,7 @@ final class AppController {
         let ls     = layerStates[activeLayerIndex]
         guard ls.layerMode == .sprite else { return }
         let count  = ls.sprites.count + 1
-        let sprite = UMSprite(
+        var sprite = UMSprite(
             name:     "Sprite \(count)",
             x:        Double(point.x),
             y:        Double(point.y),
@@ -225,6 +225,7 @@ final class AppController {
             shapeID:  activeShapeID,
             motionID: activeMotionID
         )
+        sprite.animatedGeometryID = activeAnimatedGeometryID
         ls.sprites.append(sprite)
         activeSpriteID = sprite.id
     }
@@ -302,10 +303,11 @@ final class AppController {
     var backgroundImagePath: String? = nil
     var isPlaying: Bool              = false
     var selectedIndices:    Set<Int> = []
-    var activeStyleID:      UUID?    = nil
-    var activeMotionID:     UUID?    = nil
-    var activeShapeID:      UUID?    = nil
-    var activeSpriteID:     UUID?    = nil
+    var activeStyleID:             UUID?    = nil
+    var activeMotionID:            UUID?    = nil
+    var activeShapeID:             UUID?    = nil
+    var activeAnimatedGeometryID:  UUID?    = nil
+    var activeSpriteID:            UUID?    = nil
 
     var currentFileURL:             URL?      = nil
     var globalLibrary:              UMLibrary = .empty
@@ -329,6 +331,8 @@ final class AppController {
     // MARK: Timeline panel state
     var isTimelineCollapsed: Bool  = true
     var showScrubBar: Bool         = false
+    var isLooping: Bool            = false
+    var timelineResizePreviewH: CGFloat? = nil
     var startFrame: Int            = 0
     var endFrame: Int              = 240
     var selectedTimelineKF: UMTimelineKFSelection? = nil
@@ -531,6 +535,11 @@ final class AppController {
                 while let self, !Task.isCancelled, self.isPlaying {
                     // Advance all layers in lockstep
                     for ls in self.layerStates { ls.engine.advance() }
+
+                    // Loop playback: wrap from endFrame back to startFrame
+                    if self.isLooping && self.engine.currentFrame >= self.endFrame {
+                        self.seekToFrame(self.startFrame)
+                    }
 
                     if self.isRecording && self.engine.currentFrame % self.recordingInterval == 0 {
                         self.captureState()
