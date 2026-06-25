@@ -1,7 +1,19 @@
 import SwiftUI
+import AppKit
+
+final class UMAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
+    }
+
+    func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
+        false
+    }
+}
 
 @main
 struct UMApp: App {
+    @NSApplicationDelegateAdaptor(UMAppDelegate.self) private var appDelegate
     @State private var controller = AppController()
 
     var body: some Scene {

@@ -1,6 +1,25 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Inspector layout
+
+private struct InspectorFieldIndentKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 12
+}
+
+extension EnvironmentValues {
+    var inspectorFieldIndent: CGFloat {
+        get { self[InspectorFieldIndentKey.self] }
+        set { self[InspectorFieldIndentKey.self] = newValue }
+    }
+}
+
+extension View {
+    func inspectorFieldIndent(_ value: CGFloat) -> some View {
+        environment(\.inspectorFieldIndent, value)
+    }
+}
+
 // MARK: - InspectorSection
 
 struct InspectorSection<Content: View>: View {
@@ -54,9 +73,27 @@ struct InspectorSection<Content: View>: View {
     }
 }
 
+// MARK: - InspectorSubheading
+
+struct InspectorSubheading: View {
+    let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.secondary)
+    }
+}
+
 // MARK: - InspectorField
 
 struct InspectorField<Content: View>: View {
+    @Environment(\.inspectorFieldIndent) private var indent
+
     let label: String
     private let content: Content
 
@@ -68,13 +105,14 @@ struct InspectorField<Content: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
             content
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, indent)
+        .padding(.trailing, 12)
         .padding(.vertical, 2)
     }
 }
@@ -82,23 +120,26 @@ struct InspectorField<Content: View>: View {
 // MARK: - InspectorRow
 
 struct InspectorRow: View {
+    @Environment(\.inspectorFieldIndent) private var indent
+
     let label: String
     let value: String
 
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .frame(width: 80, alignment: .leading)
             Text(value)
-                .font(.system(size: 12, design: .monospaced))
+                .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, indent)
+        .padding(.trailing, 12)
         .padding(.vertical, 3)
     }
 }

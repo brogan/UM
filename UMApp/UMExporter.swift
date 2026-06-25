@@ -106,59 +106,58 @@ private struct UMExportFrameCapture: View {
         let styleMap = Dictionary(uniqueKeysWithValues: layer.document.styles.map { ($0.id, $0) })
         let spriteRef = min(gridW, gridH) / 8.0
         for (idx, sprite) in layer.sprites.enumerated() {
-            let motionSet = sprite.motionID.flatMap { motionMap[$0] }
-            let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
-                                                                 animatedGeometries: projectAnimatedGeometries,
-                                                                 frame: frame)
-            let style = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
-            let motion = computeMotion(motionSet: motionSet, style: style, path: nil,
+            let motionSet  = sprite.motionID.flatMap { motionMap[$0] }
+            let geoLayers  = resolveEffectiveSpriteLayers(sprite: sprite, motionSet: motionSet,
+                                                          animatedGeometries: projectAnimatedGeometries,
+                                                          frame: frame)
+            guard !geoLayers.isEmpty else { continue }
+            let primaryStyle = (geoLayers.first?.styleID ?? sprite.styleID).flatMap { styleMap[$0] }
+            let motion = computeMotion(motionSet: motionSet, style: primaryStyle, path: nil,
                                        frame: frame,
                                        phaseOffset: sprite.phaseOffset,
                                        cellIndex: idx,
                                        cellW: spriteRef * sprite.scaleX,
                                        cellH: spriteRef * sprite.scaleY)
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: idx)
-            let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
-                                                              animatedGeometries: projectAnimatedGeometries,
-                                                              frame: frame)
-            let mx = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
-            let my = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
-            let rot = sprite.rotation + motion.rotation + stateT.rotation
-            let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
-                                                                  animatedGeometries: projectAnimatedGeometries,
-                                                                  frame: frame)
-            let polygons = resolvePolygons(shapeID: effectiveShapeID,
-                                           shapeMap: shapePolygonMap,
-                                           fallback: fallbackPolygons)
-            let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
-            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
-            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
-            let fillC = style?.fillColor ?? .defaultFill
-            let strokeC = style?.strokeColor ?? .defaultStroke
-            let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
-            let mode = style?.renderMode ?? .filledStroked
+            for geoLayer in geoLayers {
+                let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
+                let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
+                let my      = sprite.y * gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY
+                let rot     = sprite.rotation + motion.rotation + geoLayer.transform.rotation
+                let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                                                 shapeMap: shapePolygonMap,
+                                                 fallback: fallbackPolygons)
+                let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: shapePolygonIDMap)
+                let zoomX   = (spriteRef / 2) * sprite.scaleX * motion.scaleX * geoLayer.transform.scaleX
+                let zoomY   = (spriteRef / 2) * sprite.scaleY * motion.scaleY * geoLayer.transform.scaleY
+                let la      = geoLayer.alpha
+                let fillC   = style?.fillColor   ?? .defaultFill
+                let strokeC = style?.strokeColor ?? .defaultStroke
+                let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
+                let mode    = style?.renderMode  ?? .filledStroked
 
-            if polygons.isEmpty {
-                let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
-                ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
-                         with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
-            } else {
-                for (i, polygon) in polygons.filter(\.visible).enumerated() {
-                    let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
-                    let fC = ovr?.fill ?? fillC
-                    let sC = ovr?.stroke ?? strokeC
-                    let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
-                                               zoomX: zoomX, zoomY: zoomY,
-                                               scaleX: 1.0, scaleY: 1.0,
-                                               rotation: rot)
-                    if mode == .filled || mode == .filledStroked {
-                        ctx.fill(Path(cgp),
-                                 with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
-                    }
-                    if mode == .stroked || mode == .filledStroked {
-                        ctx.stroke(Path(cgp),
-                                   with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
-                                   lineWidth: strokeW)
+                if polygons.isEmpty {
+                    let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                    ctx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                             with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a * la)))
+                } else {
+                    for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                        let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
+                        let fC  = ovr?.fill   ?? fillC
+                        let sC  = ovr?.stroke ?? strokeC
+                        let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                                   zoomX: zoomX, zoomY: zoomY,
+                                                   scaleX: 1.0, scaleY: 1.0,
+                                                   rotation: rot)
+                        if mode == .filled || mode == .filledStroked {
+                            ctx.fill(Path(cgp),
+                                     with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a * la)))
+                        }
+                        if mode == .stroked || mode == .filledStroked {
+                            ctx.stroke(Path(cgp),
+                                       with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a * la)),
+                                       lineWidth: strokeW)
+                        }
                     }
                 }
             }

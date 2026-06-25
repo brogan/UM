@@ -374,57 +374,56 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
     if layer.layerMode == .sprite {
         let spriteRef = min(layer.gridW, layer.gridH) / 8.0
         for (idx, sprite) in layer.sprites.enumerated() {
-            let motionSet = sprite.motionID.flatMap { motionMap[$0] }
-            let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
-                                                                 animatedGeometries: snap.projectAnimatedGeometries,
-                                                                 frame: snap.frame)
-            let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
-            let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+            let motionSet  = sprite.motionID.flatMap { motionMap[$0] }
+            let geoLayers  = resolveEffectiveSpriteLayers(sprite: sprite, motionSet: motionSet,
+                                                          animatedGeometries: snap.projectAnimatedGeometries,
+                                                          frame: snap.frame)
+            guard !geoLayers.isEmpty else { continue }
+            let primaryStyle = (geoLayers.first?.styleID ?? sprite.styleID).flatMap { styleMap[$0] }
+            let motion    = computeMotion(motionSet: motionSet, style: primaryStyle, path: nil,
                                           frame: snap.frame, phaseOffset: sprite.phaseOffset,
                                           cellIndex: idx,
                                           cellW: spriteRef * sprite.scaleX,
                                           cellH: spriteRef * sprite.scaleY)
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: snap.frame, spriteIndex: idx)
-            let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
-                                                              animatedGeometries: snap.projectAnimatedGeometries,
-                                                              frame: snap.frame)
-            let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x + stateT.offsetX) * dsf
-            let my = (sprite.y * layer.gridH + motion.dy + driverPos.y + stateT.offsetY) * dsf
-            let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
-                                                                  animatedGeometries: snap.projectAnimatedGeometries,
-                                                                  frame: snap.frame)
-            let polygons   = resolvePolygons(shapeID: effectiveShapeID,
-                                             shapeMap: snap.shapePolygonMap,
-                                             fallback: snap.fallbackPolygons)
-            let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: snap.shapePolygonIDMap)
-            let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX * dsf
-            let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY * dsf
-            let rot   = sprite.rotation + motion.rotation + stateT.rotation
-            let fillC   = style?.fillColor   ?? .defaultFill
-            let strokeC = style?.strokeColor ?? .defaultStroke
-            let strokeW = (style?.strokeWidth ?? 1.5) * dsf
-            let mode    = style?.renderMode  ?? .filledStroked
-            if polygons.isEmpty {
-                let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
-                let cgp  = CGPath(roundedRect: rect, cornerWidth: 3 * dsf, cornerHeight: 3 * dsf, transform: nil)
-                ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a))
-                ctx.addPath(cgp); ctx.fillPath()
-            } else {
-                for (i, polygon) in polygons.filter(\.visible).enumerated() {
-                    let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
-                    let fC  = ovr?.fill   ?? fillC
-                    let sC  = ovr?.stroke ?? strokeC
-                    let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
-                                               zoomX: zoomX, zoomY: zoomY,
-                                               scaleX: 1.0, scaleY: 1.0, rotation: rot)
-                    if mode == .filled || mode == .filledStroked {
-                        ctx.setFillColor(CGColor(red: fC.r, green: fC.g, blue: fC.b, alpha: fC.a))
-                        ctx.addPath(cgp); ctx.fillPath()
-                    }
-                    if mode == .stroked || mode == .filledStroked {
-                        ctx.setStrokeColor(CGColor(red: sC.r, green: sC.g, blue: sC.b, alpha: sC.a))
-                        ctx.setLineWidth(CGFloat(strokeW))
-                        ctx.addPath(cgp); ctx.strokePath()
+            for geoLayer in geoLayers {
+                let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
+                let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX) * dsf
+                let my = (sprite.y * layer.gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY) * dsf
+                let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                                                 shapeMap: snap.shapePolygonMap,
+                                                 fallback: snap.fallbackPolygons)
+                let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: snap.shapePolygonIDMap)
+                let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * geoLayer.transform.scaleX * dsf
+                let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * geoLayer.transform.scaleY * dsf
+                let rot   = sprite.rotation + motion.rotation + geoLayer.transform.rotation
+                let la    = geoLayer.alpha
+                let fillC   = style?.fillColor   ?? .defaultFill
+                let strokeC = style?.strokeColor ?? .defaultStroke
+                let strokeW = (style?.strokeWidth ?? 1.5) * dsf
+                let mode    = style?.renderMode  ?? .filledStroked
+                if polygons.isEmpty {
+                    let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                    let cgp  = CGPath(roundedRect: rect, cornerWidth: 3 * dsf, cornerHeight: 3 * dsf, transform: nil)
+                    ctx.setFillColor(CGColor(red: fillC.r, green: fillC.g, blue: fillC.b, alpha: fillC.a * la))
+                    ctx.addPath(cgp); ctx.fillPath()
+                } else {
+                    for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                        let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
+                        let fC  = ovr?.fill   ?? fillC
+                        let sC  = ovr?.stroke ?? strokeC
+                        let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                                   zoomX: zoomX, zoomY: zoomY,
+                                                   scaleX: 1.0, scaleY: 1.0, rotation: rot)
+                        if mode == .filled || mode == .filledStroked {
+                            ctx.setFillColor(CGColor(red: fC.r, green: fC.g, blue: fC.b, alpha: fC.a * la))
+                            ctx.addPath(cgp); ctx.fillPath()
+                        }
+                        if mode == .stroked || mode == .filledStroked {
+                            ctx.setStrokeColor(CGColor(red: sC.r, green: sC.g, blue: sC.b, alpha: sC.a * la))
+                            ctx.setLineWidth(CGFloat(strokeW))
+                            ctx.addPath(cgp); ctx.strokePath()
+                        }
                     }
                 }
             }
@@ -701,74 +700,72 @@ struct GridCanvasPlaceholder: View {
                                 let styleMap  = Dictionary(uniqueKeysWithValues: controller.projectStyles.map { ($0.id, $0) })
                                 let spriteRef = min(gridW, gridH) / 8.0
                                 for (idx, sprite) in ls.sprites.enumerated() {
-                                    let motionSet = sprite.motionID.flatMap { lMotionMap[$0] }
-                                    let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
-                                                                                         animatedGeometries: controller.projectAnimatedGeometries,
-                                                                                         frame: currentFrame)
-                                    let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
-                                    let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+                                    let motionSet  = sprite.motionID.flatMap { lMotionMap[$0] }
+                                    let geoLayers  = resolveEffectiveSpriteLayers(sprite: sprite, motionSet: motionSet,
+                                                                                   animatedGeometries: controller.projectAnimatedGeometries,
+                                                                                   frame: currentFrame)
+                                    guard !geoLayers.isEmpty else { continue }
+                                    let primaryStyle = (geoLayers.first?.styleID ?? sprite.styleID).flatMap { styleMap[$0] }
+                                    let motion    = computeMotion(motionSet: motionSet, style: primaryStyle, path: nil,
                                                                   frame: currentFrame,
                                                                   phaseOffset: sprite.phaseOffset,
                                                                   cellIndex: idx,
                                                                   cellW: spriteRef * sprite.scaleX,
                                                                   cellH: spriteRef * sprite.scaleY)
-                                    let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
-                                    let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
-                                                                                       animatedGeometries: controller.projectAnimatedGeometries,
-                                                                                       frame: currentFrame)
-                                    let mx  = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
-                                    let my  = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
-                                    let rot = sprite.rotation + motion.rotation + stateT.rotation
-                                    let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
-                                                                                          animatedGeometries: controller.projectAnimatedGeometries,
-                                                                                          frame: currentFrame)
-                                    let polygons   = resolvePolygons(shapeID: effectiveShapeID,
-                                                                     shapeMap: shapePolyMap,
-                                                                     fallback: fallbackPolys)
-                                    let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolyIDMap)
-                                    let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
-                                    let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
+                                    let driverPos  = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
                                     let isSelected = sprite.id == controller.activeSpriteID
-
-                                    if polygons.isEmpty {
-                                        let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
-                                        let fc   = style?.fillColor ?? .defaultFill
-                                        layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
-                                                      with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a)))
-                                        if isSelected {
-                                            layerCtx.stroke(Path(roundedRect: rect, cornerRadius: 3),
-                                                            with: .color(.accentColor), lineWidth: 1.5)
-                                        }
-                                    } else {
-                                        let fillC   = style?.fillColor   ?? .defaultFill
-                                        let strokeC = style?.strokeColor ?? .defaultStroke
-                                        let strokeW = style?.strokeWidth ?? 1.5
-                                        let mode    = style?.renderMode  ?? .filledStroked
-                                        let paths   = polygons.filter(\.visible).enumerated().map { (_, polygon) -> CGPath in
-                                            buildPolygonPath(polygon, cx: mx, cy: my,
-                                                             zoomX: zoomX, zoomY: zoomY,
-                                                             scaleX: 1.0, scaleY: 1.0,
-                                                             rotation: rot)
-                                        }
-                                        for (i, cgp) in paths.enumerated() {
-                                            let ovr   = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
-                                            let fC    = ovr?.fill   ?? fillC
-                                            let sC    = ovr?.stroke ?? strokeC
-                                            if mode == .filled || mode == .filledStroked {
-                                                layerCtx.fill(Path(cgp),
-                                                              with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
+                                    for (li, geoLayer) in geoLayers.enumerated() {
+                                        let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
+                                        let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
+                                        let my      = sprite.y * gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY
+                                        let rot     = sprite.rotation + motion.rotation + geoLayer.transform.rotation
+                                        let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                                                                         shapeMap: shapePolyMap,
+                                                                         fallback: fallbackPolys)
+                                        let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: shapePolyIDMap)
+                                        let zoomX   = (spriteRef / 2) * sprite.scaleX * motion.scaleX * geoLayer.transform.scaleX
+                                        let zoomY   = (spriteRef / 2) * sprite.scaleY * motion.scaleY * geoLayer.transform.scaleY
+                                        let la      = geoLayer.alpha
+                                        if polygons.isEmpty {
+                                            let rect = CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2)
+                                            let fc   = style?.fillColor ?? .defaultFill
+                                            layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
+                                                          with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a * la)))
+                                            if isSelected && li == 0 {
+                                                layerCtx.stroke(Path(roundedRect: rect, cornerRadius: 3),
+                                                                with: .color(.accentColor), lineWidth: 1.5)
                                             }
-                                            if mode == .stroked || mode == .filledStroked {
-                                                layerCtx.stroke(Path(cgp),
-                                                                with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
-                                                                lineWidth: strokeW)
+                                        } else {
+                                            let fillC   = style?.fillColor   ?? .defaultFill
+                                            let strokeC = style?.strokeColor ?? .defaultStroke
+                                            let strokeW = style?.strokeWidth ?? 1.5
+                                            let mode    = style?.renderMode  ?? .filledStroked
+                                            let paths   = polygons.filter(\.visible).enumerated().map { (_, polygon) -> CGPath in
+                                                buildPolygonPath(polygon, cx: mx, cy: my,
+                                                                 zoomX: zoomX, zoomY: zoomY,
+                                                                 scaleX: 1.0, scaleY: 1.0,
+                                                                 rotation: rot)
                                             }
-                                        }
-                                        if isSelected {
-                                            for cgp in paths {
-                                                layerCtx.stroke(Path(cgp),
-                                                                with: .color(.accentColor.opacity(0.9)),
-                                                                lineWidth: 2.5)
+                                            for (i, cgp) in paths.enumerated() {
+                                                let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
+                                                let fC  = ovr?.fill   ?? fillC
+                                                let sC  = ovr?.stroke ?? strokeC
+                                                if mode == .filled || mode == .filledStroked {
+                                                    layerCtx.fill(Path(cgp),
+                                                                  with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a * la)))
+                                                }
+                                                if mode == .stroked || mode == .filledStroked {
+                                                    layerCtx.stroke(Path(cgp),
+                                                                    with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a * la)),
+                                                                    lineWidth: strokeW)
+                                                }
+                                            }
+                                            if isSelected && li == 0 {
+                                                for cgp in paths {
+                                                    layerCtx.stroke(Path(cgp),
+                                                                    with: .color(.accentColor.opacity(0.9)),
+                                                                    lineWidth: 2.5)
+                                                }
                                             }
                                         }
                                     }
@@ -1440,9 +1437,13 @@ struct GridCanvasPlaceholder: View {
         let ref = min(gridW, gridH) / 8.0
         let motion = spriteMotion(for: sprite, index: index, frame: frame, gridW: gridW, gridH: gridH)
         let dOff = DriverEvaluator.evaluate(sprite.positionDriver, frame: frame, spriteIndex: index)
-        let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
-                                                          animatedGeometries: controller.projectAnimatedGeometries,
-                                                          frame: frame)
+        let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
+        let geoLayers = resolveEffectiveSpriteLayers(sprite: sprite, motionSet: motionSet,
+                                                     animatedGeometries: controller.projectAnimatedGeometries,
+                                                     frame: frame)
+        // Hit-testing uses only the primary (first) layer.
+        let stateT = geoLayers.first?.transform ?? .identity
+        let primaryShapeID = geoLayers.first?.shapeID
         let sx = sprite.x * gridW + motion.dx + dOff.x + stateT.offsetX
         let sy = sprite.y * gridH + motion.dy + dOff.y + stateT.offsetY
         let zoom = controller.canvasZoom
@@ -1451,11 +1452,7 @@ struct GridCanvasPlaceholder: View {
         let hh = max(minHit, (ref / 2) * sprite.scaleY * abs(motion.scaleY) * stateT.scaleY)
         let fallback = CGRect(x: sx - hw, y: sy - hh, width: hw * 2, height: hh * 2)
         let style = sprite.styleID.flatMap { id in controller.projectStyles.first { $0.id == id } }
-        let motionSet = sprite.motionID.flatMap { id in controller.projectMotionSets.first { $0.id == id } }
-        let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
-                                                              animatedGeometries: controller.projectAnimatedGeometries,
-                                                              frame: frame)
-        let polygons = resolvePolygons(shapeID: effectiveShapeID,
+        let polygons = resolvePolygons(shapeID: primaryShapeID,
                                        shapeMap: controller.shapePolygonMap,
                                        fallback: controller.shapePolygons)
         guard !polygons.isEmpty else { return fallback }
@@ -2065,63 +2062,62 @@ struct SpriteCapture: View {
             let motionMap = Dictionary(uniqueKeysWithValues: projectMotionSets.map { ($0.id, $0) })
             let spriteRef = min(gridW, gridH) / 8.0
             for (idx, sprite) in sprites.enumerated() {
-                let motionSet = sprite.motionID.flatMap { motionMap[$0] }
-                let styleOverrideID = resolveEffectiveSpriteStyleID(sprite: sprite,
-                                                                     animatedGeometries: projectAnimatedGeometries,
-                                                                     frame: currentFrame)
-                let style     = (styleOverrideID ?? sprite.styleID).flatMap { styleMap[$0] }
-                let motion    = computeMotion(motionSet: motionSet, style: style, path: nil,
+                let motionSet  = sprite.motionID.flatMap { motionMap[$0] }
+                let geoLayers  = resolveEffectiveSpriteLayers(sprite: sprite, motionSet: motionSet,
+                                                               animatedGeometries: projectAnimatedGeometries,
+                                                               frame: currentFrame)
+                guard !geoLayers.isEmpty else { continue }
+                let primaryStyle = (geoLayers.first?.styleID ?? sprite.styleID).flatMap { styleMap[$0] }
+                let motion    = computeMotion(motionSet: motionSet, style: primaryStyle, path: nil,
                                               frame: currentFrame, phaseOffset: sprite.phaseOffset,
                                               cellIndex: idx,
                                               cellW: spriteRef * sprite.scaleX,
                                               cellH: spriteRef * sprite.scaleY)
                 let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
-                let stateT = resolveEffectiveSpriteStateTransform(sprite: sprite,
-                                                                   animatedGeometries: projectAnimatedGeometries,
-                                                                   frame: currentFrame)
-                let mx  = sprite.x * gridW + motion.dx + driverPos.x + stateT.offsetX
-                let my  = sprite.y * gridH + motion.dy + driverPos.y + stateT.offsetY
-                let rot = sprite.rotation + motion.rotation + stateT.rotation
-                let effectiveShapeID = resolveEffectiveSpriteShapeID(sprite: sprite, motionSet: motionSet,
-                                                                      animatedGeometries: projectAnimatedGeometries,
-                                                                      frame: currentFrame)
-                let polygons   = resolvePolygons(shapeID: effectiveShapeID,
-                                                 shapeMap: shapePolygonMap,
-                                                 fallback: fallbackPolygons)
-                let polygonIDs = resolvePolygonIDs(shapeID: effectiveShapeID, idMap: shapePolygonIDMap)
-                let zoomX = (spriteRef / 2) * sprite.scaleX * motion.scaleX * stateT.scaleX
-                let zoomY = (spriteRef / 2) * sprite.scaleY * motion.scaleY * stateT.scaleY
+                for geoLayer in geoLayers {
+                    let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
+                    let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
+                    let my      = sprite.y * gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY
+                    let rot     = sprite.rotation + motion.rotation + geoLayer.transform.rotation
+                    let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                                                     shapeMap: shapePolygonMap,
+                                                     fallback: fallbackPolygons)
+                    let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: shapePolygonIDMap)
+                    let zoomX   = (spriteRef / 2) * sprite.scaleX * motion.scaleX * geoLayer.transform.scaleX
+                    let zoomY   = (spriteRef / 2) * sprite.scaleY * motion.scaleY * geoLayer.transform.scaleY
+                    let la      = geoLayer.alpha
 
-                if polygons.isEmpty {
-                    let fc = style?.fillColor ?? .defaultFill
-                    ctx.fill(Path(roundedRect: CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2),
-                                  cornerRadius: 3),
-                             with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a)))
-                } else {
-                    let fillC   = style?.fillColor   ?? .defaultFill
-                    let strokeC = style?.strokeColor ?? .defaultStroke
-                    let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
-                    let mode    = style?.renderMode  ?? .filledStroked
-                    for (i, polygon) in polygons.filter(\.visible).enumerated() {
-                        let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
-                        let fC  = ovr?.fill   ?? fillC
-                        let sC  = ovr?.stroke ?? strokeC
-                        let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
-                                                   zoomX: zoomX, zoomY: zoomY,
-                                                   scaleX: 1.0, scaleY: 1.0,
-                                                   rotation: rot)
-                        if mode == .filled || mode == .filledStroked {
-                            ctx.fill(Path(cgp),
-                                     with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a)))
-                        }
-                        if mode == .stroked || mode == .filledStroked {
-                            ctx.stroke(Path(cgp),
-                                       with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a)),
-                                       lineWidth: strokeW)
+                    if polygons.isEmpty {
+                        let fc = style?.fillColor ?? .defaultFill
+                        ctx.fill(Path(roundedRect: CGRect(x: mx - zoomX, y: my - zoomY, width: zoomX * 2, height: zoomY * 2),
+                                      cornerRadius: 3),
+                                 with: .color(Color(red: fc.r, green: fc.g, blue: fc.b, opacity: fc.a * la)))
+                    } else {
+                        let fillC   = style?.fillColor   ?? .defaultFill
+                        let strokeC = style?.strokeColor ?? .defaultStroke
+                        let strokeW = (style?.strokeWidth ?? 1.5) * strokeScale
+                        let mode    = style?.renderMode  ?? .filledStroked
+                        for (i, polygon) in polygons.filter(\.visible).enumerated() {
+                            let ovr = sprite.polygonOverrides[polygonIDs[safe: i]?.uuidString ?? ""]
+                            let fC  = ovr?.fill   ?? fillC
+                            let sC  = ovr?.stroke ?? strokeC
+                            let cgp = buildPolygonPath(polygon, cx: mx, cy: my,
+                                                       zoomX: zoomX, zoomY: zoomY,
+                                                       scaleX: 1.0, scaleY: 1.0,
+                                                       rotation: rot)
+                            if mode == .filled || mode == .filledStroked {
+                                ctx.fill(Path(cgp),
+                                         with: .color(Color(red: fC.r, green: fC.g, blue: fC.b, opacity: fC.a * la)))
+                            }
+                            if mode == .stroked || mode == .filledStroked {
+                                ctx.stroke(Path(cgp),
+                                           with: .color(Color(red: sC.r, green: sC.g, blue: sC.b, opacity: sC.a * la)),
+                                           lineWidth: strokeW)
+                            }
                         }
                     }
-                }
-            }
+                }  // for geoLayer
+            }  // for sprite
         }
         .frame(width: gridW, height: gridH)
     }

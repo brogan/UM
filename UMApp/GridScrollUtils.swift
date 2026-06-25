@@ -62,6 +62,7 @@ func resolveEffectiveSpriteStyleID(
 
 /// Returns the per-state transform for the active animated geometry state at the given frame,
 /// or .identity if the sprite has no animated geometry assigned.
+/// Used by hit-testing (primary layer only); render sites use resolveEffectiveSpriteLayers.
 func resolveEffectiveSpriteStateTransform(
     sprite: UMSprite,
     animatedGeometries: [UMAnimatedGeometry],
@@ -71,6 +72,26 @@ func resolveEffectiveSpriteStateTransform(
           let geo = animatedGeometries.first(where: { $0.id == geoID })
     else { return .identity }
     return geo.resolveStateTransform(atFrame: frame + sprite.phaseOffset)
+}
+
+/// Returns the render layers for this sprite at the given frame.
+/// Animated geometry sprites: calls geo.resolveRenderLayers (1 or 2 layers during transitions).
+/// Non-animated sprites: returns a single synthetic layer with SEQUENCE-resolved shapeID.
+/// Render sites iterate these layers, drawing each at layer.alpha opacity.
+func resolveEffectiveSpriteLayers(
+    sprite: UMSprite,
+    motionSet: UMMotionSet?,
+    animatedGeometries: [UMAnimatedGeometry],
+    frame: Int
+) -> [UMRenderLayer] {
+    if let geoID = sprite.animatedGeometryID,
+       let geo = animatedGeometries.first(where: { $0.id == geoID }) {
+        return geo.resolveRenderLayers(atFrame: frame + sprite.phaseOffset)
+    }
+    let shapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: sprite.shapeID,
+                                         frame: frame, phaseOffset: sprite.phaseOffset)
+    guard let sid = shapeID else { return [] }
+    return [UMRenderLayer(shapeID: sid, styleID: nil, alpha: 1.0, transform: .identity)]
 }
 
 // MARK: - Grid-scroll render spec

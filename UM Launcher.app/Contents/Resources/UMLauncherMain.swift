@@ -1,11 +1,52 @@
 import Foundation
 import AppKit
 
-let projectDir = "/Users/broganbunt/UMApp"
-let scheme     = "UMApp"
-let buildDir   = "/tmp/umapp-build"
-let appPath    = "\(buildDir)/\(scheme).app"
-let logPath    = "/tmp/um-launcher.log"
+let projectDir  = "/Users/broganbunt/UMApp"
+let scheme      = "UMApp"
+let buildDir    = "/tmp/umapp-build"
+let appPath     = "\(buildDir)/\(scheme).app"
+let binaryPath  = "\(appPath)/Contents/MacOS/\(scheme)"
+let logPath     = "/tmp/um-launcher.log"
+let appBundleID = "org.brogan.umapp"
+let savedStatePath = "\(NSHomeDirectory())/Library/Saved Application State/\(appBundleID).savedState"
+
+// Directories whose modification times are checked to decide whether a rebuild is needed.
+let sourceRoots = [
+    "\(projectDir)/UMApp",
+    "\(projectDir)/UMEngine/Sources",
+]
+
+func newestMtime(in roots: [String]) -> Date? {
+    let fm = FileManager.default
+    var newest: Date? = nil
+    for root in roots {
+        guard let enumerator = fm.enumerator(
+            at: URL(fileURLWithPath: root),
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else { continue }
+        for case let url as URL in enumerator {
+            guard let ext = url.pathExtension.lowercased() as String?,
+                  ["swift", "xcdatamodeld", "xcassets", "storyboard", "plist"].contains(ext) else { continue }
+            if let mtime = try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate {
+                if newest == nil || mtime > newest! { newest = mtime }
+            }
+        }
+    }
+    return newest
+}
+
+func binaryMtime() -> Date? {
+    (try? URL(fileURLWithPath: binaryPath)
+        .resourceValues(forKeys: [.contentModificationDateKey])
+        .contentModificationDate)
+}
+
+func needsRebuild() -> Bool {
+    guard let binary = binaryMtime() else { return true }   // no binary yet
+    guard let sources = newestMtime(in: sourceRoots) else { return true }
+    return sources > binary
+}
 
 func appendLog(_ msg: String) {
     let line = "\(msg)\n"
@@ -54,24 +95,52 @@ func run(_ exe: String, _ args: [String], env: [String: String]? = nil) -> Int32
 }
 
 appendLog("==== \(Date()) ====")
-appendLog("Building \(scheme)...")
 
-let status = run("/usr/bin/xcodebuild", [
-    "-scheme", scheme,
-    "-destination", "platform=macOS",
-    "CONFIGURATION_BUILD_DIR=\(buildDir)",
-    "build"
-])
+if needsRebuild() {
+    appendLog("Source changes detected — building \(scheme)...")
+    let status = run("/usr/bin/xcodebuild", [
+        "-scheme", scheme,
+        "-destination", "platform=macOS",
+        "CONFIGURATION_BUILD_DIR=\(buildDir)",
+        "build"
+    ])
+    guard status == 0 else {
+        let message = "The UM build failed with status \(status). Details were written to \(logPath)."
+        appendLog("xcodebuild failed (status \(status)). Check \(logPath)")
+        showAlert(title: "UM could not be built", message: message)
+        exit(status)
+    }
+} else {
+    appendLog("No source changes — skipping build.")
+}
 
-guard status == 0 else {
-    let message = "The UM build failed with status \(status). Details were written to \(logPath)."
-    appendLog("xcodebuild failed (status \(status)). Check \(logPath)")
-    showAlert(title: "UM could not be built", message: message)
-    exit(status)
+let runningApps = NSRunningApplication.runningApplications(withBundleIdentifier: appBundleID)
+if !runningApps.isEmpty {
+    appendLog("Terminating \(runningApps.count) running UM instance(s)...")
+    for app in runningApps {
+        app.terminate()
+    }
+    let deadline = Date().addingTimeInterval(5)
+    while Date() < deadline && runningApps.contains(where: { !$0.isTerminated }) {
+        Thread.sleep(forTimeInterval: 0.1)
+    }
+for app in runningApps where !app.isTerminated {
+        appendLog("Force terminating stale UM instance pid \(app.processIdentifier)...")
+        app.forceTerminate()
+    }
+}
+
+if FileManager.default.fileExists(atPath: savedStatePath) {
+    do {
+        try FileManager.default.removeItem(atPath: savedStatePath)
+        appendLog("Removed saved app state at \(savedStatePath)")
+    } catch {
+        appendLog("Could not remove saved app state at \(savedStatePath): \(error)")
+    }
 }
 
 appendLog("Launching \(appPath)...")
-let openStatus = run("/usr/bin/open", [appPath])
+let openStatus = run("/usr/bin/open", ["-n", appPath])
 appendLog("open finished with status \(openStatus).")
 if openStatus != 0 {
     showAlert(title: "UM could not be opened",

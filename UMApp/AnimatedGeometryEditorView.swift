@@ -318,37 +318,39 @@ struct AnimatedGeometryEditorView: View {
                     if nextIdx != activeIdx && nextIdx != prevIdx { drawGhost(idx: nextIdx, opacity: 0.22) }
                 }
 
-                // Active state at full opacity.
-                let acx = size.width  / 2 - shapeCX * fitZoom + activeState.offsetX
-                let acy = size.height / 2 + shapeCY * fitZoom + activeState.offsetY
-                let azx = fitZoom * activeState.scaleX
-                let azy = fitZoom * activeState.scaleY
-                let polygons = (snapPolygonMap[activeState.shapeID] ?? snapFallbackPolys).filter(\.visible)
-
-                let style   = activeState.styleID.flatMap { id in snapStyles.first { $0.id == id } }
-                          ?? snapStyles.first
-                let fillC   = style?.fillColor   ?? .defaultFill
-                let strokeC = style?.strokeColor ?? .defaultStroke
-                let strokeW = style?.strokeWidth ?? 1.5
-                let mode    = style?.renderMode  ?? .filledStroked
-
-                if polygons.isEmpty {
-                    let rect = CGRect(x: acx - azx, y: acy - azy, width: azx * 2, height: azy * 2)
-                    ctx.fill(Path(roundedRect: rect, cornerRadius: 4),
-                             with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
-                } else {
-                    for polygon in polygons {
-                        let cgp = buildPolygonPath(polygon, cx: acx, cy: acy,
-                                                   zoomX: azx, zoomY: azy,
-                                                   scaleX: 1.0, scaleY: 1.0, rotation: activeState.rotation)
-                        if mode == .filled || mode == .filledStroked {
-                            ctx.fill(Path(cgp),
-                                     with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a)))
-                        }
-                        if mode == .stroked || mode == .filledStroked {
-                            ctx.stroke(Path(cgp),
-                                       with: .color(Color(red: strokeC.r, green: strokeC.g, blue: strokeC.b, opacity: strokeC.a)),
-                                       lineWidth: strokeW)
+                // Render layers (1 at full opacity normally; 2 during cross-fade transition).
+                let renderLayers = g.resolveRenderLayers(atFrame: snapFrame)
+                for renderLayer in renderLayers {
+                    let la  = renderLayer.alpha
+                    let acx = size.width  / 2 - shapeCX * fitZoom + renderLayer.transform.offsetX
+                    let acy = size.height / 2 + shapeCY * fitZoom + renderLayer.transform.offsetY
+                    let azx = fitZoom * renderLayer.transform.scaleX
+                    let azy = fitZoom * renderLayer.transform.scaleY
+                    let layerPolys = (snapPolygonMap[renderLayer.shapeID] ?? snapFallbackPolys).filter(\.visible)
+                    let style   = renderLayer.styleID.flatMap { id in snapStyles.first { $0.id == id } }
+                              ?? snapStyles.first
+                    let fillC   = style?.fillColor   ?? .defaultFill
+                    let strokeC = style?.strokeColor ?? .defaultStroke
+                    let strokeW = style?.strokeWidth ?? 1.5
+                    let mode    = style?.renderMode  ?? .filledStroked
+                    if layerPolys.isEmpty {
+                        let rect = CGRect(x: acx - azx, y: acy - azy, width: azx * 2, height: azy * 2)
+                        ctx.fill(Path(roundedRect: rect, cornerRadius: 4),
+                                 with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a * la)))
+                    } else {
+                        for polygon in layerPolys {
+                            let cgp = buildPolygonPath(polygon, cx: acx, cy: acy,
+                                                       zoomX: azx, zoomY: azy,
+                                                       scaleX: 1.0, scaleY: 1.0, rotation: renderLayer.transform.rotation)
+                            if mode == .filled || mode == .filledStroked {
+                                ctx.fill(Path(cgp),
+                                         with: .color(Color(red: fillC.r, green: fillC.g, blue: fillC.b, opacity: fillC.a * la)))
+                            }
+                            if mode == .stroked || mode == .filledStroked {
+                                ctx.stroke(Path(cgp),
+                                           with: .color(Color(red: strokeC.r, green: strokeC.g, blue: strokeC.b, opacity: strokeC.a * la)),
+                                           lineWidth: strokeW)
+                            }
                         }
                     }
                 }
@@ -431,14 +433,43 @@ struct AnimatedGeometryEditorView: View {
     // MARK: - Transform sub-row
 
     private func transformSubRow(state: UMAnimatedGeometryState, index: Int) -> some View {
-        HStack(spacing: 4) {
-            tField("Δx", value: state.offsetX)  { v in updateState(at: index) { $0.offsetX  = v } }
-            tField("Δy", value: state.offsetY)  { v in updateState(at: index) { $0.offsetY  = v } }
-            Spacer()
-            tField("°",  value: state.rotation) { v in updateState(at: index) { $0.rotation = v } }
-            Spacer()
-            tField("Sx", value: state.scaleX)   { v in updateState(at: index) { $0.scaleX   = v } }
-            tField("Sy", value: state.scaleY)   { v in updateState(at: index) { $0.scaleY   = v } }
+        VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                tField("Δx", value: state.offsetX)  { v in updateState(at: index) { $0.offsetX  = v } }
+                tField("Δy", value: state.offsetY)  { v in updateState(at: index) { $0.offsetY  = v } }
+                Spacer()
+                tField("°",  value: state.rotation) { v in updateState(at: index) { $0.rotation = v } }
+                Spacer()
+                tField("Sx", value: state.scaleX)   { v in updateState(at: index) { $0.scaleX   = v } }
+                tField("Sy", value: state.scaleY)   { v in updateState(at: index) { $0.scaleY   = v } }
+            }
+            // Transition row — cross-fade to next state over transitionFrames
+            HStack(spacing: 4) {
+                Text("Trans").font(.system(size: 10)).foregroundStyle(.secondary)
+                TextField("", value: Binding(
+                    get: { state.transitionFrames },
+                    set: { v in updateState(at: index) { $0.transitionFrames = max(0, v) } }
+                ), format: .number)
+                .textFieldStyle(.squareBorder)
+                .font(.system(size: 11, design: .monospaced))
+                .frame(width: 36)
+
+                Text("Ease").font(.system(size: 10)).foregroundStyle(.secondary)
+                    .opacity(state.transitionFrames > 0 ? 1 : 0.35)
+                Picker("", selection: Binding(
+                    get: { state.easing },
+                    set: { v in updateState(at: index) { $0.easing = v } }
+                )) {
+                    ForEach(PathEasing.allCases, id: \.self) { e in
+                        Text(e.displayName).tag(e)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 110)
+                .opacity(state.transitionFrames > 0 ? 1 : 0.35)
+                Spacer()
+            }
         }
         .padding(.leading, 30)
         .padding(.trailing, 12)
