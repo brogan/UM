@@ -2472,7 +2472,7 @@ public enum UMAnimatedGeometryLoopMode: String, Codable, CaseIterable, Sendable 
 | Phase 2b | All render sites iterate `geoLayers` at `layer.alpha` (canvas, accumulation, spriteBounds, SpriteCapture, export) | ✓ Built 2026-06-25 |
 | Phase 2b | Trans + Ease fields in editor transform sub-row | ✓ Built 2026-06-25 |
 | Phase 2b | Editor preview canvas renders cross-fade via `resolveRenderLayers` | ✓ Built 2026-06-25 |
-| Phase 2b | Vertex morph (same-topology shapes) | Not planned — cross-fade covers the visual need |
+| Phase 3 | Vertex morph (per-vertex position interpolation between same-topology shapes) | Planned — Loom-gated |
 
 **Render site integration**
 
@@ -2501,9 +2501,54 @@ SHAPES section → `+ Import Layers as Shapes…` → select a multi-layer Loom 
 
 **Resolved design decisions (Phase 2b)**
 
-- Cross-fade is the primary multi-state transition mechanism. Vertex morph (interpolating polygon vertices between two same-topology shapes) is not planned — cross-fade covers the visual need without requiring topology parity checks.
+- Cross-fade is the current transition mechanism (Phase 2b). Vertex morph (per-vertex position interpolation) is Phase 3 — planned but Loom-gated.
 - `transitionFrames` consumed only during the forward pass; PingPong back-pass uses hold-only counts so the reverse does not double the cross-fade.
 - `UMRenderLayer` is ID-agnostic (UUID-only). UM resolves `styleID → UMStyle`; Loom will resolve `styleID → rendererSet`. No style-specific types leak into the engine.
+
+**Phase 3 — Vertex morph (planned, Loom-gated)**
+
+Morph targets interpolate polygon vertex positions between two same-topology shapes (identical vertex count per polygon, matching order). The result is a smooth geometric deformation rather than an opacity dissolve — shapes actually flow from one configuration to another.
+
+**Loom morph target system (from codebase analysis)**
+
+`PolygonSetDef.isMorphTarget: Bool` — flag on the polygon set definition in `PolygonConfig`. When `true`, the geometry editor restricts all editing to vertex-position-only changes: add/remove polygon, add/remove vertex, cut, paste, and delete are all disabled. This is the topology lock; it cannot be broken without toggling the flag, which changes the file's morph target identity.
+
+A multi-layer editable geometry JSON file is the natural container. Each layer is one shape in the morph family — one layer is the base, additional named layers are blend destinations (e.g. "base", "drift", "extreme"). The geometry editor shows a vertex-mismatch warning if any layer has a different vertex count from the first, alerting the author before lock time.
+
+`SpriteDef.morphTargetNames: [String]` — ordered list of shape or layer names that are morph destinations. Index 0 blends at amount 1.0, index 1 at amount 2.0, etc. A single sprite can reference multiple morph targets from one file.
+
+Load-time resolution in `SpriteScene.makeInstance` (priority order):
+1. Shape name in the same ShapeSet (named shape in the project)
+2. Layer name within the base shape's own geometry file (multi-layer editable JSON)
+3. Legacy: file in the `morphTargets/` subdirectory
+
+Topology check at load time: any target whose polygon count or per-polygon vertex count doesn't match the base is silently skipped with a console warning. No crash; missing/mismatched targets simply produce no morph for that slot.
+
+`MorphInterpolator.interpolate(base:targets:morphAmount:)` — the blend engine:
+- `morphAmount` is a `Double` in `[0, targets.count]`, clamped
+- `0` = pure base geometry
+- `1.0` = pure `targets[0]`; `1.5` = 50% blend between `targets[0]` and `targets[1]`; `2.0` = pure `targets[1]`
+- Integer part selects the "from" source; fractional part is `t` for the lerp
+- Per vertex: `Vector2D.lerp(from.point, to.point, t: t)`
+- `type`, `pressures`, `pressureProfiles`, `visible` are always preserved from the base — never interpolated
+
+In Loom, `morphAmount` is driven by `TransformDrivers.morph: DoubleDriver` — a full keyframe/oscillator/jitter/noise driver with its own purple timeline lane, producing a continuous `Double` that feeds `MorphInterpolator` each frame.
+
+**Import into UM**
+
+The existing "Import Layers as Shapes" workflow is the natural entry point. When the source is a locked Loom morph target file, all extracted shapes (layers) are from the same topology family. A future import extension could tag each imported shape with its source file URL so UM can identify morph-compatible pairs at Sprite Set authoring time — e.g. showing a morph indicator icon in the state picker when both adjacent states come from the same locked file.
+
+**UM render path (Phase 3)**
+
+In UM the `progress` value from `stateAtFrame(_:)` maps directly to `morphAmount` in `[0, 1]`. When `transitionFrames > 0` and both adjacent states are topology-compatible (same polygon count, same per-polygon vertex count — checked at render time, not import time), substitute vertex interpolation for the current alpha cross-fade:
+
+```swift
+// Instead of two UMRenderLayers at complementary alphas:
+let morphed = morphBlend(from: fromPolygons, to: toPolygons, t: easedProgress)
+// → one UMRenderLayer at alpha = 1.0 with interpolated polygon geometry
+```
+
+`visible` is preserved from the base; `type` and control-point metadata are preserved from the base (matching Loom's contract). When topology doesn't match, fall back to the existing cross-fade — no crash, no special gate required. The existing `UMRenderLayer` struct may need an optional `resolvedPolygons` field so pre-interpolated geometry can be passed through the render pipeline without a second shapeID lookup.
 
 ---
 
