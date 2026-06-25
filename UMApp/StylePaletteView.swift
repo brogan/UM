@@ -147,6 +147,16 @@ struct StylePaletteView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
 
+                Button("+ Import Layers as Shapes…") {
+                    importShapeLayersFromFile()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 7)
+
                 Divider().padding(.vertical, 4)
 
                 sectionHeader("PALETTES")
@@ -1046,6 +1056,20 @@ struct StylePaletteView: View {
         }
         guard panel.runModal() == .OK else { return }
         for url in panel.urls { controller.importShape(from: url) }
+    }
+
+    private func importShapeLayersFromFile() {
+        let panel = NSOpenPanel()
+        panel.title = "Import Layers as Shapes"
+        panel.message = "Select a multi-layer Loom geometry file — each visible layer becomes a separate shape and a Sprite Set is created automatically."
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = true
+        let loomProjects = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".loom_projects")
+        if FileManager.default.fileExists(atPath: loomProjects.path) {
+            panel.directoryURL = loomProjects
+        }
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls { controller.importShapeLayers(from: url) }
     }
 
     // MARK: - Sprite Sets row

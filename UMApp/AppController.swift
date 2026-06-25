@@ -1546,6 +1546,64 @@ final class AppController {
         rebuildShapePolygonMap()
     }
 
+    /// Imports each visible, non-empty layer of a multi-layer Loom geometry file as an
+    /// individual UMShape, then auto-creates a UMAnimatedGeometry (Sprite Set) containing
+    /// all resulting shapes in layer order.  Layers with no polygons are skipped.
+    func importShapeLayers(from url: URL) {
+        guard let data   = try? Data(contentsOf: url),
+              let geoDoc = try? EditableGeometryJSONLoader.decode(from: data)
+        else { return }
+
+        let docName = url.deletingPathExtension().lastPathComponent
+        let candidateLayers = geoDoc.layers.filter { $0.isVisible && !$0.polygons.isEmpty }
+        guard !candidateLayers.isEmpty else { return }
+
+        let shapesDir: URL? = currentFileURL.map {
+            let dir = $0.appendingPathComponent("shapes")
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            return dir
+        }
+
+        var created: [UMShape] = []
+        for layer in candidateLayers {
+            // Build a self-contained single-layer document.
+            // weldGroups reference cross-layer points so we clear them; runtimePolygons()
+            // doesn't use them and this keeps the file clean.
+            var singleDoc = geoDoc
+            singleDoc.layers = [layer]
+            singleDoc.weldGroups = []
+
+            guard let encoded = try? EditableGeometryJSONLoader.encode(singleDoc),
+                  let json    = String(data: encoded, encoding: .utf8)
+            else { continue }
+
+            let layerName = layer.name.isEmpty ? "Layer" : layer.name
+            let baseFilename = "\(docName)_\(layerName).json"
+            let savedFilename: String
+            if let dir = shapesDir {
+                let dest = uniqueURL(in: dir, for: baseFilename)
+                try? json.write(to: dest, atomically: true, encoding: .utf8)
+                savedFilename = dest.lastPathComponent
+            } else {
+                savedFilename = baseFilename
+            }
+
+            let shape = UMShape(name: layerName, sourceFilename: savedFilename, geometryJSON: json)
+            projectShapes.append(shape)
+            created.append(shape)
+        }
+
+        guard !created.isEmpty else { return }
+        rebuildShapePolygonMap()
+
+        // Auto-create a Sprite Set with all imported shapes in layer order.
+        var geo = UMAnimatedGeometry(name: docName)
+        geo.states = created.map { UMAnimatedGeometryState(shapeID: $0.id, holdFrames: 2) }
+        projectAnimatedGeometries.append(geo)
+
+        UMLogger.shared.log("importShapeLayers: \(created.count) shapes + Sprite Set from \(docName)")
+    }
+
     func deleteShape(_ id: UUID) {
         if let projectURL = currentFileURL,
            let shape = projectShapes.first(where: { $0.id == id }) {
