@@ -1,6 +1,6 @@
 # UM Swift — Technical Specification
 
-_Generated 2026-06-17. Revised 2026-06-21 (grid distortion built: UMGridDistortion enum with perspective/barrel/fractured modes; UMLayer.gridDistortion field; distorted cell geometry threaded through live canvas loop, FrameCapture, and video export; DISTORTION subsection in LAYER DRIVERS panel; summary table updated). Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch). Revised 2026-06-20 (three UI features built: right-panel context-switching — RENDER → STYLE—[name], new SHAPE—[name] section; LAYER DRIVERS section for opacityDriver/layerOffset oscillator/jitter/noise UI; timing-scale % field in timeline header; §6.8, §15.9, §15.11 updated; summary table updated). Revised 2026-06-20 (four more features built: sprite MOTION section — effectiveMotionID/effectiveMotionSet derives context from selected sprite; per-layer blend modes — UMBlendMode enum, picker in LAYER DRIVERS, wired into all render paths; phase heat-map overlay — toggle in CANVAS section, blue-to-red per phaseOffset; "nothing active" hint in right panel; §6.8, §15.6, §15.8, §15.9, §15.12 updated; summary table updated). Revised 2026-06-20 (polygon override index stability fixed: `polygonOverrides` key changed from `Int` to `String` (EditableClosedPolygon.id.uuidString); `shapePolygonIDMap` added to AppController and threaded through all render paths and inspector UI; §15.12 known limitations and summary table updated). Revised 2026-06-20 (sprite positionDriver keyframe timeline integration built: spriteLane rows (purple) per sprite in expanded sprite layers; all KF ops wired — add, drag, delete, copy/paste, rubber-band, select-all, timing-scale, undo; TLSnapshot extended with per-sprite positionDriver snapshots; UMSpriteKFSelection type + controller.selectedSpriteKF; KF inspector in QuickAdjust; §15.12 known limitations updated; summary table updated). Revised 2026-06-21 (cut-based video export built: UMVideoExporter.exportCuts swaps UMTimelineState cells/styles/config per cut; animation frame runs continuously across cuts; AppController.exportCutVideo added; Transport Bar Video button becomes a menu when timeline non-empty; §15.3 and summary table updated). Revised 2026-06-21 (bezier tangent handles built: outTangentX/Y + inTangentX/Y + smooth added to PathKeyframe with decodeIfPresent backward compat; UMMotionPath.evaluate uses cubic Bezier when tangents non-zero; canvas overlay draws tangent arms + handle circles for selected KF; drag gesture intercepts before tool dispatch; AppController.selectedPathKeyframeID shared between overlay and inspector; tangent sliders + Smooth toggle added to keyframeEditor; §12.1 and §15.4 updated; summary table updated). Revised 2026-06-21 (timeline ruler start/end drag handles built: orange/red upward triangles at start/end frame positions in ruler; drag moves startFrame/endFrame in real-time; tapping seeks playhead; hitTestRulerHandle fires before seek; resize cursor on hover; shaded grey region outside loop window; §15.11 "Not built" item updated to ✓ Built; summary table updated). Revised 2026-06-21 (camera driver oscillator/keyframe UI built: CAMERA section restructured into PAN/ZOOM/ROTATION subsections each with Mode picker; all four modes (oscillator, jitter, noise, keyframe) exposed for each axis; Reset Camera button; §15.8 Phase 2 marked built; summary table updated; help layers and qa-project camera sections rewritten). Revised 2026-06-20 (resolution preset library tabs built: RESOLUTION section added to Library tab with global preset chips, import button, and Remove from library context menu; project preset chips gain Save to Library context menu; §15.9 remaining items cleared; summary table updated)._
+_Generated 2026-06-17. Revised 2026-06-25 (§15.13 Animated Geometry / Sprite Set fully built: Phase 1 image replacement + Phase 2a per-state transforms implemented; Import Layers as Shapes workflow; AnimatedGeometryEditorView with live preview canvas, play/pause, per-state transform sub-rows; launcher skip-rebuild optimisation; §15.13 rewritten as built, summary table updated). Revised 2026-06-21 (grid distortion built: UMGridDistortion enum with perspective/barrel/fractured modes; UMLayer.gridDistortion field; distorted cell geometry threaded through live canvas loop, FrameCapture, and video export; DISTORTION subsection in LAYER DRIVERS panel; summary table updated). Revised 2026-06-18 (UI design direction, spatial/temporal nuance model; backlog and image color system added). Revised 2026-06-18 (geometry integration strategy; shape library manager added). Revised 2026-06-18 (built-vs-remaining status updated; §15 Outstanding Work added). Revised 2026-06-18 (shape rendering wired; Order/Chaos sine-oscillator jitter built; SEQUENCE cycling built; `shapeIDs` multi-shape model; §15 updated). Revised 2026-06-18 (multi-layer composition system built; §6.8 added; §7.1, §12.3, §15 updated; §15.8 Camera & Parallax added). Revised 2026-06-18 (layer rename and drag-to-reorder built; §6.8 and §12.3 updated; crash fix for styleNameHeader binding). Revised 2026-06-18 (layer opacity slider added to palette rows; §6.8 and §12.3 updated). Revised 2026-06-19 (four-axis cell model implemented: CellStyle render-only, UMMotionSet new palette entity, UMGridCell gains motionID/shapeID/pathID, project-level shape/motion palettes, legacy migration; §6.1, §6.2, §6.4, §6.5, §6.9 added, §7.1, §12.3, §13.2, §15 updated). Revised 2026-06-19 (MOTION section wired in right panel; 4 new path easing curves; position scatter on resample; accumulation trail bug fixed; layer-switch crash fixed; §5.7, §6.3, §12.3, §15.4, §15.9 updated). Revised 2026-06-19 (stamp transform bug fixed: all four stamp operations now copy the full cell struct; §12.3 updated). Revised 2026-06-19 (colour palette chooser built: `UMColorPalette` model, grid sampling from colour map, project/library CRUD, swatch picker popover in RENDER section; §6, §12.3, §15.10 updated). Revised 2026-06-19 (per-layer color maps built: each layer owns a `UMColorMapEngine`; §6.8, §12 color map section, §12.3, §15 summary updated). Revised 2026-06-19 (color map lock/unlock built: `lockedFillColor`/`lockedStrokeColor` on `UMGridCell`; §12 color map section and §12.3 updated). Revised 2026-06-19 (camera and parallax system built: `UMCamera`, `UMDoubleDriver`, `UMVectorDriver`, `DriverEvaluator`, `UMVec2`, `UMLoopMode` ported into UMEngine; `UMLayer` gains `parallaxFactor`/`layerOffset`/`opacityDriver`; CAMERA section in Quick Adjust; parallax slider per layer row; §15.8 updated to built status). Revised 2026-06-19 (spec §6.8 layer row description updated with parallax slider and camera ref; §6.8 limitations updated; help pendingBody camera row removed; qa-project CAMERA section added; layers page camera section already present). Revised 2026-06-19 (§15.11 Keyframe Timeline added: full spec for Loom-based timeline panel, lane model, model changes, keyframe inspector, transport integration, phased build plan). Revised 2026-06-20 (§15.9 updated: left panel restructure built — MOTIONS section with full CRUD, 4-axis cell inspector in PLACE & TIME, SEQUENCE cycling re-integrated as UMMotionSet feature with SequenceMode enum + shapeIDs; remaining outstanding work clarified; summary table updated). Revised 2026-06-20 (§15.11 updated to built status: keyframe timeline fully implemented — UMTimelinePanel 1174 lines, three layer lanes including gridScroll, camera lanes, KF inspector in QuickAdjust, named markers, copy/paste/undo/delete; timing-scale % field and ruler drag handles not built; summary table updated). Revised 2026-06-20 (canvas zoom and pan built: §15.2 updated; CGAffineTransform applied in Canvas closure; pinch, trackpad scroll, Cmd+0/=/- shortcuts; hit-testing via inverse transform). Revised 2026-06-20 (per-axis motion amounts built: `axisX`, `axisY`, `axisRotation`, `axisScale` added to `UMMotionSet`; applied in `computeParametric` after preset switch; axis mix sliders added to MOTION inspector; §6.9 updated). Revised 2026-06-20 (§7.6 SwiftUI State Safety added: four required patterns — ID-based lookups over integer indices, keypath binding factory, no index params in @ViewBuilder, scale-deviation interpolation — derived from crash post-mortems). Revised 2026-06-20 (§7.6 pattern-debt addendum: two known non-crash violations documented — activeStyleIndex/activeMotionIndex binding setters and layerRow index param — flagged for fix on next touch). Revised 2026-06-20 (three UI features built: right-panel context-switching — RENDER → STYLE—[name], new SHAPE—[name] section; LAYER DRIVERS section for opacityDriver/layerOffset oscillator/jitter/noise UI; timing-scale % field in timeline header; §6.8, §15.9, §15.11 updated; summary table updated). Revised 2026-06-20 (four more features built: sprite MOTION section — effectiveMotionID/effectiveMotionSet derives context from selected sprite; per-layer blend modes — UMBlendMode enum, picker in LAYER DRIVERS, wired into all render paths; phase heat-map overlay — toggle in CANVAS section, blue-to-red per phaseOffset; "nothing active" hint in right panel; §6.8, §15.6, §15.8, §15.9, §15.12 updated; summary table updated). Revised 2026-06-20 (polygon override index stability fixed: `polygonOverrides` key changed from `Int` to `String` (EditableClosedPolygon.id.uuidString); `shapePolygonIDMap` added to AppController and threaded through all render paths and inspector UI; §15.12 known limitations and summary table updated). Revised 2026-06-20 (sprite positionDriver keyframe timeline integration built: spriteLane rows (purple) per sprite in expanded sprite layers; all KF ops wired — add, drag, delete, copy/paste, rubber-band, select-all, timing-scale, undo; TLSnapshot extended with per-sprite positionDriver snapshots; UMSpriteKFSelection type + controller.selectedSpriteKF; KF inspector in QuickAdjust; §15.12 known limitations updated; summary table updated). Revised 2026-06-21 (cut-based video export built: UMVideoExporter.exportCuts swaps UMTimelineState cells/styles/config per cut; animation frame runs continuously across cuts; AppController.exportCutVideo added; Transport Bar Video button becomes a menu when timeline non-empty; §15.3 and summary table updated). Revised 2026-06-21 (bezier tangent handles built: outTangentX/Y + inTangentX/Y + smooth added to PathKeyframe with decodeIfPresent backward compat; UMMotionPath.evaluate uses cubic Bezier when tangents non-zero; canvas overlay draws tangent arms + handle circles for selected KF; drag gesture intercepts before tool dispatch; AppController.selectedPathKeyframeID shared between overlay and inspector; tangent sliders + Smooth toggle added to keyframeEditor; §12.1 and §15.4 updated; summary table updated). Revised 2026-06-21 (timeline ruler start/end drag handles built: orange/red upward triangles at start/end frame positions in ruler; drag moves startFrame/endFrame in real-time; tapping seeks playhead; hitTestRulerHandle fires before seek; resize cursor on hover; shaded grey region outside loop window; §15.11 "Not built" item updated to ✓ Built; summary table updated). Revised 2026-06-21 (camera driver oscillator/keyframe UI built: CAMERA section restructured into PAN/ZOOM/ROTATION subsections each with Mode picker; all four modes (oscillator, jitter, noise, keyframe) exposed for each axis; Reset Camera button; §15.8 Phase 2 marked built; summary table updated; help layers and qa-project camera sections rewritten). Revised 2026-06-20 (resolution preset library tabs built: RESOLUTION section added to Library tab with global preset chips, import button, and Remove from library context menu; project preset chips gain Save to Library context menu; §15.9 remaining items cleared; summary table updated)._
 _Based on full source analysis of the UM Java project and the Loom_2026 Swift project._
 
 ---
@@ -2389,33 +2389,18 @@ When the active layer is `.sprite`, the right panel hides GRID SCROLL, PLACE & T
 
 ---
 
-### 15.13 Animated Geometry / Sprite Set Assets (Future)
+### 15.13 Animated Geometry / Sprite Set Assets ✓ Built 2026-06-25
 
 **Motivation**
 
-Sprite layers now support two distinct animation concepts:
+Sprite layers support two distinct animation concepts:
 
-- **Stage motion** — where an individual sprite travels on the canvas, currently handled by the per-sprite `positionDriver` lane in the main keyframe timeline.
-- **Internal motion** — how the sprite itself changes shape over time, currently possible through `UMMotionSet.sequenceMode` and `shapeIDs`, but presented as a motion-set feature rather than as a dedicated animated sprite asset.
+- **Stage motion** — where a sprite travels on the canvas, handled by the per-sprite `positionDriver` lane in the main keyframe timeline.
+- **Internal motion** — how the sprite itself changes shape over time. Now handled by `UMAnimatedGeometry` (Sprite Sets), a dedicated first-class asset that owns the full animation cycle independently of the main timeline.
 
-For character-like or object-like animation, these should be separated. The main timeline should answer "where does the shark go?" while a reusable sprite-state asset should answer "how does the shark swim?"
+The main timeline answers "where does the shark go?" — the Sprite Set answers "how does the shark swim?"
 
-**Feature concept**
-
-Add a first-class **Animated Geometry** or **Sprite Set** asset: a Loom-style layered geometry file that wraps multiple sprite states into one reusable object. Instead of placing several separate sprites or building replacement cycles laboriously on the main keyframe timeline, the user defines the cycle once in a separate editing context, then places that animated object as a single sprite on a sprite layer.
-
-This feature supports three animation modes, all unified under the same keyframe model. The mode per state boundary is determined by `transitionFrames` and the shapes involved:
-
-- **Image replacement** — the default. Hard-cut between states (`transitionFrames == 0`). Each state references a different shape from the project shape library. Phase 1.
-- **Morph target** — smooth vertex interpolation between two same-topology shapes (`transitionFrames > 0`, both shapes share the same point count). The render path blends polygon vertices using `easing` over the transition window. Phase 2, depends on LoomEditorKit / multi-layer geometry import.
-- **Style animation** — per-state `styleID` override. With `transitionFrames > 0`, fill and stroke colours are interpolated between adjacent states. Can be combined with either of the above. Phase 1 or 2.
-
-This feature is conceptually an evolution of the existing Motion Set SEQUENCE mechanism:
-
-- Current: a `UMMotionSet` can cycle through a list of shape IDs at a fixed frame step, hard-cut only.
-- Future: an animated geometry asset owns the ordered states, per-state timing, transition type, loop behaviour, per-state registration offsets, and its own editing context.
-
-**Proposed data model**
+**As-built data model**
 
 ```swift
 public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
@@ -2423,74 +2408,86 @@ public struct UMAnimatedGeometry: Codable, Identifiable, Sendable {
     public var name: String
     public var states: [UMAnimatedGeometryState]
     public var loopMode: UMAnimatedGeometryLoopMode
+    public var totalForwardFrames: Int   // sum of all state holdFrames
+    public var totalCycleFrames: Int     // includes pingPong reverse pass
+    public func resolveShapeID(atFrame:) -> UUID?
+    public func resolveStyleID(atFrame:) -> UUID?
+    public func resolveStateTransform(atFrame:) -> UMAnimatedGeometryStateTransform
 }
 
 public struct UMAnimatedGeometryState: Codable, Identifiable, Sendable {
     public var id: UUID
-    public var shapeID: UUID        // required; for morph: must share topology with the next state
-    public var styleID: UUID?       // nil = inherit the sprite's assigned style
-    public var holdFrames: Int      // frames this state is fully "on"
-    public var transitionFrames: Int // blend frames into the next state; 0 = hard cut (Phase 1 only renders 0)
-    public var easing: PathEasing   // applied during transitionFrames; ignored when transitionFrames == 0
-    public var offsetX: Double      // per-state registration offset (canvas pixels)
-    public var offsetY: Double
-    public var rotation: Double     // per-state rotation offset (degrees)
-    public var scaleX: Double       // per-state scale factor
-    public var scaleY: Double
+    public var shapeID: UUID        // shape from project shape library
+    public var styleID: UUID?       // nil = inherit the sprite's own style
+    public var holdFrames: Int      // frames this state is active (min 1)
+    public var transitionFrames: Int // Phase 2b: blend frames into next state (stored, inert)
+    public var easing: PathEasing   // Phase 2b: easing during transitionFrames (stored, inert)
+    public var offsetX, offsetY: Double   // per-state position offset (canvas pixels) ✓ Live
+    public var rotation: Double           // per-state rotation offset (degrees) ✓ Live
+    public var scaleX, scaleY: Double     // per-state scale multiplier ✓ Live
+}
+
+public struct UMAnimatedGeometryStateTransform: Sendable {
+    public var offsetX, offsetY, rotation, scaleX, scaleY: Double
+    public static let identity: UMAnimatedGeometryStateTransform
 }
 
 public enum UMAnimatedGeometryLoopMode: String, Codable, CaseIterable, Sendable {
-    case loop
-    case pingPong
-    case once
-    case holdLast
+    case loop, pingPong, once, holdLast
 }
 ```
 
-**The keyframe-with-easing unification**
+`UMSprite` gains `animatedGeometryID: UUID?`. When set, the Sprite Set resolves effective shape, style override, and per-state transform at each render frame, overriding the sprite's static `shapeID` and any Motion Set SEQUENCE cycling. The sprite's `motionID`, `phaseOffset`, `positionDriver`, and polygon overrides remain independent.
 
-Image replacement, morph targets, and style animation are the same model at different `transitionFrames` values:
+**Phase implementation status**
 
-| `transitionFrames` | Shape topology | Effect |
+| Phase | Feature | Status |
 |---|---|---|
-| 0 | Any | Hard cut — image replacement |
-| > 0 | Same point count | Vertex morph blend |
-| > 0 | Different shapes | Cross-fade (opacity blend, not vertex morph) |
-| Any | — | `styleID` present → style override; with `transitionFrames > 0`, colours interpolate |
+| Phase 1 | Hard-cut image replacement (`transitionFrames == 0`) | ✓ Built |
+| Phase 1 | Per-state style override (`styleID`) | ✓ Built |
+| Phase 1 | Loop modes: loop, pingPong, once, holdLast | ✓ Built |
+| Phase 1 | `UMSprite.animatedGeometryID` assignment | ✓ Built |
+| Phase 1 | All render sites wired (canvas, accumulation, spriteBounds, SpriteCapture, export) | ✓ Built |
+| Phase 1 | SPRITE SETS palette section + AnimatedGeometryEditorView sheet | ✓ Built |
+| Phase 1 | Sprite Set picker in SPRITES inspector (Quick Adjust) | ✓ Built |
+| Phase 1 | Project save/load at version 10 with backward compat | ✓ Built |
+| Phase 1 | Import Layers as Shapes (multi-layer Loom → individual shapes + auto Sprite Set) | ✓ Built |
+| Phase 2a | Per-state transforms: offsetX/Y, rotation, scaleX/Y | ✓ Built |
+| Phase 2a | `UMAnimatedGeometryStateTransform` + `resolveStateTransform(atFrame:)` | ✓ Built |
+| Phase 2a | Transform sub-row in editor (▸ toggle, five fields per state) | ✓ Built |
+| Phase 2a | Live preview canvas in editor (dark background, shape rendered with transforms) | ✓ Built |
+| Phase 2a | Play/pause button (24fps timer), scrubber pauses playback | ✓ Built |
+| Phase 2a | `totalCycleFrames` (accurate pingPong cycle length) | ✓ Built |
+| Phase 2b | Transition frames (cross-fade / opacity blend between states) | Pending |
+| Phase 2b | Vertex morph (same-topology shapes, `transitionFrames > 0`) | Pending |
 
-Phase 1 implements only `transitionFrames == 0`. The fields `transitionFrames` and `easing` are persisted but inert until Phase 2. This means files authored in Phase 1 will automatically gain morph playback once Phase 2 is built, with no data migration.
+**Render site integration**
 
-`UMSprite` would gain an optional `animatedGeometryID`. When set, the animated geometry asset resolves the effective shape (and optionally style) at render time, replacing or taking priority over `sprite.shapeID` and Motion Set SEQUENCE cycling. The sprite's existing `motionID`, `phaseOffset`, `positionDriver`, and polygon overrides still apply — external movement and styling remain independent.
+`resolveEffectiveSpriteStateTransform(sprite:animatedGeometries:frame:)` is called at all five sprite render paths. The returned `UMAnimatedGeometryStateTransform` is composed into `mx/my` (position offset), `zoomX/zoomY` (scale multiplied), and `rot` (rotation added) before polygon paths are built. `resolveEffectiveSpriteShapeID` and `resolveEffectiveSpriteStyleID` are unchanged from Phase 1.
 
-**Editing workflow**
+**Editor (AnimatedGeometryEditorView)**
 
-- Add an **ANIMATED GEOMETRY** or **SPRITE SETS** section to the left palette, parallel to SHAPES / MOTIONS / PATHS.
-- `+ New Sprite Set` creates an asset with one state.
-- `+ Add State` appends a shape from the project shape library.
-- A **dedicated editor window** (independent of the main composition) shows the cycle playing in isolation, with controls for:
-  - State order (drag to reorder)
-  - Hold frames and transition frames per state
-  - Transition type indicator (Step / Morph / Cross-fade, derived automatically)
-  - Loop mode
-  - Per-state registration offset, rotation, scale
-  - Optional onion-skin preview of adjacent states
-- Once authored, the asset can be assigned to a sprite from the SPRITES inspector.
-- On the main timeline, the sprite remains a single selectable object. Position, scale, rotation, opacity, camera, and layer timing stay in the main composition context.
+Sheet presented from SPRITE SETS palette section (pencil icon or right-click → Edit…). Layout top to bottom:
+- Header: name field, loop mode picker, ✕ close button
+- State list (scrollable): each row has ▸ expand toggle, active-state indicator dot, shape picker, style override picker, Hold frames field, − delete, ↑↓ reorder. Expanded: transform sub-row (Δx, Δy, °, Sx, Sy fields at 46px width each)
+- Live preview canvas (160px, dark background): renders the active shape at the current preview frame with all per-state transforms applied using the project's assigned style
+- Scrubber: ▶/⏸ play button (24fps), slider over full `totalCycleFrames`, frame counter, active shape name
 
-**Phase 2: multi-layer Loom geometry import**
+**Import Layers as Shapes workflow**
 
-When `LoomEditorKit` is available, the editor window gains an **Import Loom File** action. A multi-layer Loom geometry file — where each named layer represents one state of the character and all layers share the same point count — is parsed and each layer becomes a `UMAnimatedGeometryState` automatically. The system checks topology parity between adjacent states and sets `transitionFrames` to the default when point counts match, enabling morph playback immediately. This is the "reads multi-layer Loom geometry assets" workflow. Loom's existing morph interpolation code is reused rather than reimplemented.
+SHAPES section → `+ Import Layers as Shapes…` → select a multi-layer Loom .json geometry file. Each visible, non-empty layer is extracted as an individual `UMShape` (saved as `DocName_LayerName.json`) and added to the project shape library. A `UMAnimatedGeometry` named after the source document is created automatically with all shapes in layer order at holdFrames: 2. Hidden layers and empty layers are skipped.
 
-**Relationship to Loom**
+**Resolved design decisions**
 
-The long-term ideal is to follow Loom's layered geometry-file model: a single geometry document containing multiple named/layered states that together describe a complete animated object. UM stores the animated asset in project JSON and optionally promotes it to the global library, just like shapes, paths, styles, and motion sets. The independent editor window is the natural home for this authoring work in both applications.
+- Motion Set SEQUENCE remains as a lightweight cycling mechanism for grid cells; sprites prefer `UMAnimatedGeometry` (Sprite Set wins when assigned; SEQUENCE cycling is only active when no Sprite Set is assigned).
+- One sprite maps to one Sprite Set (no layering of multiple sets per sprite).
+- Cross-fade (opacity blend between different-topology shapes) is Phase 2b, after per-state transforms (Phase 2a).
+- Per-state polygon colour overrides are not planned for animated geometry states — polygon overrides live on the sprite instance and apply regardless of which state is active.
 
-**Open decisions**
+**Remaining work (Phase 2b)**
 
-- Whether per-state polygon colour overrides live on the animated asset's state, the sprite instance, or both.
-- Whether Motion Set SEQUENCE remains as a lightweight cycling feature for grid cells while sprites prefer `UMAnimatedGeometry`.
-- Whether a sprite can layer multiple animated geometry assets (e.g. body cycle + blink cycle), or one sprite maps to one asset.
-- Whether cross-fade (opacity blend between different-topology shapes) is worth implementing before full morph support.
+- `transitionFrames > 0`: cross-fade (opacity blend) between consecutive states at state boundaries. The `transitionFrames` and `easing` fields are already stored in the data model; the render path needs to detect when it is within a transition window and draw both shapes with interpolated alpha.
+- Vertex morph: only if both adjacent states share the same polygon topology (same vertex count per polygon). Requires topology parity check at import time. Lower priority than cross-fade.
 
 ---
 
@@ -2527,7 +2524,8 @@ The long-term ideal is to follow Loom's layered geometry-file model: a single ge
 | **Sprite layer** | MOTION section in sprite context (effectiveMotionID from selected sprite) | ✓ Built 2026-06-20 |
 | **Sprite layer** | positionDriver keyframe lane in timeline (per-sprite purple lanes, full KF ops) | ✓ Built 2026-06-20 |
 | **Sprite layer** | Polygon override index stability (UUID-keyed instead of positional) | ✓ Built 2026-06-20 |
-| **Sprite layer** | Animated Geometry / Sprite Set assets (reusable Loom-style sprite-state cycles edited outside the main timeline) | LoomEditorKit / future data model |
+| **Sprite layer** | Animated Geometry / Sprite Set assets — Phase 1 (image replacement, style override, loop modes) + Phase 2a (per-state transforms, live preview canvas) | ✓ Built 2026-06-25 |
+| **Sprite layer** | Sprite Set Phase 2b: transition frames (cross-fade / vertex morph between states) | Pending |
 | **UI** | "Nothing active" hint in right panel | ✓ Built 2026-06-20 |
 | **Compat** | Legacy UM XML import | — |
 | **Color** | ~~Color map palette extraction → styles~~ → palette chooser | ✓ Built 2026-06-19 |

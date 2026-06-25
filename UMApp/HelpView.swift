@@ -1601,6 +1601,18 @@ private let spriteSetsBody = #"""
   <tr><td>Hold frames</td><td>How many animation frames to stay on this state before advancing to the next. Minimum 1.</td></tr>
 </table>
 
+<h3>Per-state transforms</h3>
+<p>Click the <strong>▸ chevron</strong> on any state row to expand a transform sub-row. These five fields are applied on top of the sprite's own transform while that state is active:</p>
+<table>
+  <tr><th>Field</th><th>Description</th></tr>
+  <tr><td><strong>Δx</strong></td><td>Horizontal position offset in canvas pixels. Positive shifts the sprite right.</td></tr>
+  <tr><td><strong>Δy</strong></td><td>Vertical position offset in canvas pixels. Positive shifts the sprite down.</td></tr>
+  <tr><td><strong>°</strong></td><td>Rotation offset in degrees, added to the sprite's own rotation.</td></tr>
+  <tr><td><strong>Sx</strong></td><td>Horizontal scale multiplier (1.0 = no change). Applied on top of the sprite's own scale.</td></tr>
+  <tr><td><strong>Sy</strong></td><td>Vertical scale multiplier (1.0 = no change). Applied on top of the sprite's own scale.</td></tr>
+</table>
+<p>All five default to identity (0 / 0 / 0 / 1 / 1). The preview canvas updates immediately when you edit any value, so you can tweak registration offsets and see the result without needing to place the sprite on the main canvas first.</p>
+
 <h3>Loop modes</h3>
 <table>
   <tr><th>Mode</th><th>Behaviour</th></tr>
@@ -1651,14 +1663,23 @@ private let spriteSetsBody = #"""
 <p>Style overrides work similarly: if the active state has a style override set, that style is used for the entire frame including motion parameters derived from the style. If the state's style is set to – (dash), the sprite's own global style is used as normal.</p>
 
 <h2>Editing a Sprite Set</h2>
-<p>Click the <strong>pencil icon</strong> next to a Sprite Set row in the palette (or choose <strong>Edit…</strong> from the right-click context menu) to open the editor sheet:</p>
+<p>Click the <strong>pencil icon</strong> next to a Sprite Set row in the palette (or choose <strong>Edit…</strong> from the right-click context menu) to open the editor sheet. The sheet has four areas top to bottom:</p>
 <table>
-  <tr><th>Control</th><th>Action</th></tr>
-  <tr><td>Name field</td><td>Rename the set. Changes apply immediately.</td></tr>
-  <tr><td>Loop mode picker</td><td>Switch between Loop, Ping Pong, Once, Hold Last.</td></tr>
-  <tr><td>State list</td><td>Each row: shape picker, style override picker, Hold field, − remove button, ↑/↓ reorder. The coloured dot indicates which state is active at the current preview frame.</td></tr>
-  <tr><td>Add State menu</td><td>Shows all shapes in the project. Choose one to append a new state.</td></tr>
-  <tr><td>Preview scrubber</td><td>Slider over the full cycle length (double for Ping Pong). Drag to step through states and see which shape is active.</td></tr>
+  <tr><th>Area / Control</th><th>Action</th></tr>
+  <tr><td><strong>Header</strong>: Name field</td><td>Rename the set. Changes apply immediately.</td></tr>
+  <tr><td><strong>Header</strong>: Loop mode picker</td><td>Switch between Loop, Ping Pong, Once, Hold Last.</td></tr>
+  <tr><td><strong>Header</strong>: ✕ button</td><td>Close the editor. Escape also works.</td></tr>
+  <tr><td><strong>State list</strong>: ▸ chevron</td><td>Expand the per-state transform sub-row (Δx, Δy, °, Sx, Sy).</td></tr>
+  <tr><td><strong>State list</strong>: shape picker</td><td>Which shape from the project library this state displays.</td></tr>
+  <tr><td><strong>State list</strong>: style picker</td><td>Optional style override for this state. – means use the sprite's own style.</td></tr>
+  <tr><td><strong>State list</strong>: Hold field</td><td>How many frames to stay on this state.</td></tr>
+  <tr><td><strong>State list</strong>: − button</td><td>Remove this state.</td></tr>
+  <tr><td><strong>State list</strong>: ↑ / ↓ buttons</td><td>Reorder states. The coloured dot indicates which state is active at the current preview frame.</td></tr>
+  <tr><td><strong>State list</strong>: Add State menu</td><td>Append a new state using a shape from the project library.</td></tr>
+  <tr><td><strong>Preview canvas</strong></td><td>Dark 160px canvas that renders the active shape at the current frame, with the state's style and all per-state transforms (offset, rotation, scale) applied. Updates in real time as you edit values.</td></tr>
+  <tr><td><strong>Scrubber</strong>: ▶ / ⏸ button</td><td>Play or pause the animation preview at 24fps. Dragging the slider pauses playback automatically.</td></tr>
+  <tr><td><strong>Scrubber</strong>: slider</td><td>Step to a specific frame across the full cycle (including the reverse pass for Ping Pong).</td></tr>
+  <tr><td><strong>Scrubber</strong>: shape name</td><td>Shows the name of the shape currently active at the scrubber position.</td></tr>
 </table>
 
 <h2>Deleting a Sprite Set</h2>
@@ -1884,7 +1905,8 @@ private let pendingBody = #"""
   <tr><td>Canvas</td><td>Hover preview</td><td>No visual feedback on undrawn cells before committing a stroke. A faint style preview on hover is planned.</td></tr>
   <tr><td>Export</td><td>SVG export</td><td>The SVG button in the Transport Bar is present but has no action yet.</td></tr>
   <tr><td>Export</td><td>Timeline video export</td><td>The Video button exports live animation (parametric + keyframe motion). A separate mode that renders the recorded timeline states as discrete cuts is planned.</td></tr>
-  <tr><td>Sprites</td><td>Animated geometry / Sprite Sets</td><td>✓ Built — <strong>Sprite Sets</strong> are reusable shape-animation cycles assignable to any sprite. Each set holds an ordered list of states (shape + optional style override + hold frames) and steps through them at playback time. Use the SPRITE SETS section in the left palette to create or import sets, and the Sprite Set picker in the SPRITES inspector (Quick Adjust) to assign one to a sprite. Multi-layer Loom geometry files can be split into individual per-layer shapes automatically via <strong>+ Import Layers as Shapes…</strong>. See <a href="um-help://help/sprite-sets">Sprite Sets</a>.</td></tr>
+  <tr><td>Sprites</td><td>Animated geometry / Sprite Sets (Phase 1 + Phase 2a)</td><td>✓ Built — <strong>Sprite Sets</strong> are reusable shape-animation cycles assignable to any sprite. Each set holds an ordered list of states (shape + optional style override + hold frames + per-state transforms). The editor sheet includes a live preview canvas with play/pause. Multi-layer Loom geometry files can be split into individual per-layer shapes automatically via <strong>+ Import Layers as Shapes…</strong>. See <a href="um-help://help/sprite-sets">Sprite Sets</a>.</td></tr>
+  <tr><td>Sprites</td><td>Sprite Set Phase 2b: transition frames (cross-fade / opacity blend between states)</td><td><code>transitionFrames</code> and <code>easing</code> are stored in the data model but not yet rendered. When built, states with <code>transitionFrames &gt; 0</code> will blend between the outgoing and incoming shape using interpolated opacity over the transition window. No data migration needed — existing projects will gain the effect automatically.</td></tr>
   <tr><td>Geometry</td><td>In-app geometry editor</td><td>Shapes must currently be authored in standalone Loom and imported as .json files. An in-app geometry mode (toolbar button G) is planned once Loom's editor is extractable as a standalone Swift Package.</td></tr>
   <tr><td>Canvas overlays</td><td>Phase heat-map overlay</td><td>✓ Built — <strong>Phase map</strong> checkbox in the CANVAS section of Quick Adjust. Colours each drawn cell in the active grid layer by phaseOffset: blue (0) → red (max), 50% opacity. See <a href="um-help://help/layers">Layers</a>.</td></tr>
   <tr><td>Canvas overlays</td><td>Background image backdrop</td><td>✓ Built — "Bg Image" row in CANVAS section. Image fills canvas behind all layers; saved in project package.</td></tr>
