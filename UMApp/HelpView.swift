@@ -553,7 +553,7 @@ private let layersBody = #"""
 <p>Camera pan, zoom, and rotation are saved as part of the project file and applied consistently in all renders and video exports.</p>
 
 <h2>LAYER DRIVERS — blend mode, animated opacity and offset</h2>
-<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) controls how a layer composites and moves independently of the camera.</p>
+<p>The <strong>LAYER DRIVERS</strong> section in Quick Adjust (collapsed by default) controls how a layer composites and moves independently of the camera. <strong>All three controls — Blend, Opacity, and Offset — apply to both grid layers and sprite layers.</strong> The DISTORTION subsection is grid-only and does not appear when a sprite layer is active.</p>
 
 <h3>Blend mode</h3>
 <p>The <strong>Blend</strong> picker at the top of LAYER DRIVERS sets how this layer composites with all layers below it:</p>
@@ -595,6 +595,7 @@ private let layersBody = #"""
   <tr><td><strong>Keyframe</strong></td><td>Driven by keyframes in the timeline's <strong>Offset</strong> lane.</td></tr>
 </table>
 <div class="tip">Use oscillator offset on a background layer to create a subtle breathing or drifting effect without touching the camera.</div>
+<div class="tip"><strong>Fading up a morph target animation</strong> — place your morph-target sprites on their own sprite layer, then open LAYER DRIVERS → Opacity. Use <strong>Keyframe</strong> mode to draw a fade-in curve on the timeline Opacity lane, or <strong>Oscillator</strong> mode to pulse the whole layer in and out. The morph continues to interpolate underneath regardless of layer opacity.</div>
 
 <h2>Right-panel context sections</h2>
 <p>The Quick Adjust right panel shows context sections that reflect the active palette item:</p>
@@ -685,8 +686,18 @@ private let layersBody = #"""
 </ul>
 <div class="note">Polygon indices are positional. If you re-import a shape from Loom with a different polygon ordering, existing overrides will shift to different polygons. Clear all overrides before re-importing if you want a clean slate.</div>
 
+<h3>Sprite layers and LAYER DRIVERS</h3>
+<p>The full <strong>LAYER DRIVERS</strong> section is available for sprite layers. When a sprite layer is active, LAYER DRIVERS shows:</p>
+<ul>
+  <li><strong>Blend</strong> — composite mode for the whole sprite layer against layers below it.</li>
+  <li><strong>Opacity</strong> — animate the entire layer's opacity via Constant, Oscillator, Jitter, Noise, or Keyframe mode. The Keyframe Opacity lane in the timeline is the most direct way to fade a sprite layer up or down at a specific moment.</li>
+  <li><strong>Offset</strong> — shift the entire sprite layer (all sprites together) by an animated canvas-pixel amount, independent of individual sprite positions or the camera.</li>
+</ul>
+<p>DISTORTION does not appear for sprite layers — it has no effect on free-placed shapes.</p>
+<div class="note">These are <em>layer-level</em> controls — they apply uniformly to every sprite in the layer. To animate an individual sprite's position, use the sprite's own Position Driver instead.</div>
+
 <h3>Sprite layers and export</h3>
-<p>Sprite layers export identically to grid layers — they composite into the PNG or video output at the configured opacity and parallax factor. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution. The Position Driver animation and SEQUENCE shape cycling are both applied at export time.</p>
+<p>Sprite layers export identically to grid layers — they composite into the PNG or video output with the layer's configured opacity, offset, blend mode, and parallax factor all applied. Sprite positions are stored as canvas fractions, so they remain correctly placed regardless of export resolution. The Position Driver animation, SEQUENCE shape cycling, Sprite Set morph/cross-fade, and all LAYER DRIVERS values are applied at export time.</p>
 
 <h3>Limitations in this version</h3>
 <ul>
