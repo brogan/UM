@@ -1,4 +1,5 @@
 import SwiftUI
+import LoomEngine
 import UMEngine
 
 // MARK: - AnimatedGeometryEditorView
@@ -318,15 +319,26 @@ struct AnimatedGeometryEditorView: View {
                     if nextIdx != activeIdx && nextIdx != prevIdx { drawGhost(idx: nextIdx, opacity: 0.22) }
                 }
 
-                // Render layers (1 at full opacity normally; 2 during cross-fade transition).
+                // Render layers — attempt vertex morph when topology matches, else alpha cross-fade.
                 let renderLayers = g.resolveRenderLayers(atFrame: snapFrame)
-                for renderLayer in renderLayers {
+                let morphResultP = attemptMorphLayers(renderLayers, shapeMap: snapPolygonMap, fallback: snapFallbackPolys)
+                let resolvedRenderLayers: [UMRenderLayer]
+                var morphOverrideP: [UUID: [Polygon2D]] = [:]
+                if let (morphPolys, morphTransform) = morphResultP {
+                    let synth = UMRenderLayer(shapeID: renderLayers[0].shapeID, styleID: renderLayers[0].styleID,
+                                              alpha: 1.0, transform: morphTransform)
+                    resolvedRenderLayers = [synth]
+                    morphOverrideP = [renderLayers[0].shapeID: morphPolys]
+                } else {
+                    resolvedRenderLayers = renderLayers
+                }
+                for renderLayer in resolvedRenderLayers {
                     let la  = renderLayer.alpha
                     let acx = size.width  / 2 - shapeCX * fitZoom + renderLayer.transform.offsetX
                     let acy = size.height / 2 + shapeCY * fitZoom + renderLayer.transform.offsetY
                     let azx = fitZoom * renderLayer.transform.scaleX
                     let azy = fitZoom * renderLayer.transform.scaleY
-                    let layerPolys = (snapPolygonMap[renderLayer.shapeID] ?? snapFallbackPolys).filter(\.visible)
+                    let layerPolys = morphOverrideP[renderLayer.shapeID] ?? (snapPolygonMap[renderLayer.shapeID] ?? snapFallbackPolys).filter(\.visible)
                     let style   = renderLayer.styleID.flatMap { id in snapStyles.first { $0.id == id } }
                               ?? snapStyles.first
                     let fillC   = style?.fillColor   ?? .defaultFill

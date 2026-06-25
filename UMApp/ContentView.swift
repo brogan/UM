@@ -386,11 +386,22 @@ private nonisolated func renderLayerCG(_ layer: LayerAccumulationData,
                                           cellW: spriteRef * sprite.scaleX,
                                           cellH: spriteRef * sprite.scaleY)
             let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: snap.frame, spriteIndex: idx)
-            for geoLayer in geoLayers {
+            let morphResult = attemptMorphLayers(geoLayers, shapeMap: snap.shapePolygonMap, fallback: snap.fallbackPolygons)
+            let resolvedLayers1: [UMRenderLayer]
+            var morphOverride1: [UUID: [Polygon2D]] = [:]
+            if let (morphPolys, morphTransform) = morphResult {
+                let synth = UMRenderLayer(shapeID: geoLayers[0].shapeID, styleID: geoLayers[0].styleID,
+                                          alpha: 1.0, transform: morphTransform)
+                resolvedLayers1 = [synth]
+                morphOverride1 = [geoLayers[0].shapeID: morphPolys]
+            } else {
+                resolvedLayers1 = geoLayers
+            }
+            for geoLayer in resolvedLayers1 {
                 let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
                 let mx = (sprite.x * layer.gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX) * dsf
                 let my = (sprite.y * layer.gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY) * dsf
-                let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                let polygons   = morphOverride1[geoLayer.shapeID] ?? resolvePolygons(shapeID: geoLayer.shapeID,
                                                  shapeMap: snap.shapePolygonMap,
                                                  fallback: snap.fallbackPolygons)
                 let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: snap.shapePolygonIDMap)
@@ -714,12 +725,23 @@ struct GridCanvasPlaceholder: View {
                                                                   cellH: spriteRef * sprite.scaleY)
                                     let driverPos  = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
                                     let isSelected = sprite.id == controller.activeSpriteID
-                                    for (li, geoLayer) in geoLayers.enumerated() {
+                                    let morphResult2 = attemptMorphLayers(geoLayers, shapeMap: shapePolyMap, fallback: fallbackPolys)
+                                    let resolvedLayers2: [UMRenderLayer]
+                                    var morphOverride2: [UUID: [Polygon2D]] = [:]
+                                    if let (morphPolys, morphTransform) = morphResult2 {
+                                        let synth = UMRenderLayer(shapeID: geoLayers[0].shapeID, styleID: geoLayers[0].styleID,
+                                                                   alpha: 1.0, transform: morphTransform)
+                                        resolvedLayers2 = [synth]
+                                        morphOverride2 = [geoLayers[0].shapeID: morphPolys]
+                                    } else {
+                                        resolvedLayers2 = geoLayers
+                                    }
+                                    for (li, geoLayer) in resolvedLayers2.enumerated() {
                                         let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
                                         let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
                                         let my      = sprite.y * gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY
                                         let rot     = sprite.rotation + motion.rotation + geoLayer.transform.rotation
-                                        let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                                        let polygons   = morphOverride2[geoLayer.shapeID] ?? resolvePolygons(shapeID: geoLayer.shapeID,
                                                                          shapeMap: shapePolyMap,
                                                                          fallback: fallbackPolys)
                                         let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: shapePolyIDMap)
@@ -2074,12 +2096,23 @@ struct SpriteCapture: View {
                                               cellW: spriteRef * sprite.scaleX,
                                               cellH: spriteRef * sprite.scaleY)
                 let driverPos = DriverEvaluator.evaluate(sprite.positionDriver, frame: currentFrame, spriteIndex: idx)
-                for geoLayer in geoLayers {
+                let morphResult4 = attemptMorphLayers(geoLayers, shapeMap: shapePolygonMap, fallback: fallbackPolygons)
+                let resolvedLayers4: [UMRenderLayer]
+                var morphOverride4: [UUID: [Polygon2D]] = [:]
+                if let (morphPolys, morphTransform) = morphResult4 {
+                    let synth = UMRenderLayer(shapeID: geoLayers[0].shapeID, styleID: geoLayers[0].styleID,
+                                              alpha: 1.0, transform: morphTransform)
+                    resolvedLayers4 = [synth]
+                    morphOverride4 = [geoLayers[0].shapeID: morphPolys]
+                } else {
+                    resolvedLayers4 = geoLayers
+                }
+                for geoLayer in resolvedLayers4 {
                     let style   = (geoLayer.styleID ?? sprite.styleID).flatMap { styleMap[$0] } ?? primaryStyle
                     let mx      = sprite.x * gridW + motion.dx + driverPos.x + geoLayer.transform.offsetX
                     let my      = sprite.y * gridH + motion.dy + driverPos.y + geoLayer.transform.offsetY
                     let rot     = sprite.rotation + motion.rotation + geoLayer.transform.rotation
-                    let polygons   = resolvePolygons(shapeID: geoLayer.shapeID,
+                    let polygons   = morphOverride4[geoLayer.shapeID] ?? resolvePolygons(shapeID: geoLayer.shapeID,
                                                      shapeMap: shapePolygonMap,
                                                      fallback: fallbackPolygons)
                     let polygonIDs = resolvePolygonIDs(shapeID: geoLayer.shapeID, idMap: shapePolygonIDMap)

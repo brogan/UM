@@ -2472,7 +2472,7 @@ public enum UMAnimatedGeometryLoopMode: String, Codable, CaseIterable, Sendable 
 | Phase 2b | All render sites iterate `geoLayers` at `layer.alpha` (canvas, accumulation, spriteBounds, SpriteCapture, export) | ✓ Built 2026-06-25 |
 | Phase 2b | Trans + Ease fields in editor transform sub-row | ✓ Built 2026-06-25 |
 | Phase 2b | Editor preview canvas renders cross-fade via `resolveRenderLayers` | ✓ Built 2026-06-25 |
-| Phase 3 | Vertex morph (per-vertex position interpolation between same-topology shapes) | Planned — Loom-gated |
+| Phase 3 | Vertex morph (per-vertex position interpolation between same-topology shapes) | ✓ Built 2026-06-25 |
 
 **Render site integration**
 

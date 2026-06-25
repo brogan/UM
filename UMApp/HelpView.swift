@@ -1622,15 +1622,20 @@ private let spriteSetsBody = #"""
 </table>
 <p>All transform fields default to identity (0 / 0 / 0 / 1 / 1). Trans defaults to 0. The preview canvas updates immediately and shows the cross-fade live when scrubbing through a transition window.</p>
 
-<h3>Cross-fade between states</h3>
-<p>When <strong>Trans</strong> is greater than 0, UM draws <em>two</em> shapes simultaneously at the state boundary: the outgoing shape fades out and the incoming shape fades in over the specified number of frames. This is sometimes called an opacity blend or morph — it works across shapes of any topology (no vertex-count matching required).</p>
-<p>The easing curve (Ease) controls the feel of the fade:</p>
+<h3>Transitions: cross-fade and morph</h3>
+<p>When <strong>Trans</strong> is greater than 0, UM transitions between states over the specified number of frames. The method it uses depends on whether the two shapes are topology-compatible:</p>
 <ul>
-  <li><strong>Linear</strong> — constant opacity change throughout.</li>
+  <li><strong>Vertex morph</strong> (automatic when shapes match) — if both states have the same number of polygons and the same number of vertices per polygon, UM interpolates the actual vertex positions. The shape smoothly deforms from one configuration to the other. Position, rotation, and scale also interpolate simultaneously. This produces the smoothest possible animation and is the intended path for shapes authored as morph targets in Loom.</li>
+  <li><strong>Cross-fade</strong> (fallback) — if the shapes have different topology, UM draws both shapes simultaneously: the outgoing shape fades out while the incoming shape fades in. Works across any two shapes regardless of vertex count.</li>
+</ul>
+<p>UM automatically picks the right method — no configuration needed. Shape your morph targets in Loom's geometry editor (which validates topology parity) and import them via <strong>Import Layers as Shapes</strong>; the morph will work automatically.</p>
+<p>The <strong>Ease</strong> curve controls the feel of either transition type:</p>
+<ul>
+  <li><strong>Linear</strong> — constant rate throughout.</li>
   <li><strong>Ease In/Out</strong> (default) — slow start and end, fast in the middle. Usually the most natural.</li>
   <li><strong>Back In/Out</strong> — briefly overshoots before settling, giving a snappy elastic feel.</li>
   <li><strong>Bounce Out</strong> — incoming shape bounces into position at the end of the transition.</li>
-  <li><strong>Step</strong> — hard cut at exactly the midpoint (equivalent to Trans = 0 but centred differently).</li>
+  <li><strong>Step</strong> — hard cut at exactly the midpoint.</li>
 </ul>
 <div class="note">Trans frames extend the state's total on-screen time. A state with Hold = 4 and Trans = 2 occupies 6 frames in the cycle before the next state begins its Hold period.</div>
 <div class="tip">For Ping-Pong loop mode, transitions only play during the forward pass. The reverse pass is hold-only, so the cycle length is shorter on the way back.</div>
@@ -1670,6 +1675,7 @@ private let spriteSetsBody = #"""
   <li>Open the Sprite Set editor to adjust hold-frame counts, loop mode, or style overrides.</li>
 </ol>
 <div class="note">Hidden layers and layers with no polygons are skipped. If a layer was a reference or guide in Loom, it will not produce a shape.</div>
+<div class="tip">If the source file is a morph-target geometry file from Loom (topology-locked with the lock icon), all extracted shapes have the same vertex count and will automatically morph — no cross-fade fallback — when Trans &gt; 0 in the Sprite Set editor.</div>
 
 <h2>Assigning a Sprite Set to a sprite</h2>
 <ol class="steps">

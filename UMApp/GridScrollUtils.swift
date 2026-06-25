@@ -1,4 +1,5 @@
 import Foundation
+import LoomEngine
 import UMEngine
 
 // MARK: - Shape sequence resolver
@@ -92,6 +93,59 @@ func resolveEffectiveSpriteLayers(
                                          frame: frame, phaseOffset: sprite.phaseOffset)
     guard let sid = shapeID else { return [] }
     return [UMRenderLayer(shapeID: sid, styleID: nil, alpha: 1.0, transform: .identity)]
+}
+
+// MARK: - Morph blend
+
+/// Attempts per-vertex morph interpolation between the two render layers.
+///
+/// Returns `(polygons, transform)` when the two shapes have identical topology
+/// (same polygon count, same per-polygon vertex count), so vertex positions can
+/// be lerped at `t = geoLayers[1].alpha`. Returns `nil` when topology doesn't
+/// match — callers should fall back to the existing alpha cross-fade.
+///
+/// The blended transform interpolates all five per-state fields (offsetX/Y,
+/// rotation, scaleX/Y) so position, rotation, and scale also animate smoothly.
+///
+/// `type`, `pressures`, `pressureProfiles`, and `visible` are preserved from
+/// the base (from-layer) polygons, matching Loom's MorphInterpolator contract.
+func attemptMorphLayers(
+    _ geoLayers: [UMRenderLayer],
+    shapeMap: [UUID: [Polygon2D]],
+    fallback: [Polygon2D]
+) -> (polygons: [Polygon2D], transform: UMAnimatedGeometryStateTransform)? {
+    guard geoLayers.count == 2 else { return nil }
+    let from = geoLayers[0], to = geoLayers[1]
+    let t = to.alpha                         // progress: 0...1
+    guard t > 0 && t < 1 else { return nil }
+
+    let fromPolys = (shapeMap[from.shapeID] ?? fallback).filter(\.visible)
+    let toPolys   = (shapeMap[to.shapeID]   ?? fallback).filter(\.visible)
+
+    guard !fromPolys.isEmpty,
+          fromPolys.count == toPolys.count,
+          zip(fromPolys, toPolys).allSatisfy({ $0.points.count == $1.points.count })
+    else { return nil }
+
+    // Lerp vertex positions; preserve all non-geometric fields from base.
+    let morphed: [Polygon2D] = zip(fromPolys, toPolys).map { (f, tgt) in
+        let pts = zip(f.points, tgt.points).map { Vector2D.lerp($0, $1, t: t) }
+        return Polygon2D(points: pts, type: f.type,
+                        pressures: f.pressures,
+                        pressureProfiles: f.pressureProfiles,
+                        visible: true)
+    }
+
+    // Lerp per-state transform fields.
+    let ft = from.transform, tt = to.transform
+    var blended = ft
+    blended.offsetX  = ft.offsetX  + (tt.offsetX  - ft.offsetX)  * t
+    blended.offsetY  = ft.offsetY  + (tt.offsetY  - ft.offsetY)  * t
+    blended.rotation = ft.rotation + (tt.rotation - ft.rotation) * t
+    blended.scaleX   = ft.scaleX   + (tt.scaleX   - ft.scaleX)   * t
+    blended.scaleY   = ft.scaleY   + (tt.scaleY   - ft.scaleY)   * t
+
+    return (morphed, blended)
 }
 
 // MARK: - Grid-scroll render spec
