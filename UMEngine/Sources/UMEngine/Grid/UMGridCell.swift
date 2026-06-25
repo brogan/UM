@@ -35,6 +35,8 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
     public var shapeID:  UUID?
     /// Optional reference to a UMMotionPath in document.paths.
     public var pathID:   UUID?
+    /// Optional reference to a UMAnimatedGeometry (Sprite Set) in the project palette.
+    public var animatedGeometryID: UUID?
 
     /// Baked color from a color map "lock" operation. When set, the cell
     /// uses this color instead of live color map sampling so the color
@@ -51,9 +53,10 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         scaleX:         Double   = 1.0,
         scaleY:         Double   = 1.0,
         rotation:       Double   = 0.0,
-        motionID:       UUID?    = nil,
-        shapeID:        UUID?    = nil,
-        pathID:         UUID?    = nil
+        motionID:              UUID?    = nil,
+        shapeID:               UUID?    = nil,
+        pathID:                UUID?    = nil,
+        animatedGeometryID:    UUID?    = nil
     ) {
         self.id             = UUID()
         self.gridIndex      = gridIndex
@@ -64,9 +67,10 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         self.scaleX         = scaleX
         self.scaleY         = scaleY
         self.rotation       = rotation
-        self.motionID       = motionID
-        self.shapeID        = shapeID
-        self.pathID         = pathID
+        self.motionID            = motionID
+        self.shapeID             = shapeID
+        self.pathID              = pathID
+        self.animatedGeometryID  = animatedGeometryID
     }
 
     // MARK: - Codable
@@ -75,7 +79,7 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         case id, gridIndex, isDrawn, styleID
         case positionOffset, phaseOffset
         case scaleX, scaleY, rotation
-        case motionID, shapeID, pathID
+        case motionID, shapeID, pathID, animatedGeometryID
         case lockedFillColor, lockedStrokeColor
     }
 
@@ -93,6 +97,7 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         motionID            = try c.decodeIfPresent(UUID.self,    forKey: .motionID)
         shapeID             = try c.decodeIfPresent(UUID.self,    forKey: .shapeID)
         pathID              = try c.decodeIfPresent(UUID.self,    forKey: .pathID)
+        animatedGeometryID  = try c.decodeIfPresent(UUID.self,    forKey: .animatedGeometryID)
         lockedFillColor     = try c.decodeIfPresent(UMColor.self, forKey: .lockedFillColor)
         lockedStrokeColor   = try c.decodeIfPresent(UMColor.self, forKey: .lockedStrokeColor)
     }
@@ -108,9 +113,10 @@ public struct UMGridCell: Codable, Identifiable, Sendable {
         try c.encode(scaleX,         forKey: .scaleX)
         try c.encode(scaleY,         forKey: .scaleY)
         try c.encode(rotation,       forKey: .rotation)
-        try c.encodeIfPresent(motionID,          forKey: .motionID)
-        try c.encodeIfPresent(shapeID,           forKey: .shapeID)
-        try c.encodeIfPresent(pathID,            forKey: .pathID)
+        try c.encodeIfPresent(motionID,             forKey: .motionID)
+        try c.encodeIfPresent(shapeID,              forKey: .shapeID)
+        try c.encodeIfPresent(pathID,               forKey: .pathID)
+        try c.encodeIfPresent(animatedGeometryID,   forKey: .animatedGeometryID)
         try c.encodeIfPresent(lockedFillColor,   forKey: .lockedFillColor)
         try c.encodeIfPresent(lockedStrokeColor, forKey: .lockedStrokeColor)
     }

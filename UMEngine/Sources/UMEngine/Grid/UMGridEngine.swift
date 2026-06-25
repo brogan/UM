@@ -46,28 +46,31 @@ public final class UMGridEngine {
     // MARK: - Cell editing
 
     public func setCellDrawn(_ index: Int, drawn: Bool,
-                              styleID:  UUID,
-                              motionID: UUID? = nil,
-                              shapeID:  UUID? = nil,
-                              pathID:   UUID? = nil) {
+                              styleID:            UUID,
+                              motionID:           UUID? = nil,
+                              shapeID:            UUID? = nil,
+                              pathID:             UUID? = nil,
+                              animatedGeometryID: UUID? = nil) {
         guard index >= 0, index < document.cells.count else { return }
         document.cells[index].isDrawn = drawn
         if drawn {
-            document.cells[index].styleID        = styleID
-            document.cells[index].motionID       = motionID
-            document.cells[index].shapeID        = shapeID
-            document.cells[index].pathID         = pathID
-            document.cells[index].phaseOffset    = computePhaseOffset(for: index)
-            document.cells[index].positionOffset = randomOffset()
+            document.cells[index].styleID             = styleID
+            document.cells[index].motionID            = motionID
+            document.cells[index].shapeID             = shapeID
+            document.cells[index].pathID              = pathID
+            document.cells[index].animatedGeometryID  = animatedGeometryID
+            document.cells[index].phaseOffset         = computePhaseOffset(for: index)
+            document.cells[index].positionOffset      = randomOffset()
             paintOrderCounter += 1
         }
     }
 
     public func floodFill(from index: Int,
-                           styleID:  UUID,
-                           motionID: UUID? = nil,
-                           shapeID:  UUID? = nil,
-                           pathID:   UUID? = nil) {
+                           styleID:            UUID,
+                           motionID:           UUID? = nil,
+                           shapeID:            UUID? = nil,
+                           pathID:             UUID? = nil,
+                           animatedGeometryID: UUID? = nil) {
         guard index >= 0, index < document.cells.count else { return }
         guard !document.cells[index].isDrawn else { return }
         var visited = Set<Int>()
@@ -80,7 +83,8 @@ public final class UMGridEngine {
             visited.insert(i)
             guard !document.cells[i].isDrawn else { continue }
             setCellDrawn(i, drawn: true, styleID: styleID,
-                         motionID: motionID, shapeID: shapeID, pathID: pathID)
+                         motionID: motionID, shapeID: shapeID, pathID: pathID,
+                         animatedGeometryID: animatedGeometryID)
             // 4-connected neighbours
             let r = i / cols, c = i % cols
             if r > 0       { queue.append(i - cols) }

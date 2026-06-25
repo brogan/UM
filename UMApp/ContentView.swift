@@ -874,46 +874,69 @@ struct GridCanvasPlaceholder: View {
                                 let my = dCell.cy - lFracY * lCellH + cell.positionOffset.dy * lScaleY + motion.dy
                                 let isSelected = isActiveLayer && controller.selectedIndices.contains(cell.gridIndex)
 
-                                let lEffectiveShapeID = resolveSequenceShapeID(motionSet: motionSet,
-                                                                               cellShapeID: cell.shapeID,
-                                                                               frame: currentFrame,
-                                                                               phaseOffset: cell.phaseOffset)
-                                let polygons = resolvePolygons(shapeID: lEffectiveShapeID,
+                                let lGeoLayers = resolveEffectiveCellLayers(cell: cell, motionSet: motionSet,
+                                                                              animatedGeometries: controller.projectAnimatedGeometries,
+                                                                              frame: currentFrame)
+                                let lMorphResult = attemptMorphLayers(lGeoLayers, shapeMap: shapePolyMap, fallback: fallbackPolys)
+                                let lResolvedLayers: [UMRenderLayer]
+                                var lMorphOverride: [UUID: [Polygon2D]] = [:]
+                                if let (morphPolys, morphTransform) = lMorphResult {
+                                    let synth = UMRenderLayer(shapeID: lGeoLayers[0].shapeID, styleID: lGeoLayers[0].styleID,
+                                                               alpha: 1.0, transform: morphTransform)
+                                    lResolvedLayers = [synth]
+                                    lMorphOverride  = [lGeoLayers[0].shapeID: morphPolys]
+                                } else {
+                                    lResolvedLayers = lGeoLayers.isEmpty
+                                        ? [UMRenderLayer(shapeID: UUID(), styleID: nil, alpha: 1.0, transform: .identity)]
+                                        : lGeoLayers
+                                }
+
+                                for lGeoLayer in lResolvedLayers {
+                                let la       = lGeoLayer.alpha
+                                let lxOff    = lGeoLayer.transform.offsetX
+                                let lyOff    = lGeoLayer.transform.offsetY
+                                let lRot     = lGeoLayer.transform.rotation
+                                let lSX      = lGeoLayer.transform.scaleX
+                                let lSY      = lGeoLayer.transform.scaleY
+                                let lxm      = mx + lxOff
+                                let lym      = my + lyOff
+                                let lStyle   = lGeoLayer.styleID.flatMap { lStyleMap[$0] } ?? style
+                                let polygons = lMorphOverride[lGeoLayer.shapeID] ?? resolvePolygons(shapeID: lGeoLayer.shapeID,
                                                                shapeMap: shapePolyMap,
                                                                fallback: fallbackPolys)
 
                                 if polygons.isEmpty {
                                     let rw   = (dCellW - 4) / 2 * motion.scaleX
                                     let rh   = (dCellH - 4) / 2 * motion.scaleY
-                                    let rect = CGRect(x: mx - rw, y: my - rh, width: rw * 2, height: rh * 2)
-                                    let fc   = motion.fillOverride ?? style?.fillColor ?? .defaultFill
+                                    let rect = CGRect(x: lxm - rw, y: lym - rh, width: rw * 2, height: rh * 2)
+                                    let fc   = motion.fillOverride ?? lStyle?.fillColor ?? .defaultFill
                                     layerCtx.fill(Path(roundedRect: rect, cornerRadius: 3),
                                                   with: .color(Color(red: fc.r, green: fc.g, blue: fc.b)
-                                                      .opacity(isSelected ? min(1, fc.a * 1.3) : fc.a)))
+                                                      .opacity((isSelected ? min(1, fc.a * 1.3) : fc.a) * la)))
                                     if isSelected {
                                         layerCtx.stroke(Path(roundedRect: rect, cornerRadius: 3),
                                                         with: .color(.accentColor), lineWidth: 1.5)
                                     }
                                 } else {
                                     let dCellHalf = min(dCellW, dCellH)
-                                    let zoomX   = (stretch ? dCellW : dCellHalf) * motion.scaleX
-                                    let zoomY   = (stretch ? dCellH : dCellHalf) * motion.scaleY
-                                    let fillC   = motion.fillOverride   ?? style?.fillColor   ?? .defaultFill
-                                    let strokeC = motion.strokeOverride ?? style?.strokeColor ?? .defaultStroke
-                                    let strokeW = style?.strokeWidth ?? 1.5
-                                    let mode    = style?.renderMode  ?? .filledStroked
+                                    let zoomX   = (stretch ? dCellW : dCellHalf) * motion.scaleX * lSX
+                                    let zoomY   = (stretch ? dCellH : dCellHalf) * motion.scaleY * lSY
+                                    let fillC   = motion.fillOverride   ?? lStyle?.fillColor   ?? .defaultFill
+                                    let strokeC = motion.strokeOverride ?? lStyle?.strokeColor ?? .defaultStroke
+                                    let strokeW = lStyle?.strokeWidth ?? 1.5
+                                    let mode    = lStyle?.renderMode  ?? .filledStroked
 
                                     let paths = polygons.filter(\.visible)
-                                                        .map { buildPolygonPath($0, cx: mx, cy: my,
+                                                        .map { buildPolygonPath($0, cx: lxm, cy: lym,
                                                                                 zoomX: zoomX, zoomY: zoomY,
                                                                                 scaleX: cell.scaleX,
                                                                                 scaleY: cell.scaleY,
-                                                                                rotation: cell.rotation + motion.rotation) }
+                                                                                rotation: cell.rotation + motion.rotation + lRot) }
                                     for cgp in paths {
                                         if mode == .filled || mode == .filledStroked {
                                             layerCtx.fill(Path(cgp),
                                                           with: .color(Color(red: fillC.r, green: fillC.g,
-                                                                             blue: fillC.b, opacity: fillC.a)))
+                                                                             blue: fillC.b, opacity: fillC.a * la)))
                                         }
                                         if mode == .stroked || mode == .filledStroked {
                                             layerCtx.stroke(Path(cgp),
@@ -930,6 +953,7 @@ struct GridCanvasPlaceholder: View {
                                         }
                                     }
                                 }
+                                } // for lGeoLayer
                             }
                         } // ctx.drawLayer
                     } // for ls in layerStates
@@ -1650,9 +1674,10 @@ struct GridCanvasPlaceholder: View {
         case .draw:
             let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
             controller.engine.setCellDrawn(index, drawn: true, styleID: sid,
-                                           motionID: controller.activeMotionID,
-                                           shapeID:  controller.activeShapeID,
-                                           pathID:   controller.activePathID)
+                                           motionID:           controller.activeMotionID,
+                                           shapeID:            controller.activeShapeID,
+                                           pathID:             controller.activePathID,
+                                           animatedGeometryID: controller.activeAnimatedGeometryID)
         case .erase:
             controller.engine.setCellDrawn(index, drawn: false, styleID: UUID())
         case .sample:
@@ -1662,9 +1687,10 @@ struct GridCanvasPlaceholder: View {
         case .fill:
             let sid = controller.activeStyleID ?? controller.projectStyles.first?.id ?? UUID()
             controller.engine.floodFill(from: index, styleID: sid,
-                                        motionID: controller.activeMotionID,
-                                        shapeID:  controller.activeShapeID,
-                                        pathID:   controller.activePathID)
+                                        motionID:           controller.activeMotionID,
+                                        shapeID:            controller.activeShapeID,
+                                        pathID:             controller.activePathID,
+                                        animatedGeometryID: controller.activeAnimatedGeometryID)
         case .select, .nudge:
             break  // handled separately
         }

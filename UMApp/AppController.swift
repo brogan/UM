@@ -1740,6 +1740,14 @@ final class AppController {
         }
     }
 
+    func assignAnimGeoToSelection(_ geoID: UUID?) {
+        guard !selectedIndices.isEmpty else { return }
+        engine.pushUndoSnapshot()
+        for i in selectedIndices where i < engine.document.cells.count {
+            engine.document.cells[i].animatedGeometryID = geoID
+        }
+    }
+
     // MARK: Nudge
 
     func nudgeSelection(dx: Double, dy: Double, isRepeat: Bool = false) {

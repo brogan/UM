@@ -62,7 +62,7 @@ struct StylePaletteView: View {
 
                 Menu("+ New Layer") {
                     Button("Grid Layer")   { controller.addLayer() }
-                    Button("Sprite Layer") { controller.addSpriteLayer() }
+                    Button("Open Layer")   { controller.addSpriteLayer() }
                 }
                 .menuStyle(.borderlessButton)
                 .font(.system(size: 12))

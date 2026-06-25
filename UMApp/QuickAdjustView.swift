@@ -1259,6 +1259,18 @@ struct QuickAdjustView: View {
                 .frame(maxWidth: 150)
                 .disabled(!hasSelection)
             }
+            InspectorField("Anim. Set") {
+                Picker("", selection: selectionAnimGeoBinding) {
+                    Text("—").tag(nil as UUID?)
+                    ForEach(controller.projectAnimatedGeometries) { geo in
+                        Text(geo.name).tag(Optional(geo.id))
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(maxWidth: 150)
+                .disabled(!hasSelection)
+            }
             InspectorField("Path") {
                 Picker("", selection: selectionPathBinding) {
                     Text("None").tag(nil as UUID?)
@@ -2861,6 +2873,13 @@ struct QuickAdjustView: View {
         Binding(
             get: { focusedCell?.shapeID },
             set: { controller.assignShapeToSelection($0) }
+        )
+    }
+
+    private var selectionAnimGeoBinding: Binding<UUID?> {
+        Binding(
+            get: { focusedCell?.animatedGeometryID },
+            set: { controller.assignAnimGeoToSelection($0) }
         )
     }
 

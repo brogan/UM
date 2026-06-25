@@ -75,6 +75,25 @@ func resolveEffectiveSpriteStateTransform(
     return geo.resolveStateTransform(atFrame: frame + sprite.phaseOffset)
 }
 
+/// Returns the render layers for a grid cell at the given frame.
+/// Mirrors resolveEffectiveSpriteLayers for grid cells: animated-geometry (Sprite Set)
+/// wins when assigned, otherwise falls back to SEQUENCE then cell's own shapeID.
+func resolveEffectiveCellLayers(
+    cell: UMGridCell,
+    motionSet: UMMotionSet?,
+    animatedGeometries: [UMAnimatedGeometry],
+    frame: Int
+) -> [UMRenderLayer] {
+    if let geoID = cell.animatedGeometryID,
+       let geo   = animatedGeometries.first(where: { $0.id == geoID }) {
+        return geo.resolveRenderLayers(atFrame: frame + cell.phaseOffset)
+    }
+    let shapeID = resolveSequenceShapeID(motionSet: motionSet, cellShapeID: cell.shapeID,
+                                         frame: frame, phaseOffset: cell.phaseOffset)
+    guard let sid = shapeID else { return [] }
+    return [UMRenderLayer(shapeID: sid, styleID: nil, alpha: 1.0, transform: .identity)]
+}
+
 /// Returns the render layers for this sprite at the given frame.
 /// Animated geometry sprites: calls geo.resolveRenderLayers (1 or 2 layers during transitions).
 /// Non-animated sprites: returns a single synthetic layer with SEQUENCE-resolved shapeID.
