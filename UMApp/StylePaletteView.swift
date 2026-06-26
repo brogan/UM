@@ -8,6 +8,7 @@ struct StylePaletteView: View {
     @State private var tab: PaletteTab = .project
     @State private var renamingLayerID:   UUID? = nil
     @State private var expandedLayerIDs:  Set<UUID> = []
+    @State private var showHiddenShapes:  Bool = false
     @State private var renamingStyleID:   UUID? = nil
     @State private var renamingMotionID:  UUID? = nil
     @State private var renamingPathID:    UUID? = nil
@@ -100,66 +101,48 @@ struct StylePaletteView: View {
 
                 Divider().padding(.vertical, 4)
 
-                sectionHeader("STYLES")
-
-                ForEach(controller.projectStyles) { style in
-                    projectStyleRow(style)
+                // SHAPES section
+                let ssShapeIDs: Set<UUID> = Set(
+                    controller.projectAnimatedGeometries.flatMap { $0.states.map(\.shapeID) }
+                )
+                let shapeGeoMap: [UUID: [String]] = {
+                    var m: [UUID: [String]] = [:]
+                    for geo in controller.projectAnimatedGeometries {
+                        for state in geo.states {
+                            m[state.shapeID, default: []].append(geo.name)
+                        }
+                    }
+                    return m
+                }()
+                let hasHidden = controller.projectShapes.contains { controller.hiddenShapeIDs.contains($0.id) }
+                HStack(spacing: 0) {
+                    Text("SHAPES")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    if hasHidden {
+                        Button {
+                            showHiddenShapes.toggle()
+                        } label: {
+                            Image(systemName: showHiddenShapes ? "eye" : "eye.slash")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.tertiary)
+                        }
+                        .buttonStyle(.plain)
+                        .help(showHiddenShapes ? "Hide hidden shapes" : "Show hidden shapes")
+                    }
                 }
-
-                Button("+ New Style") {
-                    let style = CellStyle(name: "Style \(controller.projectStyles.count + 1)")
-                    controller.projectStyles.append(style)
-                    controller.activeStyleID = style.id
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.accentColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
 
-                Divider().padding(.vertical, 4)
-
-                sectionHeader("MOTIONS")
-
-                ForEach(controller.projectMotionSets) { ms in
-                    projectMotionRow(ms)
-                }
-
-                Button("+ New Motion") {
-                    controller.addMotionSet()
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.accentColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-
-                Divider().padding(.vertical, 4)
-
-                pathsSectionHeader
-
-                ForEach(controller.engine.document.paths) { path in
-                    projectPathRow(path)
-                }
-
-                Button("+ New Path") {
-                    controller.createPath()
-                }
-                .buttonStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundStyle(Color.accentColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-
-                Divider().padding(.vertical, 4)
-
-                sectionHeader("SHAPES")
-
-                ForEach(controller.projectShapes) { shape in
-                    projectShapeRow(shape)
+                ForEach(controller.projectShapes.filter {
+                    showHiddenShapes || !controller.hiddenShapeIDs.contains($0.id)
+                }) { shape in
+                    projectShapeRow(shape,
+                                    isInSpriteSet: ssShapeIDs.contains(shape.id),
+                                    spriteSetNames: shapeGeoMap[shape.id] ?? [],
+                                    isHidden: controller.hiddenShapeIDs.contains(shape.id))
                 }
 
                 Button("+ Import Shape…") {
@@ -181,6 +164,44 @@ struct StylePaletteView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 10)
                 .padding(.bottom, 7)
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("SPRITE SETS")
+
+                ForEach(controller.projectAnimatedGeometries) { geo in
+                    spriteSetsRow(geo)
+                }
+
+                Button("+ New Sprite Set") {
+                    controller.addAnimatedGeometry()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+
+                Divider().padding(.vertical, 4)
+
+                sectionHeader("STYLES")
+
+                ForEach(controller.projectStyles) { style in
+                    projectStyleRow(style)
+                }
+
+                Button("+ New Style") {
+                    let style = CellStyle(name: "Style \(controller.projectStyles.count + 1)")
+                    controller.projectStyles.append(style)
+                    controller.activeStyleID = style.id
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
 
                 Divider().padding(.vertical, 4)
 
@@ -214,14 +235,32 @@ struct StylePaletteView: View {
 
                 Divider().padding(.vertical, 4)
 
-                sectionHeader("SPRITE SETS")
+                sectionHeader("MOTIONS")
 
-                ForEach(controller.projectAnimatedGeometries) { geo in
-                    spriteSetsRow(geo)
+                ForEach(controller.projectMotionSets) { ms in
+                    projectMotionRow(ms)
                 }
 
-                Button("+ New Sprite Set") {
-                    controller.addAnimatedGeometry()
+                Button("+ New Motion") {
+                    controller.addMotionSet()
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+
+                Divider().padding(.vertical, 4)
+
+                pathsSectionHeader
+
+                ForEach(controller.engine.document.paths) { path in
+                    projectPathRow(path)
+                }
+
+                Button("+ New Path") {
+                    controller.createPath()
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 12))
@@ -914,12 +953,15 @@ struct StylePaletteView: View {
         }
     }
 
-    private func projectShapeRow(_ shape: UMShape) -> some View {
+    private func projectShapeRow(_ shape: UMShape,
+                                  isInSpriteSet: Bool,
+                                  spriteSetNames: [String],
+                                  isHidden: Bool) -> some View {
         let active = controller.activeShapeID == shape.id
         return HStack(spacing: 6) {
             Image(systemName: "pentagon")
                 .font(.system(size: 9))
-                .foregroundStyle(active ? Color.accentColor : Color.secondary)
+                .foregroundStyle(active ? Color.accentColor : (isHidden ? Color.secondary.opacity(0.35) : Color.secondary))
             if renamingShapeID == shape.id {
                 TextField("Shape name", text: Binding(
                     get: { controller.projectShapes.first { $0.id == shape.id }?.name ?? shape.name },
@@ -936,7 +978,17 @@ struct StylePaletteView: View {
                 Text(shape.name)
                     .font(.system(size: 12))
                     .lineLimit(1)
+                    .foregroundStyle(isHidden ? .tertiary : .primary)
                     .onTapGesture(count: 2) { renamingShapeID = shape.id }
+                if isInSpriteSet {
+                    Text("ss")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color.accentColor.opacity(0.7))
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .background(Color.accentColor.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
             }
             Spacer()
             Button {
@@ -958,7 +1010,18 @@ struct StylePaletteView: View {
             controller.activeShapeID = (controller.activeShapeID == shape.id) ? nil : shape.id
         }
         .contextMenu {
+            if !spriteSetNames.isEmpty {
+                Menu("Used in Sprite Sets") {
+                    ForEach(spriteSetNames, id: \.self) { name in
+                        Text(name)
+                    }
+                }
+                Divider()
+            }
             Button("Rename") { renamingShapeID = shape.id }
+            Button(isHidden ? "Show in List" : "Hide from List") {
+                controller.toggleShapeHidden(shape.id)
+            }
             Button("Save to Library") { controller.promoteShapeToLibrary(shape.id) }
             Divider()
             Button("Delete Shape", role: .destructive) { controller.deleteShape(shape.id) }

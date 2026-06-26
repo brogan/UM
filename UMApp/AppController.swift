@@ -313,6 +313,7 @@ final class AppController {
     var globalLibrary:              UMLibrary = .empty
     var globalShapes:               [UMShape] = []
     var projectShapes:              [UMShape] = []
+    var hiddenShapeIDs:             Set<UUID> = []
     var projectMotionSets:          [UMMotionSet] = []
     var projectColorPalettes:       [UMColorPalette] = []
     var activeColorPaletteID:       UUID? = nil
@@ -635,6 +636,7 @@ final class AppController {
         activeColorPaletteID      = nil
         projectResolutionPresets  = []
         projectAnimatedGeometries = []
+        hiddenShapeIDs            = []
         activeStyleID             = doc.styles.first?.id
         activeMotionID            = nil
         layerColorMapEngines.removeAll()
@@ -735,6 +737,7 @@ final class AppController {
         var projectColorPalettes: [UMColorPalette]
         var projectResolutionPresets: [UMResolutionPreset]
         var projectAnimatedGeometries: [UMAnimatedGeometry]?   // Added in v10; nil → []
+        var hiddenShapeIDs: [UUID]?                            // Added in v11; nil → []
         var layers: [LayerRecord]
         var camera: UMCamera?             // Added in v4; nil → .identity
         var timelineMarkers: [UMTimelineMarker]?  // Added in v5; nil → []
@@ -745,7 +748,7 @@ final class AppController {
         enum CodingKeys: String, CodingKey {
             case version, activeLayerIndex, projectStyles, projectShapes
             case projectMotionSets, projectColorPalettes, projectResolutionPresets
-            case projectAnimatedGeometries, layers
+            case projectAnimatedGeometries, hiddenShapeIDs, layers
             case camera, timelineMarkers, backgroundImageRelPath, backgroundColor, backgroundDraw
         }
 
@@ -754,6 +757,7 @@ final class AppController {
              projectColorPalettes: [UMColorPalette],
              projectResolutionPresets: [UMResolutionPreset],
              projectAnimatedGeometries: [UMAnimatedGeometry],
+             hiddenShapeIDs: [UUID],
              layers: [LayerRecord], camera: UMCamera?,
              timelineMarkers: [UMTimelineMarker]?,
              backgroundImageRelPath: String?,
@@ -767,6 +771,7 @@ final class AppController {
             self.projectColorPalettes       = projectColorPalettes
             self.projectResolutionPresets   = projectResolutionPresets
             self.projectAnimatedGeometries  = projectAnimatedGeometries.isEmpty ? nil : projectAnimatedGeometries
+            self.hiddenShapeIDs             = hiddenShapeIDs.isEmpty ? nil : hiddenShapeIDs
             self.layers                     = layers
             self.camera                     = camera
             self.timelineMarkers            = timelineMarkers
@@ -785,6 +790,7 @@ final class AppController {
             projectColorPalettes        = (try? c.decodeIfPresent([UMColorPalette].self,            forKey: .projectColorPalettes))       ?? []
             projectResolutionPresets    = (try? c.decodeIfPresent([UMResolutionPreset].self,        forKey: .projectResolutionPresets))   ?? []
             projectAnimatedGeometries   = try? c.decodeIfPresent([UMAnimatedGeometry].self,         forKey: .projectAnimatedGeometries)
+            hiddenShapeIDs              = try? c.decodeIfPresent([UUID].self,                       forKey: .hiddenShapeIDs)
             layers                      = try  c.decode([LayerRecord].self,   forKey: .layers)
             camera                      = try? c.decodeIfPresent(UMCamera.self,               forKey: .camera)
             timelineMarkers             = try? c.decodeIfPresent([UMTimelineMarker].self,     forKey: .timelineMarkers)
@@ -927,7 +933,7 @@ final class AppController {
         // Build and write config.json
         layerStates[activeLayerIndex].activeStyleID = activeStyleID
         let config = ProjectConfig(
-            version: 10,
+            version: 11,
             activeLayerIndex: activeLayerIndex,
             projectStyles: projectStyles,
             projectShapes: projectShapes.map {
@@ -937,6 +943,7 @@ final class AppController {
             projectColorPalettes: projectColorPalettes,
             projectResolutionPresets: projectResolutionPresets,
             projectAnimatedGeometries: projectAnimatedGeometries,
+            hiddenShapeIDs: Array(hiddenShapeIDs),
             layers: layerStates.map { ls in
                 ProjectConfig.LayerRecord(
                     id:            ls.id,
@@ -1049,6 +1056,7 @@ final class AppController {
         activeColorPaletteID      = config.projectColorPalettes.first?.id
         projectResolutionPresets  = config.projectResolutionPresets
         projectAnimatedGeometries = config.projectAnimatedGeometries ?? []
+        hiddenShapeIDs            = Set(config.hiddenShapeIDs ?? [])
         activeStyleID             = layerStates[idx].activeStyleID ?? styles.first?.id
         activeMotionID    = projectMotionSets.first?.id
         activeShapeID     = nil
@@ -1611,6 +1619,14 @@ final class AppController {
         projectAnimatedGeometries.append(geo)
 
         UMLogger.shared.log("importShapeLayers: \(created.count) shapes + Sprite Set from \(docName)")
+    }
+
+    func toggleShapeHidden(_ id: UUID) {
+        if hiddenShapeIDs.contains(id) {
+            hiddenShapeIDs.remove(id)
+        } else {
+            hiddenShapeIDs.insert(id)
+        }
     }
 
     func deleteShape(_ id: UUID) {
