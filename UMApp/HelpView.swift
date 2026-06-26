@@ -483,12 +483,18 @@ private let layersBody = #"""
 <table>
   <tr><th>Element</th><th>Description</th></tr>
   <tr><td>Eye icon</td><td>Click to toggle the layer's visibility on and off. Hidden layers are excluded from the canvas and from exports.</td></tr>
+  <tr><td>▶ / ▼ chevron</td><td>Click to expand or collapse the layer's detail rows (opacity and parallax sliders). Collapsed by default to keep the list compact.</td></tr>
   <tr><td>Accent dot</td><td>Filled with the accent colour when this is the active layer; faint otherwise.</td></tr>
+  <tr><td>✦ sparkle icon</td><td>Shown on Open Layers only.</td></tr>
   <tr><td>Layer name</td><td>The editable name. Double-click to rename inline.</td></tr>
-  <tr><td>Opacity slider</td><td>A mini slider (0–100%) that adjusts the layer's compositing opacity continuously.</td></tr>
-  <tr><td>Opacity %</td><td>Live readout alongside the slider.</td></tr>
-  <tr><td>Camera icon + parallax slider</td><td>A compact 0–1 slider controlling how much camera movement this layer responds to. See Camera &amp; Parallax below.</td></tr>
 </table>
+<p>When a layer is <strong>expanded</strong>, two additional rows appear beneath the name row:</p>
+<table>
+  <tr><th>Element</th><th>Description</th></tr>
+  <tr><td>○ Opacity slider</td><td>A mini slider (0–100%) that adjusts the layer's compositing opacity continuously.</td></tr>
+  <tr><td>Camera + parallax slider</td><td>A compact 0–1 slider controlling how much camera movement this layer responds to. See Camera &amp; Parallax below.</td></tr>
+</table>
+<p>The <strong>expand-all / collapse-all</strong> button in the LAYERS header (double-chevron icon, top-right of the section) expands or collapses all layers at once.</p>
 
 <h2>Selecting the active layer</h2>
 <p>Click any layer row to make it active. All painting, style editing, path editing, and Quick Adjust operations apply to the active layer only. The selection highlight on the canvas applies only to the active layer's cells.</p>
@@ -502,8 +508,8 @@ private let layersBody = #"""
 <p>Alternatively, right-click the layer row and choose <strong>Rename</strong> from the context menu.</p>
 
 <h2>Adjusting opacity</h2>
-<p>Drag the mini slider in the layer row left (more transparent) or right (more opaque). The canvas updates live as you drag. The percentage label shows the current value.</p>
-<p>Right-clicking the row also gives quick opacity presets: 100%, 75%, 50%, 25%.</p>
+<p>Click the <strong>▶ chevron</strong> on the layer row to expand it, then drag the opacity slider (○ icon) left (more transparent) or right (more opaque). The canvas updates live as you drag. The percentage label shows the current value.</p>
+<p>Right-clicking the layer row also gives quick opacity presets: 100%, 75%, 50%, 25%.</p>
 
 <h2>Reordering layers</h2>
 <ol class="steps">
@@ -539,7 +545,7 @@ private let layersBody = #"""
 </table>
 <p>The <strong>Reset Camera</strong> button (bottom of the section) returns all three drivers to their identity defaults (Pan 0, Zoom 1×, Rotation 0°, mode Constant). It is greyed out when the camera is already at identity.</p>
 
-<p>Each layer row has a <strong>parallax slider</strong> (the camera icon) that controls how much of the camera pan this layer absorbs:</p>
+<p>Each layer row has a <strong>parallax slider</strong> (camera icon) visible when the row is expanded. It controls how much of the camera pan this layer absorbs:</p>
 <table>
   <tr><th>Value</th><th>Effect</th></tr>
   <tr><td>0.0</td><td>Background-fixed — the layer stays anchored to the screen. Camera panning has no effect on it. Use for distant backgrounds, skies, or HUD overlays.</td></tr>
@@ -1508,9 +1514,10 @@ private let paletteBody = #"""
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
+<p>Each layer row has an <strong>eye</strong> toggle (visibility) and a <strong>▶ chevron</strong> (expand/collapse). Click the chevron to reveal or hide the opacity and parallax sliders for that layer. The double-chevron button in the LAYERS section header expands or collapses all layers at once.</p>
 <p>Below the layer list, the LAYERS section shows a <strong>resolution row</strong> for quick resizing:</p>
 <ul>
-  <li><strong>Multiplier buttons</strong> — a single row of eight buttons: <code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>. Each multiplies the current rows and columns by that factor (rounded to the nearest integer, minimum 1) and resamples immediately. Hover over a button to see the resulting dimensions as a tooltip.</li>
+  <li><strong>Multiplier buttons</strong> — two rows of buttons: fractional (<code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>) on top, whole-number (<code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>) below. Each multiplies the current rows and columns by that factor (rounded to the nearest integer, minimum 1) and resamples immediately. Hover over a button to see the resulting dimensions as a tooltip.</li>
   <li><strong>Custom preset chips</strong> — any resolution you have saved appears below the multiplier row as a <code>rows×cols</code> chip. Click to resample to that size. Right-click for <strong>Save to Library</strong> or <strong>Remove</strong>.</li>
   <li><strong>+ button</strong> — saves the current resolution as a project preset.</li>
   <li><strong>Other…</strong> — opens the full <a href="um-help://help/resample">Resample Grid</a> sheet for arbitrary dimensions and resize policies.</li>
@@ -1876,7 +1883,7 @@ private let resampleBody = #"""
 <p>The grid always fills the full output canvas — columns divide the canvas width equally, rows divide the canvas height equally. Changing resolution changes cell size, not canvas size.</p>
 
 <h2>Quick resize — multiplier buttons</h2>
-<p>The LAYERS section of the palette shows a row of eight multiplier buttons: <code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>. Each scales the active layer's current rows and columns by the chosen factor (rounded, minimum 1) and resamples immediately using the default policies (Preserve offsets, Inherit phase). Hover any button to preview the resulting dimensions. This is the fastest path for common size changes.</p>
+<p>The LAYERS section of the palette shows two rows of multiplier buttons: fractional (<code>1/5</code>, <code>1/4</code>, <code>1/3</code>, <code>1/2</code>) on top, whole-number (<code>2</code>, <code>3</code>, <code>4</code>, <code>5</code>) below. Each scales the active layer's current rows and columns by the chosen factor (rounded, minimum 1) and resamples immediately using the default policies (Preserve offsets, Inherit phase). Hover any button to preview the resulting dimensions. This is the fastest path for common size changes.</p>
 
 <h2>Full resample sheet</h2>
 <p>Click <strong>Other…</strong> in the RESOLUTION header (or the resolution label in the Tool Strip) to open this sheet when you need arbitrary dimensions or non-default resize policies.</p>
