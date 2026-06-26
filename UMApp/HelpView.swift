@@ -1510,7 +1510,7 @@ private let paletteBody = #"""
 <p>The Style Palette sits on the left side of the window. It has two tabs: <strong>Project</strong> and <strong>Library</strong>.</p>
 
 <h2>Project tab</h2>
-<p>Lists everything owned by the current document. Organised into seven sections: LAYERS, STYLES, MOTIONS, PATHS, SHAPES, PALETTES, and SPRITE SETS.</p>
+<p>Lists everything owned by the current document. Organised into seven sections: LAYERS, SHAPES, SPRITE SETS, STYLES, PALETTES, MOTIONS, and PATHS.</p>
 
 <h3>LAYERS</h3>
 <p>See <a href="um-help://help/layers">Working with Layers</a> for the full guide to layers.</p>
@@ -1522,6 +1522,54 @@ private let paletteBody = #"""
   <li><strong>+ button</strong> — saves the current resolution as a project preset.</li>
   <li><strong>Other…</strong> — opens the full <a href="um-help://help/resample">Resample Grid</a> sheet for arbitrary dimensions and resize policies.</li>
 </ul>
+
+<h3>SHAPES</h3>
+<p>Shapes are Loom polygon-set geometry files imported into the project. Each shape is a named set of bezier polygons. Clicking a shape sets it as the <strong>active shape</strong> — new cells you draw will be rendered with this geometry. Click the highlighted row again to deselect (new cells will use the default built-in polygon).</p>
+<ul>
+  <li><strong>+ Import Shape…</strong> — opens a file picker (defaults to ~/.loom_projects). Select one or more Loom .json polygon-set files.</li>
+  <li><strong>+ Import Layers as Shapes…</strong> — imports each visible layer of a multi-layer Loom file as a separate shape, and creates a Sprite Set containing them all in layer order.</li>
+  <li><strong>↑ button</strong> — saves the shape to the global library.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
+</ul>
+
+<h4>ss badge</h4>
+<p>Any shape that appears in at least one Sprite Set state shows a small <strong>ss</strong> pill next to its name. This makes it easy to see at a glance which shapes are animation components versus standalone shapes used directly on cells.</p>
+
+<h4>Hiding shapes</h4>
+<p>Shapes that exist only as Sprite Set components — and that you never assign directly to cells — can be hidden to keep the list uncluttered. Right-click a shape and choose <strong>Hide from List</strong>. The shape remains in the project and continues to work inside any Sprite Sets that reference it; it simply disappears from the default view.</p>
+<p>When at least one shape is hidden, an <strong>eye.slash</strong> button appears in the SHAPES header. Click it to reveal all hidden shapes (shown dimmed). Click again to re-hide them. A hidden shape's context menu shows <strong>Show in List</strong> to permanently restore it.</p>
+
+<h4>Right-click context menu</h4>
+<table>
+  <tr><th>Item</th><th>Effect</th></tr>
+  <tr><td>Used in Sprite Sets</td><td>Submenu listing every Sprite Set that references this shape. Only shown when the shape is used in at least one set.</td></tr>
+  <tr><td>Rename</td><td>Opens the inline rename field.</td></tr>
+  <tr><td>Hide from List / Show in List</td><td>Toggles the shape's visibility in the palette list. The shape is not deleted.</td></tr>
+  <tr><td>Save to Library</td><td>Copies the shape to the global library for use in other projects.</td></tr>
+  <tr><td>Delete Shape</td><td>Permanently removes the shape from the project. Cells that referenced it fall back to the default geometry.</td></tr>
+</table>
+
+<div class="tip"><strong>Workflow: Sprite Set imports</strong> — when you use <strong>+ Import Layers as Shapes…</strong> to build a Sprite Set from a multi-layer Loom file, all the component shapes are imported individually into the SHAPES list. Once the Sprite Set is configured, hide those component shapes to keep the list focused on shapes you assign directly to cells.</div>
+<div class="tip"><strong>Shape cycling over time</strong> — to cycle through multiple shapes on a schedule, use the SEQUENCE feature in the <strong>MOTION</strong> section: add shape slots to a motion set, set a step interval, and choose Sequential or Random mode. See <a href="um-help://help/qa-motion">Motion Palette → SEQUENCE cycling</a>.</div>
+
+<h3>SPRITE SETS</h3>
+<p>Sprite Sets are reusable shape-animation cycles that can be assigned to sprites on open layers <strong>and to individual grid cells on grid layers</strong>. Each set holds an ordered list of <em>states</em>: a shape, an optional style override, and a hold-frame count. The set steps through those states at playback time, independently of the motion set.</p>
+<ul>
+  <li><strong>+ New Sprite Set</strong> — creates an empty set ready to be filled with states in the editor.</li>
+  <li><strong>+ Import Layers as Shapes…</strong> — in the SHAPES section above. Select a multi-layer Loom geometry file; each visible, non-empty layer becomes a separate shape and a Sprite Set containing all of them in layer order is created automatically.</li>
+  <li><strong>Pencil icon</strong> — opens the Sprite Set editor for that set.</li>
+  <li><strong>Right-click</strong> — Edit…, Rename, Duplicate, Delete.</li>
+  <li><strong>Double-click the name</strong> — inline rename field. Press Return to confirm.</li>
+</ul>
+<h4>Direct drawing with a Sprite Set</h4>
+<p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active:</p>
+<ul>
+  <li><strong>On an open layer</strong> — clicking the canvas or using <strong>+ Place at Centre</strong> places a sprite that is automatically assigned the active Sprite Set. No need to place first and assign afterwards.</li>
+  <li><strong>On a grid layer</strong> — drawing or flood-filling cells automatically assigns the active Sprite Set to each cell. The cells animate through the Sprite Set's states independently (each cell's phase offset staggers the cycle). Morph and cross-fade transitions are supported exactly as on open-layer sprites.</li>
+</ul>
+<div class="tip">Select a Sprite Set in the palette, then draw across a grid to scatter many cells that all share the same animation cycle. Each cell inherits the active style, shape, and motion — the Sprite Set adds the shape-animation layer on top, with per-cell phase staggering for variety.</div>
+<p>To assign a Sprite Set to an <strong>existing sprite</strong>, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust.</p>
+<p>To assign a Sprite Set to <strong>existing grid cells</strong>, select the cells and use the <strong>Anim. Set</strong> picker in the <strong>PLACE &amp; TIME</strong> section of Quick Adjust. Choose <strong>—</strong> to remove the assignment and revert the cell to its static shape.</p>
 
 <h3>STYLES</h3>
 <p>A style controls rendering only: fill colour, stroke colour, stroke width, and render mode. Click a style row to make it the <strong>active style</strong> — new cells you draw will carry this style. The active style is highlighted with an accent indicator.</p>
@@ -1543,6 +1591,24 @@ private let paletteBody = #"""
   <tr><td>Delete Style</td><td>Removes the style. Cells using it are reassigned to the first remaining style. Disabled when only one style exists.</td></tr>
 </table>
 
+<h3>PALETTES</h3>
+<p>Colour palettes are sets of swatches sampled from a Color Map source. They provide a way to apply coherent, image-sourced colours to your styles through the palette picker in the RENDER section.</p>
+<ul>
+  <li><strong>Generate from Color Map…</strong> — opens a sheet to name the palette and choose a size. Available only when a Color Map source is loaded. Sizes:
+    <ul>
+      <li><strong>4×4</strong> — 16 colours (4 horizontal bands × 4 vertical bands of the source image)</li>
+      <li><strong>4×8</strong> — 32 colours</li>
+      <li><strong>8×8</strong> — 64 colours</li>
+    </ul>
+  </li>
+  <li>Each palette row shows the name and a <strong>swatch strip preview</strong> of the first 32 colours.</li>
+  <li><strong>↑ button</strong> — saves the palette to the global library for reuse across projects.</li>
+  <li><strong>Double-click the name</strong> — rename inline.</li>
+</ul>
+<p>Right-click a palette row: <strong>Save to Library</strong> or <strong>Delete Palette</strong>.</p>
+<p>To use a palette colour in a style, click the palette icon (🎨) next to Fill or Stroke in the RENDER section — see <a href="um-help://help/qa-style">Style (RENDER)</a>.</p>
+<div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
+
 <h3>MOTIONS</h3>
 <p>Motion sets control animation: parametric preset, speed, amount, phase, Order/Chaos, axis mix, and SEQUENCE shape cycling. Click a motion set row to make it the <strong>active motion</strong> — new cells you draw will carry this motion. The <strong>MOTION</strong> section in Quick Adjust (right panel) shows its parameters immediately.</p>
 <ul>
@@ -1561,55 +1627,6 @@ private let paletteBody = #"""
   <li><strong>Double-click the name</strong> — rename inline.</li>
 </ul>
 <p>Right-click a path row: <strong>Save to Library</strong> or <strong>Delete Path</strong> (removes from project and clears its reference from all cells).</p>
-
-<h3>SHAPES</h3>
-<p>Shapes are Loom polygon-set geometry files imported into the project. Each shape is a named set of bezier polygons. Clicking a shape sets it as the <strong>active shape</strong> — new cells you draw will be rendered with this geometry. Click the highlighted row again to deselect (new cells will use the default built-in polygon).</p>
-<ul>
-  <li><strong>+ Import Shape…</strong> — opens a file picker (defaults to ~/.loom_projects). Select one or more Loom .json polygon-set files.</li>
-  <li><strong>↑ button</strong> — saves the shape to the global library.</li>
-  <li><strong>Double-click the name</strong> — rename inline.</li>
-</ul>
-<p>Right-click: <strong>Delete Shape</strong> removes it from the project. Any cells that referenced this shape fall back to the default geometry.</p>
-
-<div class="tip"><strong>Shape cycling over time</strong> — to cycle through multiple shapes on a schedule, use the SEQUENCE feature in the <strong>MOTION</strong> section: add shape slots to a motion set, set a step interval, and choose Sequential or Random mode. The motion set's shape list overrides the per-cell shape during playback. See <a href="um-help://help/qa-motion">Motion Palette → SEQUENCE cycling</a>.</div>
-
-<h3>PALETTES</h3>
-<p>Colour palettes are sets of swatches sampled from a Color Map source. They provide a way to apply coherent, image-sourced colours to your styles through the palette picker in the RENDER section.</p>
-<ul>
-  <li><strong>Generate from Color Map…</strong> — opens a sheet to name the palette and choose a size. Available only when a Color Map source is loaded. Sizes:
-    <ul>
-      <li><strong>4×4</strong> — 16 colours (4 horizontal bands × 4 vertical bands of the source image)</li>
-      <li><strong>4×8</strong> — 32 colours</li>
-      <li><strong>8×8</strong> — 64 colours</li>
-    </ul>
-  </li>
-  <li>Each palette row shows the name and a <strong>swatch strip preview</strong> of the first 32 colours.</li>
-  <li><strong>↑ button</strong> — saves the palette to the global library for reuse across projects.</li>
-  <li><strong>Double-click the name</strong> — rename inline.</li>
-</ul>
-<p>Right-click a palette row: <strong>Save to Library</strong> or <strong>Delete Palette</strong>.</p>
-<p>To use a palette colour in a style, click the palette icon (🎨) next to Fill or Stroke in the RENDER section — see <a href="um-help://help/qa-style">Style (RENDER)</a>.</p>
-
-<div class="tip"><strong>Workflow tip</strong> — generate several palettes at different sizes from the same source to give yourself a coarse (4×4) and a fine (8×8) set of options. Palettes from different color sources can coexist — name them by source to keep track.</div>
-
-<h3>SPRITE SETS</h3>
-<p>Sprite Sets are reusable shape-animation cycles that can be assigned to sprites on open layers <strong>and to individual grid cells on grid layers</strong>. Each set holds an ordered list of <em>states</em>: a shape, an optional style override, and a hold-frame count. The set steps through those states at playback time, independently of the motion set.</p>
-<ul>
-  <li><strong>+ New Sprite Set</strong> — creates an empty set ready to be filled with states in the editor.</li>
-  <li><strong>+ Import Layers as Shapes…</strong> — in the SHAPES section above. Select a multi-layer Loom geometry file; each visible, non-empty layer becomes a separate shape and a Sprite Set containing all of them in layer order is created automatically.</li>
-  <li><strong>Pencil icon</strong> — opens the Sprite Set editor for that set.</li>
-  <li><strong>Right-click</strong> — Edit…, Rename, Duplicate, Delete.</li>
-  <li><strong>Double-click the name</strong> — inline rename field. Press Return to confirm.</li>
-</ul>
-<h4>Direct drawing with a Sprite Set</h4>
-<p><strong>Tap a Sprite Set row</strong> to make it the active drawing instrument (the row highlights in accent colour; tap again to deselect). While a Sprite Set is active:</p>
-<ul>
-  <li><strong>On an open layer</strong> — clicking the canvas or using <strong>+ Place at Centre</strong> places a sprite that is automatically assigned the active Sprite Set. No need to place first and assign afterwards.</li>
-  <li><strong>On a grid layer</strong> — drawing or flood-filling cells automatically assigns the active Sprite Set to each cell. The cells animate through the Sprite Set's states independently (each cell's phase offset staggers the cycle). Morph and cross-fade transitions are supported exactly as on open-layer sprites.</li>
-</ul>
-<div class="tip">Select a Sprite Set in the palette, then draw across a grid to scatter many cells that all share the same animation cycle. Each cell inherits the active style, shape, and motion — the Sprite Set adds the shape-animation layer on top, with per-cell phase staggering for variety.</div>
-<p>To assign a Sprite Set to an <strong>existing sprite</strong>, select the sprite and use the <strong>Sprite Set</strong> picker in the SPRITES inspector in Quick Adjust.</p>
-<p>To assign a Sprite Set to <strong>existing grid cells</strong>, select the cells and use the <strong>Anim. Set</strong> picker in the <strong>PLACE &amp; TIME</strong> section of Quick Adjust. Choose <strong>—</strong> to remove the assignment and revert the cell to its static shape.</p>
 
 <h2>Library tab</h2>
 <p>Shows your global user library — resolution presets, styles, motion sets, paths, shapes, and colour palettes saved across all projects.</p>
