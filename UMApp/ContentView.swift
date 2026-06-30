@@ -555,6 +555,7 @@ struct GridCanvasPlaceholder: View {
     @State private var cachedCellH: Double = 1
     @State private var cachedGridW: Double = 400
     @State private var cachedGridH: Double = 400
+    @State private var lineDrawStartIndex: Int? = nil
     // Sprite drag state
     @State private var spriteDragID:          UUID?    = nil
     @State private var spriteDragOffset:      CGPoint  = .zero
@@ -1278,6 +1279,24 @@ struct GridCanvasPlaceholder: View {
                                 return
                             }
 
+                            // Anchor mode: click defines the paste target cell
+                            if controller.isAnchorMode {
+                                let tapPt = canvasPoint(value.startLocation,
+                                                        viewSize: geo.size,
+                                                        gridW: cachedGridW, gridH: cachedGridH)
+                                let col = Int(tapPt.x / cachedCellW)
+                                let row = Int(tapPt.y / cachedCellH)
+                                let pc  = controller.engine.document.gridConfig
+                                if col >= 0, col < pc.cols, row >= 0, row < pc.rows {
+                                    controller.pasteAnchorRow = row
+                                    controller.pasteAnchorCol = col
+                                }
+                                controller.isAnchorMode = false
+                                lastDragIndex     = nil
+                                lastNudgeLocation = nil
+                                return
+                            }
+
                             // KF dot tap → select / deselect keyframe
                             let dist = hypot(value.translation.width, value.translation.height)
                             if dist < 6, controller.showPathOverlay,
@@ -1351,6 +1370,33 @@ struct GridCanvasPlaceholder: View {
                                 rubberBandStart   = nil
                                 rubberBandCurrent = nil
                             }
+
+                            // Draw tool: shift-click draws a Bresenham line from last drawn cell
+                            if controller.activeTool == .draw {
+                                let dist = hypot(value.translation.width, value.translation.height)
+                                let endIdx = lastDragIndex
+                                if dist < 8,
+                                   NSEvent.modifierFlags.contains(.shift),
+                                   let start = lineDrawStartIndex,
+                                   let end   = endIdx {
+                                    let sid = controller.activeStyleID
+                                               ?? controller.projectStyles.first?.id
+                                               ?? UUID()
+                                    for idx in bresenhamLine(from: start, to: end,
+                                                             cols: config.cols, rows: config.rows) {
+                                        controller.engine.setCellDrawn(
+                                            idx, drawn: true, styleID: sid,
+                                            motionID: controller.activeMotionID,
+                                            shapeID:  controller.activeShapeID,
+                                            pathID:   controller.activePathID,
+                                            animatedGeometryID: controller.activeAnimatedGeometryID)
+                                    }
+                                }
+                                lineDrawStartIndex = endIdx ?? lineDrawStartIndex
+                            } else {
+                                lineDrawStartIndex = nil
+                            }
+
                             lastDragIndex     = nil
                             lastNudgeLocation = nil
                         }
@@ -1801,6 +1847,30 @@ struct GridCanvasPlaceholder: View {
         lastNudgeLocation = pt
     }
 
+}
+
+// MARK: - Grid helpers (file scope)
+
+private func bresenhamLine(from startIdx: Int, to endIdx: Int, cols: Int, rows: Int) -> [Int] {
+    var r0 = startIdx / cols, c0 = startIdx % cols
+    let r1 = endIdx   / cols, c1 = endIdx   % cols
+    var result: [Int] = []
+    // Standard Bresenham using dx positive, dy negative — avoids infinite loop on axis-aligned lines.
+    let dc =  abs(c1 - c0)
+    let dr = -abs(r1 - r0)
+    let sc = c0 < c1 ? 1 : -1
+    let sr = r0 < r1 ? 1 : -1
+    var err = dc + dr
+    while true {
+        if r0 >= 0, r0 < rows, c0 >= 0, c0 < cols {
+            result.append(r0 * cols + c0)
+        }
+        if r0 == r1, c0 == c1 { break }
+        let e2 = 2 * err
+        if e2 >= dr { err += dr; c0 += sc }
+        if e2 <= dc { err += dc; r0 += sr }
+    }
+    return result
 }
 
 // MARK: - Polygon path builder (file scope — shared by canvas and frame buffer renderer)

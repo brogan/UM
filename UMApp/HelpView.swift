@@ -800,9 +800,9 @@ private let paintingBody = #"""
 
 <table>
   <tr><th>Button</th><th>Key</th><th>Tool</th><th>What it does</th></tr>
-  <tr><td><strong>Draw</strong></td><td><kbd>D</kbd></td><td>Draw</td><td>Click or drag to mark cells as drawn with the active style.</td></tr>
+  <tr><td><strong>Draw</strong></td><td><kbd>D</kbd></td><td>Draw</td><td>Click or drag to mark cells as drawn with the active style. <strong>Shift-click</strong> a destination to draw a straight line from the last drawn cell. See <a href="#line-drawing">Straight-line drawing</a> below.</td></tr>
   <tr><td><strong>Erase</strong></td><td><kbd>E</kbd></td><td>Erase</td><td>Click or drag to mark cells as undrawn.</td></tr>
-  <tr><td><strong>Select</strong></td><td><kbd>S</kbd></td><td>Select</td><td>Click a drawn cell to select or deselect it. Shift-click to add/remove. Drag on an empty area to rubber-band select. Shift-drag extends the selection.</td></tr>
+  <tr><td><strong>Select</strong></td><td><kbd>S</kbd></td><td>Select</td><td>Click a drawn cell to select or deselect it. Shift-click to add/remove. Drag on an empty area to rubber-band select. Shift-drag extends the selection. Arrow keys move the entire selection by one grid cell. Use <kbd>⌘C</kbd> / <kbd>⌘X</kbd> / <kbd>⌘V</kbd> to copy, cut, and paste. See below.</td></tr>
   <tr><td><strong>Sample</strong></td><td><kbd>A</kbd></td><td>Sample</td><td>Click a drawn cell to load its style as the active painting style.</td></tr>
   <tr><td><strong>Fill</strong></td><td><kbd>F</kbd></td><td>Fill</td><td>Flood-fill contiguous undrawn cells from the clicked cell with the active style. Propagates to 4-connected undrawn neighbours only.</td></tr>
   <tr><td><strong>Nudge</strong></td><td><kbd>N</kbd></td><td>Nudge</td><td>Click a drawn cell to select it; drag to move its visual position offset. See below.</td></tr>
@@ -830,17 +830,43 @@ private let paintingBody = #"""
   <li>The <strong>PLACE &amp; TIME</strong> panel in Quick Adjust shows the resulting Offset X / Offset Y values live.</li>
   <li>Multiple cells can be selected first (using the Select tool) and then nudged together — all selected cells move by the same delta simultaneously.</li>
 </ol>
-<div class="tip"><strong>Pixel-perfect nudging</strong> — while any cells are selected, arrow keys nudge the position offset by 1 px per press. Hold Shift for 10 px per press. This works regardless of which tool is active.</div>
+<div class="tip"><strong>Pixel-perfect nudging</strong> — when any tool other than Select is active, arrow keys nudge the position offset of selected cells by 1 px per press. Hold Shift for 10 px per press.</div>
 
-<h2>Arrow-key nudge</h2>
+<h2>Arrow keys — context-sensitive behaviour</h2>
+<p>Arrow key behaviour depends on the active tool and whether any cells are selected:</p>
 <table>
-  <tr><th>Key</th><th>Movement</th><th>Distance</th></tr>
-  <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Left / right</td><td>1 px</td></tr>
-  <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Up / down</td><td>1 px</td></tr>
-  <tr><td><kbd>Shift</kbd>+<kbd>←</kbd> <kbd>→</kbd></td><td>Left / right</td><td>10 px</td></tr>
-  <tr><td><kbd>Shift</kbd>+<kbd>↑</kbd> <kbd>↓</kbd></td><td>Up / down</td><td>10 px</td></tr>
+  <tr><th>Context</th><th>Arrow key action</th></tr>
+  <tr><td>Select tool, cells selected</td><td>Move the selection by one grid cell in the pressed direction. The cells physically relocate on the grid.</td></tr>
+  <tr><td>Any other tool (or no selection)</td><td>Nudge the position offset of selected cells by 1 px (10 px with Shift). This changes how the cells look without moving them on the grid.</td></tr>
 </table>
-<p>The first press in a sequence pushes an undo snapshot. Held-key repeats continue without additional snapshots. One <kbd>⌘Z</kbd> undoes the entire sequence.</p>
+<p>In both modes the first press pushes a single undo snapshot; held-key repeats extend the operation without additional snapshots. One <kbd>⌘Z</kbd> reverses the entire sequence.</p>
+
+<h2>Cut, copy and paste</h2>
+<p>Selected cells can be cut, copied, and pasted using a three-step sequence. The clipboard holds the relative arrangement of all selected cells so the pattern pastes in exactly the same shape wherever you place it.</p>
+<ol class="steps">
+  <li>Select the cells you want to copy or cut.</li>
+  <li>Press <kbd>⌘C</kbd> (copy) or <kbd>⌘X</kbd> (cut). The app enters <strong>anchor mode</strong> — the cursor is waiting for you to define where the paste will land.</li>
+  <li>Click anywhere on the canvas. That cell becomes the paste target. The top-left corner of the copied block will land on the clicked cell.</li>
+  <li>Press <kbd>⌘V</kbd> to paste. The cells appear at the defined target and become the new selection.</li>
+</ol>
+<table>
+  <tr><th>Shortcut</th><th>Action</th></tr>
+  <tr><td><kbd>⌘C</kbd></td><td>Copy selected cells and enter anchor mode.</td></tr>
+  <tr><td><kbd>⌘X</kbd></td><td>Cut selected cells (copy then erase) and enter anchor mode.</td></tr>
+  <tr><td><kbd>⌘V</kbd></td><td>Paste at the previously clicked target. Has no effect if no target has been set.</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Cancel anchor mode, or clear the stored paste target.</td></tr>
+</table>
+<div class="note">All four captured attributes — Style, Motion, Shape, and Path — travel with the cells through copy, cut, and paste.</div>
+
+<h2 id="line-drawing">Straight-line drawing</h2>
+<p>While the Draw tool is active, you can draw a straight line of cells between any two grid positions using Bresenham's line algorithm:</p>
+<ol class="steps">
+  <li>Draw or click a starting cell normally. That cell becomes the <strong>line anchor</strong>.</li>
+  <li><strong>Shift-click</strong> any other cell on the canvas. UM draws all cells along the straight line connecting the anchor to the clicked cell, inclusive of both endpoints.</li>
+  <li>The clicked cell becomes the new line anchor — you can keep shift-clicking to extend a multi-segment line.</li>
+  <li>The line anchor resets whenever you switch away from the Draw tool.</li>
+</ol>
+<div class="tip">Straight lines combine well with Scatter = 0 for crisp geometric outlines, or with a high Chaos value for an irregular, hand-drawn appearance.</div>
 """#
 
 private let transformsBody = #"""
@@ -2008,7 +2034,13 @@ private let shortcutsBody = #"""
   <tr><td><kbd>Space</kbd></td><td>Play / Pause</td></tr>
 </table>
 
-<h2>Nudge (cells selected)</h2>
+<h2>Grid movement (Select tool, cells selected)</h2>
+<table>
+  <tr><th>Key</th><th>Action</th></tr>
+  <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Move selected cells one grid position</td></tr>
+</table>
+
+<h2>Position-offset nudge (other tools, cells selected)</h2>
 <table>
   <tr><th>Key</th><th>Action</th></tr>
   <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Move position offset 1 px</td></tr>
@@ -2030,6 +2062,10 @@ private let shortcutsBody = #"""
   <tr><th>Key</th><th>Action</th></tr>
   <tr><td><kbd>⌘Z</kbd></td><td>Undo</td></tr>
   <tr><td><kbd>⌘⇧Z</kbd></td><td>Redo</td></tr>
+  <tr><td><kbd>⌘C</kbd></td><td>Copy selected grid cells; enter anchor mode</td></tr>
+  <tr><td><kbd>⌘X</kbd></td><td>Cut selected grid cells; enter anchor mode</td></tr>
+  <tr><td><kbd>⌘V</kbd></td><td>Paste at the clicked target cell</td></tr>
+  <tr><td><kbd>Esc</kbd></td><td>Cancel anchor mode / clear paste target</td></tr>
 </table>
 
 <h2>Canvas Zoom</h2>
@@ -2049,7 +2085,7 @@ private let shortcutsBody = #"""
   <tr><td><kbd>⌘/</kbd></td><td>Open this help window</td></tr>
 </table>
 
-<div class="note"><strong>Suppressed shortcuts</strong> — single-key tool shortcuts (D, E, S, A, F, N) are suppressed while a text field has keyboard focus, and when Command, Option, or Control is held, so they never conflict with menu shortcuts or text editing.</div>
+<div class="note"><strong>Suppressed shortcuts</strong> — single-key tool shortcuts (D, E, S, A, F, N) are suppressed while a text field has keyboard focus, and when Command, Option, or Control is held. Command shortcuts (⌘C, ⌘X, ⌘V) are always active on the canvas.</div>
 """#
 
 private let pendingBody = #"""

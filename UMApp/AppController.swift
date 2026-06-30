@@ -303,6 +303,11 @@ final class AppController {
     var backgroundImagePath: String? = nil
     var isPlaying: Bool              = false
     var selectedIndices:    Set<Int> = []
+    var gridClipboard:      [ClipboardCell] = []
+    var isAnchorMode:       Bool = false   // waiting for click to set paste target
+    var pasteAnchorRow:     Int? = nil
+    var pasteAnchorCol:     Int? = nil
+
     var activeStyleID:             UUID?    = nil
     var activeMotionID:            UUID?    = nil
     var activeShapeID:             UUID?    = nil
@@ -1775,6 +1780,99 @@ final class AppController {
 
     // MARK: Nudge
 
+    struct ClipboardCell: Sendable {
+        var relRow: Int
+        var relCol: Int
+        var cell:   UMGridCell
+    }
+
+    func copySelection() {
+        let cells  = engine.document.cells
+        let config = engine.document.gridConfig
+        let drawn  = selectedIndices.filter { $0 < cells.count && cells[$0].isDrawn }
+        guard !drawn.isEmpty else { return }
+        let minRow = drawn.map { $0 / config.cols }.min()!
+        let minCol = drawn.map { $0 % config.cols }.min()!
+        gridClipboard = drawn.map { idx in
+            ClipboardCell(relRow: idx / config.cols - minRow,
+                          relCol: idx % config.cols - minCol,
+                          cell:   cells[idx])
+        }
+        pasteAnchorRow = nil
+        pasteAnchorCol = nil
+        isAnchorMode   = true
+    }
+
+    func cutSelection() {
+        copySelection()
+        guard !gridClipboard.isEmpty else { return }
+        engine.pushUndoSnapshot()
+        for item in gridClipboard {
+            let idx = item.cell.gridIndex
+            if idx < engine.document.cells.count {
+                engine.document.cells[idx].isDrawn = false
+            }
+        }
+        selectedIndices = []
+    }
+
+    func pasteClipboard(atRow: Int, atCol: Int) {
+        guard !gridClipboard.isEmpty else { return }
+        let config = engine.document.gridConfig
+        let targets: [(src: ClipboardCell, dstIdx: Int)] = gridClipboard.map { item in
+            let r = atRow + item.relRow
+            let c = atCol + item.relCol
+            return (item, r * config.cols + c)
+        }
+        guard targets.allSatisfy({ t in
+            let r = atRow + t.src.relRow
+            let c = atCol + t.src.relCol
+            return r >= 0 && r < config.rows && c >= 0 && c < config.cols
+                && t.dstIdx < engine.document.cells.count
+        }) else { return }
+        engine.pushUndoSnapshot()
+        var newSelected: Set<Int> = []
+        for t in targets {
+            var pasted = t.src.cell
+            pasted.id        = UUID()
+            pasted.gridIndex = t.dstIdx
+            engine.document.cells[t.dstIdx] = pasted
+            newSelected.insert(t.dstIdx)
+        }
+        selectedIndices = newSelected
+        pasteAnchorRow = nil
+        pasteAnchorCol = nil
+    }
+
+    func moveSelectionByGrid(dRow: Int, dCol: Int, isRepeat: Bool = false) {
+        guard !selectedIndices.isEmpty else { return }
+        let cells  = engine.document.cells
+        let config = engine.document.gridConfig
+        let drawn  = selectedIndices.filter { $0 < cells.count && cells[$0].isDrawn }
+        guard !drawn.isEmpty else { return }
+        let moves: [(from: Int, to: Int)] = drawn.compactMap { idx in
+            let r = idx / config.cols + dRow
+            let c = idx % config.cols + dCol
+            guard r >= 0, r < config.rows, c >= 0, c < config.cols else { return nil }
+            return (idx, r * config.cols + c)
+        }
+        guard moves.count == drawn.count else { return }   // any OOB → no-op
+        if !isRepeat { engine.pushUndoSnapshot() }
+        let snapshots = moves.map { (from: $0.from, to: $0.to, cell: cells[$0.from]) }
+        let dstSet    = Set(moves.map(\.to))
+        for snap in snapshots where !dstSet.contains(snap.from) {
+            engine.document.cells[snap.from].isDrawn = false
+        }
+        var newSelected: Set<Int> = []
+        for snap in snapshots {
+            var moved       = snap.cell
+            moved.gridIndex = snap.to
+            engine.document.cells[snap.to] = moved
+            newSelected.insert(snap.to)
+        }
+        selectedIndices = newSelected
+    }
+
     func nudgeSelection(dx: Double, dy: Double, isRepeat: Bool = false) {
         guard !selectedIndices.isEmpty else { return }
         if !isRepeat { engine.pushUndoSnapshot() }
@@ -1793,16 +1891,66 @@ final class AppController {
             guard let self else { return event }
             if NSApp.keyWindow?.firstResponder is NSText { return event }
             if Self.firstResponderIsInWebView() { return event }
-            if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty { return event }
 
+            let cmd   = event.modifierFlags.contains(.command)
             let shift = event.modifierFlags.contains(.shift)
             let rep   = event.isARepeat
+
+            // Cmd shortcuts (no option/control)
+            if cmd && !event.modifierFlags.contains(.option) && !event.modifierFlags.contains(.control) {
+                switch event.charactersIgnoringModifiers?.lowercased() {
+                case "c": copySelection(); return nil
+                case "x": cutSelection(); return nil
+                case "v":
+                    if !gridClipboard.isEmpty,
+                       let r = pasteAnchorRow, let c = pasteAnchorCol {
+                        pasteClipboard(atRow: r, atCol: c)
+                    }
+                    return nil
+                default: break
+                }
+                return event  // pass other Cmd shortcuts through
+            }
+
+            if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty { return event }
+
+            // Arrow keys: grid move in select mode, pixel nudge otherwise
             switch event.keyCode {
-            case 123: nudgeSelection(dx: -nudgeStep(shift), dy:  0, isRepeat: rep); return nil
-            case 124: nudgeSelection(dx:  nudgeStep(shift), dy:  0, isRepeat: rep); return nil
-            case 125: nudgeSelection(dx:  0, dy:  nudgeStep(shift), isRepeat: rep); return nil
-            case 126: nudgeSelection(dx:  0, dy: -nudgeStep(shift), isRepeat: rep); return nil
+            case 123:
+                if activeTool == .select && !selectedIndices.isEmpty {
+                    moveSelectionByGrid(dRow: 0, dCol: -1, isRepeat: rep)
+                } else {
+                    nudgeSelection(dx: -nudgeStep(shift), dy: 0, isRepeat: rep)
+                }
+                return nil
+            case 124:
+                if activeTool == .select && !selectedIndices.isEmpty {
+                    moveSelectionByGrid(dRow: 0, dCol: 1, isRepeat: rep)
+                } else {
+                    nudgeSelection(dx: nudgeStep(shift), dy: 0, isRepeat: rep)
+                }
+                return nil
+            case 125:
+                if activeTool == .select && !selectedIndices.isEmpty {
+                    moveSelectionByGrid(dRow: 1, dCol: 0, isRepeat: rep)
+                } else {
+                    nudgeSelection(dx: 0, dy: nudgeStep(shift), isRepeat: rep)
+                }
+                return nil
+            case 126:
+                if activeTool == .select && !selectedIndices.isEmpty {
+                    moveSelectionByGrid(dRow: -1, dCol: 0, isRepeat: rep)
+                } else {
+                    nudgeSelection(dx: 0, dy: -nudgeStep(shift), isRepeat: rep)
+                }
+                return nil
             default: break
+            }
+
+            // Escape cancels anchor mode / clears paste anchor
+            if event.keyCode == 53 {
+                if isAnchorMode { isAnchorMode = false; return nil }
+                if pasteAnchorRow != nil { pasteAnchorRow = nil; pasteAnchorCol = nil; return nil }
             }
 
             guard !shift else { return event }
